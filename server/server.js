@@ -455,13 +455,24 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
     // Don't save overlay or skins to config - they are auto-managed
     delete merged.overlay;
     delete merged.skins;
-    // Never save OAuth token to disk - keep it in memory only
+    
+    // Preserve OAuth token in memory but clear it for disk
+    const tokenForMemory = cfg.twitch?.botOAuthToken || '';
     if(merged.twitch) {
-      merged.twitch.botOAuthToken = '';
+      merged.twitch.botOAuthToken = ''; // Clear for disk write
     }
     
     fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2));
+    // Restore token in memory after writing to disk
+    if(cfg.twitch) {
+      cfg.twitch.botOAuthToken = tokenForMemory;
+    }
     Object.assign(cfg, merged);
+    // Ensure token is preserved in memory
+    if(cfg.twitch) {
+      cfg.twitch.botOAuthToken = tokenForMemory;
+    }
+    
     res.json({ok:true, message:'Config saved'});
   }catch(e){
     res.status(500).json({error:e.message});
@@ -507,10 +518,15 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
     // Remove runtime properties that shouldn't be saved
     // (the config object might have other non-serializable properties)
     // Never save OAuth token to disk - keep it in memory only
+    const tokenForMemory = cfg.twitch?.botOAuthToken || '';
     if(configToSave.twitch) {
-      configToSave.twitch.botOAuthToken = '';
+      configToSave.twitch.botOAuthToken = ''; // Clear for disk write
     }
     fs.writeFileSync(cfgPath, JSON.stringify(configToSave, null, 2));
+    // Restore token in memory (configToSave is a shallow copy, so we need to ensure cfg.twitch.botOAuthToken is preserved)
+    if(cfg.twitch) {
+      cfg.twitch.botOAuthToken = tokenForMemory;
+    }
     
     dbg('Settings applied dynamically:', cfg.debug);
     res.json({ok:true, message:'Settings applied', settings: cfg.debug});
