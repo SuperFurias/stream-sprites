@@ -455,6 +455,10 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
     // Don't save overlay or skins to config - they are auto-managed
     delete merged.overlay;
     delete merged.skins;
+    // Never save OAuth token to disk - keep it in memory only
+    if(merged.twitch) {
+      merged.twitch.botOAuthToken = '';
+    }
     
     fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2));
     Object.assign(cfg, merged);
