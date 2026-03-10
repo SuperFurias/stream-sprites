@@ -915,14 +915,29 @@ if(cfg.useServer){
 }
 
 // Graceful shutdown
-process.on('SIGINT', () => {
-  dbg('Shutting down...');
+function shutdown(signal) {
+  dbg(`Shutting down (${signal})...`);
+  
+  // Clear sensitive OAuth token on shutdown
+  if(cfg && cfg.twitch) {
+    cfg.twitch.botOAuthToken = '';
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      dbg('OAuth token cleared from config.json');
+    } catch(e) {
+      dbg('Failed to clear OAuth token:', e.message);
+    }
+  }
+  
   if(twitchClient) twitchClient.disconnect();
   db.close(() => {
     dbg('Database closed');
     process.exit(0);
   });
-});
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // OAuth for bot token generation
 app.get('/auth/twitch', (req,res)=>{
