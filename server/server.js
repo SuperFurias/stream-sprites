@@ -287,6 +287,25 @@ app.get('/api/skins/auto', (req,res) => {
 
 app.get('/config.json', (req,res) => {
   dbg('GET /config.json');
+  
+  // Reload config from disk to reflect any manual changes
+  let fileCfg;
+  try {
+    if(fs.existsSync(cfgPath)) {
+      fileCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      // Update in-memory config to match file (but preserve runtime state like botOAuthToken if not persisting)
+      if(fileCfg.persistOAuthToken === false && cfg.twitch?.botOAuthToken) {
+        // Keep the in-memory token, don't overwrite with file (which would have empty token)
+        fileCfg.twitch = fileCfg.twitch || {};
+        fileCfg.twitch.botOAuthToken = cfg.twitch.botOAuthToken;
+      }
+      cfg = fileCfg;
+      dbg('Config reloaded from disk');
+    }
+  } catch(e) {
+    dbg('Failed to reload config from disk, using in-memory:', e.message);
+  }
+  
   // Auto-detect skins - ONLY return auto-detected, ignore config.json hardcoded skins
   const autoDetected = detectSkinsFromAssets();
   
