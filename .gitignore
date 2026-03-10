@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-# Sensitive configuration
-server/config.json
-
 # Database
 server/db/
 
@@ -35,9 +32,6 @@ Thumbs.db
 
 # Zip files
 *.zip
-
-# Old config backups
-server/config.json.old
 
 # Debug files
 *.log

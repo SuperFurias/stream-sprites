@@ -107,7 +107,7 @@ function dbg(...args) {
   }
 }
 
-const cfgPath = path.join(__dirname, 'config.json');
+const cfgPath = path.join(__dirname, '.env');
 
 // Load config
 let cfg;
@@ -115,14 +115,14 @@ function loadConfig(){
   try{
     if(fs.existsSync(cfgPath)){
       cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-      console.log('✓ Loaded config from config.json');
+      console.log('✓ Loaded config from .env');
       return true;
     }
   }catch(e){
-    console.warn('⚠ config.json invalid:', e.message);
+    console.warn('⚠ .env invalid:', e.message);
   }
   
-  // If config.json doesn't exist, create it with default values
+  // If .env doesn't exist, create it with default values
   const defaultCfg = {
     useServer: true,
     serverPort: 3000,
@@ -148,10 +148,10 @@ function loadConfig(){
   try{
     fs.writeFileSync(cfgPath, JSON.stringify(defaultCfg, null, 2));
     cfg = defaultCfg;
-    console.log('✓ Created default config.json');
+    console.log('✓ Created default .env');
     return true;
   }catch(e){
-    console.error('✗ Failed to create config.json:', e.message);
+    console.error('✗ Failed to create .env:', e.message);
   }
   
   return false;
@@ -165,7 +165,7 @@ if(cfg.persistOAuthToken === false && cfg.twitch?.botOAuthToken) {
   try {
     cfg.twitch.botOAuthToken = '';
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    console.log('✓ Cleared OAuth token from config.json (persistOAuthToken=false)');
+    console.log('✓ Cleared OAuth token from .env (persistOAuthToken=false)');
   } catch(e) {
     console.error('✗ Failed to clear OAuth token on startup:', e.message);
   }
@@ -306,10 +306,10 @@ app.get('/config.json', (req,res) => {
     dbg('Failed to reload config from disk, using in-memory:', e.message);
   }
   
-  // Auto-detect skins - ONLY return auto-detected, ignore config.json hardcoded skins
+  // Auto-detect skins - ONLY return auto-detected, ignore .env hardcoded skins
   const autoDetected = detectSkinsFromAssets();
   
-  // Provide default overlay settings (not stored in config.json)
+  // Provide default overlay settings (not stored in .env)
   const defaultOverlay = {
     canvasWidth: 1280,
     canvasHeight: 720,
@@ -847,7 +847,7 @@ const server = app.listen(port, () => {
 
 server.on('error', (err) => {
   if(err.code === 'EADDRINUSE'){
-    console.error(`✗ Port ${port} in use. Change in config.json`);
+    console.error(`✗ Port ${port} in use. Change in .env`);
   }
 });
 
@@ -957,7 +957,7 @@ async function connectTwitchBot(){
         if(cfg.persistOAuthToken) {
           try {
             fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-            dbg('Token refreshed and saved to config.json');
+            dbg('Token refreshed and saved to .env');
           } catch(e) {
             dbg('Token refreshed but failed to save to config:', e.message);
           }
@@ -1001,13 +1001,13 @@ function shutdown(signal) {
       cfg.twitch.botOAuthToken = '';
       try {
         fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        dbg('OAuth token cleared from config.json (persistOAuthToken=false)');
+        dbg('OAuth token cleared from .env (persistOAuthToken=false)');
       } catch(e) {
         dbg('Failed to clear OAuth token:', e.message);
       }
     } else {
       // Token is persisted, keep it in config
-      dbg('OAuth token preserved in config.json (persistOAuthToken=true)');
+      dbg('OAuth token preserved in .env (persistOAuthToken=true)');
     }
   }
   
@@ -1056,7 +1056,7 @@ app.get('/auth/callback', async (req,res)=>{
     if(cfg.persistOAuthToken) {
       try {
         fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        dbg('OAuth token saved to config.json (persistOAuthToken=true)');
+        dbg('OAuth token saved to .env (persistOAuthToken=true)');
       } catch(e) {
         dbg('Failed to save token to config:', e.message);
       }
@@ -1067,7 +1067,7 @@ app.get('/auth/callback', async (req,res)=>{
     res.send(`
       <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
         <h2>✓ OAuth Token Generated</h2>
-        <p>Token ${cfg.persistOAuthToken ? 'saved to config.json' : 'stored in memory only'}</p>
+        <p>Token ${cfg.persistOAuthToken ? 'saved to .env' : 'stored in memory only'}</p>
         <p><a href="/" style="color:#0af">Go to Admin</a></p>
       </body></html>
     `);
