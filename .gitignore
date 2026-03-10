@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Sensitive configuration
+server/config.json
+
+# Database
+server/db/
+
+# Logs
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Package lock (optional - can be kept if you want reproducible builds)
+# package-lock.json
+
+# Zip files
+*.zip
+
+# Old config backups
+server/config.json.old
+
+# Debug files
+*.log

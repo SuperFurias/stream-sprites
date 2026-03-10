@@ -1,0 +1,67 @@
+<div class="panel">
+  <h2 style="margin-top:0">⚙️ Debug Settings</h2>
+  <p>Configure which debug options to enable or disable. These settings control the verbosity of logs in the server and overlay.</p>
+  
+  <div class="form-grid">
+    <div class="form-group">
+      <label for="serverDebug">
+        <input type="checkbox" id="serverDebug" style="width:auto;margin-right:8px">
+        Server Debug Logging
+      </label>
+      <small style="color:#888;display:block;margin-top:4px">Enables detailed server-side debug logs (dbg() function)</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="twitchDebug">
+        <input type="checkbox" id="twitchDebug" style="width:auto;margin-right:8px">
+        Twitch Client Debug
+      </label>
+      <small style="color:#888;display:block;margin-top:4px">Enables debug output from the Twitch IRC client</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="twitchAuthErrors">
+        <input type="checkbox" id="twitchAuthErrors" style="width:auto;margin-right:8px">
+        Twitch Authentication Errors
+      </label>
+      <small style="color:#888;display:block;margin-top:4px">Show "Login authentication failed" errors (recommended: enabled)</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="twitchOtherErrors">
+        <input type="checkbox" id="twitchOtherErrors" style="width:auto;margin-right:8px">
+        Twitch Other Errors
+      </label>
+      <small style="color:#888;display:block;margin-top:4px">Show other Twitch connection/network errors</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="verboseMessages">
+        <input type="checkbox" id="verboseMessages" style="width:auto;margin-right:8px">
+        Verbose Message Logging
+      </label>
+      <small style="color:#888;display:block;margin-top:4px">Logs all chat messages in console (can be noisy)</small>
+    </div>
+    
+    <div class="form-group">
+      <label for="logToFile">
+        <input type="checkbox" id="logToFile" style="width:auto;margin-right:8px">
+        Log to File
+      </label>
+      <small style="color:#888;display:block;margin-top:4px">Write debug logs to logs/debug.log file</small>
+    </div>
+  </div>
+  
+  <div class="button-group">
+    <button id="saveSettings" onclick="saveSettings()">💾 Save Settings</button>
+    <button id="resetSettings" onclick="resetSettings()" class="secondary">🔄 Reset to Defaults</button>
+  </div>
+  
+  <div id="settingsStatus" class="error"></div>
+  <div id="settingsSuccess" class="success"></div>
+  
+  <div class="panel" style="margin-top:20px;background:#2d3748">
+    <h3 style="margin-top:0;font-size:16px">📋 Current Settings</h3>
+    <pre id="currentSettings" style="margin:0;font-size:13px;color:#0af;background:#111;padding:12px;border-radius:4px;overflow-x:auto">Loading...</pre>
+  </div>
+</div>

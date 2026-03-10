@@ -1,0 +1,39 @@
+<div class="panel">
+  <h2 style="margin-top:0">🔗 Quick Links</h2>
+  <div class="links-container">
+    <a href="/overlay/overlay.html" class="link-btn" target="_blank">🖥️ Overlay</a>
+    <a href="/healthz" class="link-btn" target="_blank">💓 Health Check</a>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">⚡ Quick Actions</h2>
+  <div class="actions-grid">
+    <div class="action-card" onclick="clearAvatars()">
+      <div class="icon">🧹</div>
+      <div class="title">Clear All Avatars</div>
+      <div class="desc">Remove all sprites from the overlay instantly</div>
+    </div>
+    <div class="action-card" onclick="refreshAllOverlays()">
+      <div class="icon">🔄</div>
+      <div class="title">Refresh Overlays</div>
+      <div class="desc">Force all connected overlays to reload</div>
+    </div>
+    <div class="action-card danger" onclick="resetAll()">
+      <div class="icon">⚠️</div>
+      <div class="title">Reset All Assignments</div>
+      <div class="desc">Delete ALL user skin assignments (irreversible)</div>
+    </div>
+    <div class="action-card danger" onclick="restartServer()">
+      <div class="icon">🔃</div>
+      <div class="title">Restart Server</div>
+      <div class="desc">Restart the server (brief disconnect)</div>
+    </div>
+    <div class="action-card secondary" onclick="window.location.reload()">
+      <div class="icon">↻</div>
+      <div class="title">Refresh Page</div>
+      <div class="desc">Reload the admin dashboard</div>
+    </div>
+  </div>
+</div>
+
