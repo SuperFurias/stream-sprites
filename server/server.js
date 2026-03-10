@@ -160,6 +160,17 @@ function loadConfig(){
 loadConfig();
 if(!cfg) process.exit(1);
 
+// On startup: if persistOAuthToken is false, clear any existing token from disk
+if(cfg.persistOAuthToken === false && cfg.twitch?.botOAuthToken) {
+  try {
+    cfg.twitch.botOAuthToken = '';
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    console.log('✓ Cleared OAuth token from config.json (persistOAuthToken=false)');
+  } catch(e) {
+    console.error('✗ Failed to clear OAuth token on startup:', e.message);
+  }
+}
+
 // Initialize file logger if logToFile is enabled
 if (cfg.debug?.logToFile) {
   initFileLogger();
