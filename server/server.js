@@ -141,7 +141,8 @@ function loadConfig(){
       redirectUri: "http://localhost:3000/auth/callback"
     },
     channel: "",
-    botUsername: ""
+    botUsername: "",
+    persistOAuthToken: false
   };
   
   try{
@@ -456,20 +457,25 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
     delete merged.overlay;
     delete merged.skins;
     
-    // Preserve OAuth token in memory but clear it for disk
+    // Handle OAuth token based on persistOAuthToken setting
     const tokenForMemory = cfg.twitch?.botOAuthToken || '';
     if(merged.twitch) {
-      merged.twitch.botOAuthToken = ''; // Clear for disk write
+      if(cfg.persistOAuthToken) {
+        // Keep token in merged (will be saved to disk)
+      } else {
+        // Clear token for disk write, preserve in memory
+        merged.twitch.botOAuthToken = '';
+      }
     }
     
     fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2));
-    // Restore token in memory after writing to disk
-    if(cfg.twitch) {
+    // Restore token in memory if not persisting
+    if(cfg.twitch && !cfg.persistOAuthToken) {
       cfg.twitch.botOAuthToken = tokenForMemory;
     }
     Object.assign(cfg, merged);
-    // Ensure token is preserved in memory
-    if(cfg.twitch) {
+    // Ensure token is preserved in memory if not persisting
+    if(cfg.twitch && !cfg.persistOAuthToken) {
       cfg.twitch.botOAuthToken = tokenForMemory;
     }
     
@@ -517,14 +523,19 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
     const configToSave = { ...cfg };
     // Remove runtime properties that shouldn't be saved
     // (the config object might have other non-serializable properties)
-    // Never save OAuth token to disk - keep it in memory only
+    // Handle OAuth token based on persistOAuthToken setting
     const tokenForMemory = cfg.twitch?.botOAuthToken || '';
     if(configToSave.twitch) {
-      configToSave.twitch.botOAuthToken = ''; // Clear for disk write
+      if(cfg.persistOAuthToken) {
+        // Keep token in configToSave (will be saved to disk)
+      } else {
+        // Clear token for disk write
+        configToSave.twitch.botOAuthToken = '';
+      }
     }
     fs.writeFileSync(cfgPath, JSON.stringify(configToSave, null, 2));
-    // Restore token in memory (configToSave is a shallow copy, so we need to ensure cfg.twitch.botOAuthToken is preserved)
-    if(cfg.twitch) {
+    // Restore token in memory if not persisting
+    if(cfg.twitch && !cfg.persistOAuthToken) {
       cfg.twitch.botOAuthToken = tokenForMemory;
     }
     
@@ -911,7 +922,19 @@ async function connectTwitchBot(){
         const {access_token, refresh_token, expires_in} = resp.data;
         botTokenInfo = {access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000)};
         cfg.twitch.botOAuthToken = access_token;
-        dbg('Token refreshed in memory (not saved to disk)');
+        
+        // Save to disk if persistOAuthToken is enabled
+        if(cfg.persistOAuthToken) {
+          try {
+            fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+            dbg('Token refreshed and saved to config.json');
+          } catch(e) {
+            dbg('Token refreshed but failed to save to config:', e.message);
+          }
+        } else {
+          dbg('Token refreshed in memory only (persistOAuthToken=false)');
+        }
+        
         if(twitchClient){
           twitchClient.disconnect();
           twitchClient.opts.identity.password = access_token;
@@ -941,14 +964,20 @@ if(cfg.useServer){
 function shutdown(signal) {
   dbg(`Shutting down (${signal})...`);
   
-  // Clear sensitive OAuth token on shutdown
+  // Handle OAuth token based on persistOAuthToken setting
   if(cfg && cfg.twitch) {
-    cfg.twitch.botOAuthToken = '';
-    try {
-      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-      dbg('OAuth token cleared from config.json');
-    } catch(e) {
-      dbg('Failed to clear OAuth token:', e.message);
+    if(!cfg.persistOAuthToken) {
+      // Clear token from memory and disk if not persisting
+      cfg.twitch.botOAuthToken = '';
+      try {
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        dbg('OAuth token cleared from config.json (persistOAuthToken=false)');
+      } catch(e) {
+        dbg('Failed to clear OAuth token:', e.message);
+      }
+    } else {
+      // Token is persisted, keep it in config
+      dbg('OAuth token preserved in config.json (persistOAuthToken=true)');
     }
   }
   
@@ -992,11 +1021,23 @@ app.get('/auth/callback', async (req,res)=>{
     const {access_token, refresh_token, expires_in} = tokenResp.data;
     cfg.twitch.botOAuthToken = access_token;
     botTokenInfo = {access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000)};
-    dbg('OAuth token stored in memory (not saved to disk)');
+    
+    // Save to disk if persistOAuthToken is enabled
+    if(cfg.persistOAuthToken) {
+      try {
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        dbg('OAuth token saved to config.json (persistOAuthToken=true)');
+      } catch(e) {
+        dbg('Failed to save token to config:', e.message);
+      }
+    } else {
+      dbg('OAuth token stored in memory only (persistOAuthToken=false)');
+    }
+    
     res.send(`
       <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
         <h2>✓ OAuth Token Generated</h2>
-        <p>Token stored in memory only (not saved to disk)</p>
+        <p>Token ${cfg.persistOAuthToken ? 'saved to config.json' : 'stored in memory only'}</p>
         <p><a href="/" style="color:#0af">Go to Admin</a></p>
       </body></html>
     `);
