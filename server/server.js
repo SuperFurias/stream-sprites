@@ -887,8 +887,7 @@ async function connectTwitchBot(){
         const {access_token, refresh_token, expires_in} = resp.data;
         botTokenInfo = {access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000)};
         cfg.twitch.botOAuthToken = access_token;
-        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        dbg('Token refreshed successfully');
+        dbg('Token refreshed in memory (not saved to disk)');
         if(twitchClient){
           twitchClient.disconnect();
           twitchClient.opts.identity.password = access_token;
@@ -969,12 +968,11 @@ app.get('/auth/callback', async (req,res)=>{
     const {access_token, refresh_token, expires_in} = tokenResp.data;
     cfg.twitch.botOAuthToken = access_token;
     botTokenInfo = {access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000)};
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    dbg('OAuth token saved to config');
+    dbg('OAuth token stored in memory (not saved to disk)');
     res.send(`
       <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
         <h2>✓ OAuth Token Generated</h2>
-        <p>Token saved to config.json</p>
+        <p>Token stored in memory only (not saved to disk)</p>
         <p><a href="/" style="color:#0af">Go to Admin</a></p>
       </body></html>
     `);
