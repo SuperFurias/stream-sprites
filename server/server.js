@@ -506,6 +506,10 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
     const configToSave = { ...cfg };
     // Remove runtime properties that shouldn't be saved
     // (the config object might have other non-serializable properties)
+    // Never save OAuth token to disk - keep it in memory only
+    if(configToSave.twitch) {
+      configToSave.twitch.botOAuthToken = '';
+    }
     fs.writeFileSync(cfgPath, JSON.stringify(configToSave, null, 2));
     
     dbg('Settings applied dynamically:', cfg.debug);
