@@ -1,3 +1,65 @@
+<style>
+  /* Toggle switch styles */
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    position: relative;
+    padding: 8px 0;
+  }
+  
+  .toggle {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+  }
+  
+  .toggle-slider {
+    width: 50px;
+    height: 26px;
+    background-color: #4a5568;
+    border-radius: 34px;
+    position: relative;
+    transition: 0.3s;
+    flex-shrink: 0;
+  }
+  
+  .toggle-slider:before {
+    content: "";
+    position: absolute;
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+  }
+  
+  .toggle:checked + .toggle-slider {
+    background-color: #9146FF;
+  }
+  
+  .toggle:checked + .toggle-slider:before {
+    transform: translateX(24px);
+  }
+  
+  .toggle-text {
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  
+  .form-group small {
+    margin-top: 6px;
+    color: #a0aec0;
+    font-size: 12px;
+    line-height: 1.5;
+    margin-left: 62px;
+  }
+</style>
+
 <div class="panel">
   <h2>🔑 Twitch OAuth Setup</h2>
   <p>Generate a bot OAuth token using your Twitch Developer credentials.</p>
@@ -22,6 +84,15 @@
       <label for="channel">Channel</label>
       <input id="channel" type="text" placeholder="your_channel">
     </div>
+  </div>
+  
+  <div class="form-group">
+    <label for="persistOAuthToken" class="toggle-label">
+      <input id="persistOAuthToken" type="checkbox" class="toggle">
+      <span class="toggle-slider"></span>
+      <span class="toggle-text">Persist OAuth Token to Disk</span>
+    </label>
+    <small>If enabled, the OAuth token will be saved to config.json and survive server restarts. If disabled (default), token is stored in memory only and cleared on shutdown for better security.</small>
   </div>
   
   <div class="button-group">

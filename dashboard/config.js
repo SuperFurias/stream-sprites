@@ -19,6 +19,7 @@ function updateFormFields(cfg, clearValues = false){
   const clientSecretInput = document.getElementById('clientSecret');
   const botUsernameInput = document.getElementById('botUsername');
   const channelInput = document.getElementById('channel');
+  const persistOAuthTokenInput = document.getElementById('persistOAuthToken');
 
   if(!clientIdInput || !clientSecretInput || !botUsernameInput || !channelInput) return;
 
@@ -27,11 +28,13 @@ function updateFormFields(cfg, clearValues = false){
     clientSecretInput.value = '';
     botUsernameInput.value = '';
     channelInput.value = '';
+    if(persistOAuthTokenInput) persistOAuthTokenInput.checked = false;
   } else {
     clientIdInput.value = cfg.twitch?.clientId || '';
     clientSecretInput.value = cfg.twitch?.clientSecret || '';
     botUsernameInput.value = cfg.botUsername || '';
     channelInput.value = cfg.channel || '';
+    if(persistOAuthTokenInput) persistOAuthTokenInput.checked = cfg.persistOAuthToken || false;
   }
 }
 
@@ -46,8 +49,12 @@ async function saveConfig(){
     if(!res.ok) throw new Error('config not found');
     const currentCfg = await res.json();
 
+    const persistOAuthTokenInput = document.getElementById('persistOAuthToken');
+    const persistOAuthToken = persistOAuthTokenInput ? persistOAuthTokenInput.checked : false;
+    
     const cfg = {
       ...currentCfg,
+      persistOAuthToken: persistOAuthToken,
       twitch: {
         ...currentCfg.twitch || {},
         clientId: document.getElementById('clientId').value.trim(),
