@@ -20,6 +20,10 @@ Stream Sprites is an interactive overlay application that brings your Twitch cha
 
 ![Stream Sprites Demo](assets/skins/default.png)
 
+**Quickest way to start (Windows):** `.\start.ps1`
+**Dashboard:** `http://localhost:3000`
+**Overlay:** `http://localhost:3000/overlay/overlay.html`
+
 ## Features
 
 - **Real-time Chat Integration**: Connects to your Twitch channel and displays chat messages through animated sprites
@@ -34,79 +38,56 @@ Stream Sprites is an interactive overlay application that brings your Twitch cha
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Automated Setup (Recommended - Windows)
 
-- Node.js 18+ installed
-- A Twitch account with a registered application
-- Git (optional, for cloning)
+Simply run the startup script and let it handle everything:
 
-### Installation
-
-1. Clone or download this repository:
-```bash
-git clone https://github.com/yourusername/stream-sprites.git
-cd stream-sprites
+```powershell
+.\start.ps1
 ```
 
+The script will automatically:
+- Check for Node.js 18+ and install it if missing (using winget, Chocolatey, or prompt manual download)
+- Install all npm dependencies on first run
+- Start the server with auto-restart on crashes
+- Open the dashboard in your browser
+- Handle port conflicts by killing existing processes on port 3000
+
+### Option 2: Manual Setup
+
+If you prefer manual control or are on a non-Windows system:
+
+1. Ensure Node.js 18+ is installed: `node --version`
 2. Install dependencies:
 ```bash
 cd server
 npm install
 ```
 
-3. Configure the application:
-   - Create `server/.env` manually (it will be created automatically if missing)
-   - Edit `server/.env` with your Twitch credentials. The file uses JSON format:
-```json
-{
-  "useServer": true,
-  "serverPort": 3000,
-  "autoOpenBrowser": true,
-  "twitch": {
-    "clientId": "your_client_id_here",
-    "clientSecret": "your_client_secret_here",
-    "botOAuthToken": "",
-    "redirectUri": "http://localhost:3000/auth/callback"
-  },
-  "channel": "your_channel_name",
-  "botUsername": "your_bot_username",
-  "persistOAuthToken": false,
-  "debug": {
-    "serverDebug": true,
-    "twitchDebug": true,
-    "twitchAuthErrors": true,
-    "twitchOtherErrors": true,
-    "verboseMessages": true,
-    "logToFile": true
-  }
-}
-```
-
-4. Start the server:
+3. Start the server:
 ```bash
-# On Windows
-start.ps1
-
-# Or manually
-cd server
 npm start
 ```
 
-5. Open your browser to `http://localhost:3000`
+4. Open your browser to `http://localhost:3000`
 
-### First-Time Setup
+### First-Time Configuration
 
-1. Open the dashboard at `http://localhost:3000`
-2. Navigate to the **Config** tab
-3. Enter your Twitch Client ID and Client Secret (from your Twitch developer application)
-4. Enter your Bot Username and Channel name
-5. Click **Save Config**
-6. Click **Generate OAuth Token** to authenticate the bot with Twitch
-7. Click **Connect to Twitch** to start the bot
+1. The dashboard opens at `http://localhost:3000` (auto-opened by the script or manually navigate)
+2. Go to the **Config** tab
+3. Enter your Twitch credentials:
+   - **Client ID** and **Client Secret** from your Twitch developer application
+   - **Bot Username** (the Twitch account that will connect to chat)
+   - **Channel** (your Twitch channel name)
+4. Click **Save Config**
+5. Click **Generate OAuth Token** to authenticate the bot
+6. Click **Connect to Twitch** to start the bot
+
+**Note**: The `.env` file is created automatically in the `server/` directory on first run if it doesn't exist.
 
 ## Configuration
 
-The configuration file is located at `server/.env`. It uses JSON format with the following structure:
+The configuration file (`server/.env`) is created automatically on first run with default values. It uses JSON format:
 
 ```json
 {
@@ -114,21 +95,21 @@ The configuration file is located at `server/.env`. It uses JSON format with the
   "serverPort": 3000,
   "autoOpenBrowser": true,
   "twitch": {
-    "clientId": "...",
-    "clientSecret": "...",
+    "clientId": "",
+    "clientSecret": "",
     "botOAuthToken": "",
     "redirectUri": "http://localhost:3000/auth/callback"
   },
-  "channel": "your_channel",
-  "botUsername": "your_bot",
+  "channel": "",
+  "botUsername": "",
   "persistOAuthToken": false,
   "debug": {
-    "serverDebug": true,
-    "twitchDebug": true,
-    "twitchAuthErrors": true,
-    "twitchOtherErrors": true,
-    "verboseMessages": true,
-    "logToFile": true
+    "serverDebug": false,
+    "twitchDebug": false,
+    "twitchAuthErrors": false,
+    "twitchOtherErrors": false,
+    "verboseMessages": false,
+    "logToFile": false
   }
 }
 ```
@@ -187,9 +168,35 @@ The overlay is available at `http://localhost:3000/overlay/overlay.html`. It dis
 - Real-time chat messages
 - Physics-based sprite movement
 
+### OBS Setup
+
+1. In OBS Studio, add a **Browser Source** to your scene
+2. Set the URL to: `http://localhost:3000/overlay/overlay.html`
+3. Set width to `1280` and height to `720` (matches default canvas size)
+4. Check **"Control audio via OBS"** (optional, for future audio features)
+5. The overlay will display sprites and chat messages in real-time
+
+**Note:** The overlay connects via WebSocket to the server for real-time updates. Ensure your firewall allows connections on port 3000.
+
 ### Customization
 
 Overlay settings (canvas size, gravity, spawn rate, etc.) are configured in the server code and can be adjusted via the Settings tab in the dashboard.
+
+## Chat Commands
+
+Viewers can interact with the overlay using these chat commands:
+
+| Command | Description | Permissions |
+|---------|-------------|-------------|
+| `!jump` | Makes your sprite jump | Everyone |
+| `!sit` | Makes your sprite sit (smaller size) | Everyone |
+| `!unsit` | Returns your sprite to normal size | Everyone |
+| `!boom` | Triggers an explosion effect on all sprites | Everyone |
+| `!skins` | Lists all available skins | Everyone |
+| `!skin <name>` | Changes your sprite's skin (e.g., `!skin cat`) | Everyone |
+| `!spawn [quantity] [skin] [name]` | Spawns new sprites (mods/broadcaster only)<br/>Example: `!spawn 5 knight SpriteName` | Moderators & Broadcaster |
+
+**Note:** Skin names are case-insensitive. Use the names shown by the `!skins` command.
 
 ## Skins
 
@@ -282,14 +289,29 @@ stream-sprites/
 │   ├── .env           # Configuration (ignored by git)
 │   ├── db/            # SQLite database
 │   └── logs/          # Log files
-├── start.ps1          # Windows startup script
+├── start.ps1          # Windows startup script (recommended)
 └── README.md          # This file
 ```
 
-### Scripts
+### Running the Server
 
-- `npm start` - Start the server
-- `start.ps1` - Start server with auto-restart on Windows
+**Recommended (Windows):**
+```powershell
+.\start.ps1
+```
+
+**Manual (any platform):**
+```bash
+cd server
+npm start
+```
+
+The [`start.ps1`](start.ps1:1) script provides:
+- Automatic Node.js installation if missing
+- Dependency installation on first run
+- Auto-restart on crashes
+- Port conflict resolution
+- Browser auto-launch
 
 ## Security Notes
 
