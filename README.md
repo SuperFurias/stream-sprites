@@ -2,7 +2,7 @@
 
 **Version 1.0.0**
 
-Copyright 2026 [Your Name/Organization]
+Copyright 2026 SuperFurias
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,25 +55,31 @@ npm install
 ```
 
 3. Configure the application:
-   - Copy the example configuration (if provided) or create `server/.env` manually
-   - Edit `server/.env` with your Twitch credentials:
-```env
-useServer=true
-serverPort=3000
-autoOpenBrowser=true
-twitch.clientId=your_client_id_here
-twitch.clientSecret=your_client_secret_here
-twitch.botOAuthToken=
-twitch.redirectUri=http://localhost:3000/auth/callback
-channel=your_channel_name
-botUsername=your_bot_username
-persistOAuthToken=false
-debug.serverDebug=true
-debug.twitchDebug=true
-debug.twitchAuthErrors=true
-debug.twitchOtherErrors=true
-debug.verboseMessages=true
-debug.logToFile=true
+   - Create `server/.env` manually (it will be created automatically if missing)
+   - Edit `server/.env` with your Twitch credentials. The file uses JSON format:
+```json
+{
+  "useServer": true,
+  "serverPort": 3000,
+  "autoOpenBrowser": true,
+  "twitch": {
+    "clientId": "your_client_id_here",
+    "clientSecret": "your_client_secret_here",
+    "botOAuthToken": "",
+    "redirectUri": "http://localhost:3000/auth/callback"
+  },
+  "channel": "your_channel_name",
+  "botUsername": "your_bot_username",
+  "persistOAuthToken": false,
+  "debug": {
+    "serverDebug": true,
+    "twitchDebug": true,
+    "twitchAuthErrors": true,
+    "twitchOtherErrors": true,
+    "verboseMessages": true,
+    "logToFile": true
+  }
+}
 ```
 
 4. Start the server:
@@ -306,7 +312,7 @@ If you use, modify, or distribute this software, please retain the original
 copyright notice and attribution in all copies or substantial portions of the work.
 This includes keeping the NOTICE file intact when redistributing.
 
-Stream Sprites is developed by [Your Name/Organization] and the community.
+Stream Sprites is developed by SuperFurias and the community.
 If you fork or create a derivative work, please credit the original project:
 
 > Stream Sprites - https://github.com/SuperFurias/stream-sprites
