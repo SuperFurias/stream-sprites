@@ -12,7 +12,7 @@ function dbg(...args) {
 }
 
 export function handleCommand(username, text, tags, cfg, avatars, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
-                              spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatar, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, DEBUG = false) {
+                              spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatar, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate, DEBUG = false) {
   dbg('handleCommand:', { username, text, cmd: text.trim().split(' ')[0].toLowerCase() });
   const cmd = text.trim().split(' ')[0].toLowerCase();
   const args = text.trim().split(' ').slice(1);
@@ -56,7 +56,7 @@ export function handleCommand(username, text, tags, cfg, avatars, skins, W, GROU
     dbg('Skins response:', response);
   } else if (cmd === '!spawn') {
     dbg('Spawn command by', username, 'args:', args);
-    handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate);
   }
 
   return response;
@@ -97,7 +97,7 @@ function handleBoomCommand(avatars, W, GROUND_Y, explosionParticles, createExplo
   }
 }
 
-function handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, DEBUG = false) {
+function handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate, DEBUG = false) {
   if (DEBUG) console.log('!spawn command received:', { username, args, tags, channel: cfg.channel, botUsername: cfg.botUsername });
   
   const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
@@ -132,17 +132,23 @@ function handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAva
       const uniqueId = uniqueName.toLowerCase();
       
       const existing = avatars.get(uniqueId);
+      let av;
       if (!existing) {
-        const newAv = spawn(uniqueName, avatars, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatar, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
-        newAv.skin = targetSkin;
-        newAv.lastActivity = Date.now();
-        if (DEBUG) console.log('!spawn created new sprite:', newAv.id);
+        av = spawn(uniqueName, avatars, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatar, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+        av.skin = targetSkin;
+        av.lastActivity = Date.now();
+        if (DEBUG) console.log('!spawn created new sprite:', av.id);
       } else {
-        existing.skin = targetSkin;
-        existing.lastActivity = Date.now();
-        existing.vx += (Math.random() - 0.5) * VELOCITY_BUMP;
-        existing.vy -= Math.random() * VELOCITY_BUMP;
-        if (DEBUG) console.log('!spawn updated existing sprite:', existing.id);
+        av = existing;
+        av.skin = targetSkin;
+        av.lastActivity = Date.now();
+        av.vx += (Math.random() - 0.5) * VELOCITY_BUMP;
+        av.vy -= Math.random() * VELOCITY_BUMP;
+        if (DEBUG) console.log('!spawn updated existing sprite:', av.id);
+      }
+      // Notify server about this avatar (server-authoritative sync)
+      if (sendAvatarUpdate && typeof sendAvatarUpdate === 'function') {
+        sendAvatarUpdate(av);
       }
     }
   } else if (DEBUG) {

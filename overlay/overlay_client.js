@@ -82,6 +82,9 @@ function dbg(...args) {
   const userSkinCache = createUserSkinCache();
   const gifRenderer = createGifRenderer();
   
+  // Initialize window._SA early so connection can be added
+  window._SA = {};
+  
   // Load skins
   dbg('Loading skins...');
   loadSkinsFromConfig(skins, cfg);
@@ -118,16 +121,96 @@ function dbg(...args) {
     return createAvatar(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
   }
   
+  // Send avatar update to server
+  function sendAvatarUpdateToServer(av) {
+    if (USE_SERVER && window._SA && window._SA.connection && window._SA.connection.isConnected()) {
+      window._SA.connection.send(JSON.stringify({
+        type: 'avatarUpdate',
+        id: av.id,
+        username: av.username,
+        skin: av.skin,
+        lastActivity: Date.now(),
+        createdAt: av.createdAt,
+        action: 'spawn'
+      }));
+    } else if (USE_SERVER) {
+      dbg('WebSocket not connected, skipping avatarUpdate for', av.username);
+    }
+  }
+  
   // Spawn wrapper
   function spawnAvatar(username) {
-    return spawn(username, avatars, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarWithContext, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    const av = spawn(username, avatars, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarWithContext, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    sendAvatarUpdateToServer(av);
+    return av;
+  }
+  
+  // Sync avatars from server state (server-authoritative)
+  function syncAvatarsFromServer(serverAvatarList) {
+    const serverIds = new Set(serverAvatarList.map(av => av.id));
+    
+    // Remove avatars that are no longer on the server
+    for (const [id, av] of avatars) {
+      if (!serverIds.has(id)) {
+        avatars.delete(id);
+        dbg('Removed avatar not on server:', id);
+      }
+    }
+    
+    // Update existing avatars and add new ones
+    for (const serverAv of serverAvatarList) {
+      const existingAv = avatars.get(serverAv.id);
+      if (existingAv) {
+        // Update skin and activity from server (preserve physics state)
+        if (existingAv.skin !== serverAv.skin) {
+          existingAv.skin = serverAv.skin;
+          dbg('Updated skin for', serverAv.username, 'to', serverAv.skin);
+        }
+        existingAv.lastActivity = serverAv.lastActivity;
+        existingAv.createdAt = serverAv.createdAt;
+      } else {
+        // Create new avatar from server state
+        const newAv = createAvatarWithContext(serverAv.username);
+        newAv.skin = serverAv.skin;
+        newAv.lastActivity = serverAv.lastActivity;
+        newAv.createdAt = serverAv.createdAt;
+        avatars.set(newAv.id, newAv);
+        dbg('Created new avatar from server:', serverAv.username);
+      }
+    }
+    
+    dbg('Synced with server: ', serverAvatarList.length, 'avatars, local count:', avatars.size);
+  }
+  
+  // Send full current avatar state to server
+  function sendFullStateToServer() {
+    if (!USE_SERVER || !window._SA || !window._SA.connection || !window._SA.connection.isConnected()) {
+      dbg('Cannot send full state: WebSocket not connected');
+      return;
+    }
+    
+    const avatarList = Array.from(avatars.values()).map(av => ({
+      id: av.id,
+      username: av.username,
+      skin: av.skin,
+      createdAt: av.createdAt,
+      lastActivity: Date.now()
+    }));
+    
+    window._SA.connection.send(JSON.stringify({
+      type: 'fullState',
+      avatars: avatarList,
+      timestamp: Date.now()
+    }));
+    
+    dbg('Sent full state to server:', avatarList.length, 'avatars');
   }
   
   // Command handler wrapper
   async function handleUserCommand(username, text, tags = {}) {
     console.log('[DEBUG] handleUserCommand:', { username, text });
     const response = handleCommand(username, text, tags, cfg, avatars, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
-                  spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, DEBUG);
+                  spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdateToServer, DEBUG);
     
     console.log('[DEBUG] Command response:', response);
     
@@ -199,13 +282,22 @@ function dbg(...args) {
               avatars.clear();
               gifRenderer.clear();
             }
+          },
+          (avatarState) => {
+            dbg('Received avatar state from server:', avatarState.avatars.length, 'avatars');
+            // Sync local avatars with server state
+            syncAvatarsFromServer(avatarState.avatars);
           }
         );
       },
-      () => dbg('WebSocket connected')
+      () => {
+        dbg('WebSocket connected');
+        // Send full avatar state to server to ensure it knows about all current avatars
+        sendFullStateToServer();
+      }
     );
     
-    // Expose connection for debugging
+    // Expose connection for sending messages to server
     window._SA.connection = connection;
   } else {
     dbg('USE_SERVER=false - setting up TMI fallback');
@@ -218,9 +310,14 @@ function dbg(...args) {
     });
   }
   
+  // Complete window._SA initialization with remaining properties
+  window._SA.spawn = spawnAvatar;
+  window._SA.avatars = avatars;
+  window._SA.skins = skins;
+  window._SA.gifRenderer = gifRenderer;
+  
   // Debug
   dbg('Overlay initialized successfully');
-  window._SA = { spawn: spawnAvatar, avatars, skins, gifRenderer };
   
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
