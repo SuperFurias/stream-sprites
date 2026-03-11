@@ -311,9 +311,9 @@ app.get('/config.json', (req,res) => {
   
   // Provide default overlay settings (not stored in .env)
   const defaultOverlay = {
-    canvasWidth: 1280,
-    canvasHeight: 720,
-    groundY: 620,
+    canvasWidth: 1920,
+    canvasHeight: 1080,
+    groundY: 920,
     gravity: 0.6,
     maxAvatars: 1500,
     spawnThrottleMs: 700,

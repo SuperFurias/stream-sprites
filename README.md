@@ -120,7 +120,7 @@ The configuration file (`server/.env`) is created automatically on first run wit
 |--------|------|---------|-------------|
 | `useServer` | boolean | `true` | Enable/disable Twitch bot connection |
 | `serverPort` | number | `3000` | Port for the web server |
-| `autoOpenBrowser` | boolean | `true` | Automatically open dashboard on startup |
+| `autoOpenBrowser` | boolean | `true` | Automatically open dashboard in browser when server starts (managed by server) |
 | `twitch.clientId` | string | `""` | Twitch application client ID |
 | `twitch.clientSecret` | string | `""` | Twitch application client secret |
 | `twitch.botOAuthToken` | string | `""` | Bot OAuth token (generated via UI) |
@@ -172,7 +172,7 @@ The overlay is available at `http://localhost:3000/overlay/overlay.html`. It dis
 
 1. In OBS Studio, add a **Browser Source** to your scene
 2. Set the URL to: `http://localhost:3000/overlay/overlay.html`
-3. Set width to `1280` and height to `720` (matches default canvas size)
+3. Set width to `1920` and height to `1080` (matches default 1080p canvas size)
 4. Check **"Control audio via OBS"** (optional, for future audio features)
 5. The overlay will display sprites and chat messages in real-time
 
@@ -218,7 +218,7 @@ Skins are automatically detected on startup and when the `/api/skins/auto` endpo
 
 ### Public Endpoints
 
-- `GET /config.json` - Returns merged configuration with auto-detected skins
+- `GET /config.json` - Returns merged configuration (from `.env` + auto-detected skins + overlay defaults) as JSON
 - `GET /api/skins` - List all available skins
 - `GET /api/skins/auto` - Auto-detect skins from assets folder
 - `GET /api/user/:id` - Get user's assigned skin
