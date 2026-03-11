@@ -4,6 +4,8 @@
 
 After extensive development and testing, Stream Sprites is finally ready for its first stable release. Version 1.0.0 brings a complete, production-ready interactive overlay system for Twitch streamers.
 
+**Release Date:** March 11, 2026
+
 ## ✨ Key Features
 
 - **Real-time Chat Integration**: Your viewers' chat messages come to life through animated sprites
@@ -101,7 +103,9 @@ Thank you to the Twitch community for the inspiration and feedback!
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE) files for details.
+
+This software is licensed under the Apache License 2.0, which requires attribution when redistributing or creating derivative works. Please see the NOTICE file for full attribution requirements.
 
 ---
 

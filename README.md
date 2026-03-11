@@ -2,6 +2,20 @@
 
 **Version 1.0.0**
 
+Copyright 2026 [Your Name/Organization]
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 Stream Sprites is an interactive overlay application that brings your Twitch chat to life with animated sprites. Each viewer gets their own sprite that appears on your overlay, creating a dynamic and engaging experience for your stream.
 
 ![Stream Sprites Demo](assets/skins/default.png)
@@ -284,7 +298,18 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
-MIT License - see LICENSE file for details.
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE) files for details.
+
+## Attribution
+
+If you use, modify, or distribute this software, please retain the original
+copyright notice and attribution in all copies or substantial portions of the work.
+This includes keeping the NOTICE file intact when redistributing.
+
+Stream Sprites is developed by [Your Name/Organization] and the community.
+If you fork or create a derivative work, please credit the original project:
+
+> Stream Sprites - https://github.com/SuperFurias/stream-sprites
 
 ## Acknowledgments
 

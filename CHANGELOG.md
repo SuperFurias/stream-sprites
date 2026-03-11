@@ -5,7 +5,7 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-03-11
+## [1.0.0] - 2026-03-11
 
 ### Added
 - Initial public release
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OAuth token can be stored in memory only (default) or persisted to disk
 - No authentication on admin endpoints (development mode - should be added for production)
 
-## [0.3.0] - Early Development
+## [0.3.0] - Early Development (Pre-2025)
 
 ### Added
 - Initial development version

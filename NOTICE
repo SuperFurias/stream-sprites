@@ -1,0 +1,16 @@
+Stream Sprites
+Copyright 2026 [Your Name/Organization]
+
+This product includes software developed by Stream Sprites Contributors.
+https://github.com/SuperFurias/stream-sprites
+
+Third-party licenses:
+- Express.js - MIT License
+- tmi.js - MIT License
+- ws - MIT License
+- better-sqlite3 - MIT License
+- axios - MIT License
+- And other open-source dependencies
+
+All third-party licenses are available in the node_modules directory
+or at https://github.com/SuperFurias/stream-sprites/blob/master/LICENSE
