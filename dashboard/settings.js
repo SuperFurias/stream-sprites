@@ -5,13 +5,238 @@ tabInitializers.settings = async function() {
   await loadSettings();
 };
 
+// Default overlay values (must match server's defaultOverlay)
+const defaultOverlay = {
+  canvasWidth: 1920,
+  canvasHeight: 1080,
+  groundY: 920,
+  gravity: 0.6,
+  airResistance: 0.992,
+  groundFriction: 0.92,
+  bounceDamping: 0.65,
+  minVelocity: 0.15,
+  maxAvatars: 1500,
+  maxSpawnQuantity: 100,
+  spawnThrottleMs: 700,
+  spriteSizeMin: 30,
+  spriteSizeMax: 80,
+  spawnMaxTries: 8,
+  spawnYOffset: 40,
+  spawnJitter: 6,
+  spawnBoundsPadding: 60,
+  spawnSizePadding: 120,
+  initialVelocity: 2,
+  spriteLifetimeMs: 30 * 60 * 1000,
+  fadeWarningMs: 5 * 60 * 1000,
+  collisionPersonalSpaceThreshold: 0.1,
+  collisionForceMultiplier: 0.02,
+  collisionProbabilityScaling: 1,
+  collisionProbabilityLow: 0.0,
+  collisionProbabilityMedium: 0.5,
+  collisionProbabilityHigh: 1.0,
+  collisionCountThresholdLow: 5,
+  collisionCountThresholdHigh: 15,
+  explosionForceMultiplier: 60,
+  explosionRadiusBase: 400,
+  explosionRadiusVar: 300,
+  explosionUpwardBias: 0.7,
+  spinStrengthFactor: 0.05,
+  randomJitterFactor: 0.2,
+  explosionTimingJitter: 0.3,
+  roamZoneYOffset: 30,
+  roamDurationBase: 3000,
+  roamDurationVar: 4000,
+  roamDistanceThreshold: 5,
+  roamWalkForceMultiplier: 0.2,
+  roamWalkVerticalFactor: 0.3,
+  roamSteerForceMultiplier: 0.1,
+  roamSteerVerticalFactor: 0.2,
+  roamArrivalThreshold: 10,
+  roamRandomMoveChance: 0.03,
+  roamRandomMoveForce: 0.3,
+  roamRandomMoveVertical: 0.1,
+  textWidthPadding: 4,
+  wiggleRange: 1000,
+  particleCountBase: 30,
+  particleCountVar: 20,
+  particleSpeedBase: 2,
+  particleSpeedVar: 4,
+  particleGravity: 0.1,
+  particleDecayBase: 0.01,
+  particleDecayVar: 0.02,
+  particleSizeBase: 3,
+  particleSizeVar: 5,
+  particleHueBase: 10,
+  particleHueRange: 60,
+  nameLengthLimit: 32,
+  velocityBump: 3,
+  draggedGravity: 0.5,
+  danceGravityFactor: -0.2,
+  danceAngularVelocity: 0.1,
+  tiltReturnTime: 1000,
+  danceFrequency: 200,
+  massDivisor: 1000,
+  momentOfInertiaFactor: 0.5,
+  heightScaleSit: 0.75,
+  heightScaleIdle: 1.0,
+  dtCap: 0.05,
+  groundYMultiplier: 0.99,
+  safetyNudgeDistance: 0.5,
+  angularVelocityDecay: 0.98,
+  angleDecay: 0.95,
+  tiltAngularDecay: 0.9,
+  tiltAngleThreshold: 0.01,
+  lifetimeCleanupThreshold: 10,
+  zoneSelectionBias: 0.7,
+  spatialHashCellSize: 64,
+  numZones: 5,
+  avoidanceRadiusMultiplier: 2.0,
+  sizeSimilarityThreshold: 0.85,
+  expandedRadiusMultiplier: 4.0,
+  sizeDiffThresholdLow: 0.7,
+  sizeDiffAttractionMultiplier: 1.5,
+  minAttractionDistance: 20,
+  sizeDiffFactor: 2.0,
+  attractionForceBase: 0.08,
+  largerRepulsionFactor: 0.3,
+  moderateRepulsionRadius: 1.0,
+  moderateRepulsionForce: 0.08,
+  centerPushRadius: 150,
+  centerPushForce: 0.02,
+  groundYCenterOffset: 0.8,
+  directionChangeThreshold: 0.3,
+  resizeDebounceMs: 100
+};
+
+// Map of input IDs to overlay config keys
+const overlayFieldMap = {
+  // Canvas
+  canvasWidth: 'canvasWidth',
+  canvasHeight: 'canvasHeight',
+  groundY: 'groundY',
+  
+  // Physics
+  gravity: 'gravity',
+  airResistance: 'airResistance',
+  groundFriction: 'groundFriction',
+  bounceDamping: 'bounceDamping',
+  minVelocity: 'minVelocity',
+  
+  // Spawning
+  maxAvatars: 'maxAvatars',
+  maxSpawnQuantity: 'maxSpawnQuantity',
+  spawnThrottleMs: 'spawnThrottleMs',
+  spriteSizeMin: 'spriteSizeMin',
+  spriteSizeMax: 'spriteSizeMax',
+  spawnMaxTries: 'spawnMaxTries',
+  spawnYOffset: 'spawnYOffset',
+  spawnJitter: 'spawnJitter',
+  spawnBoundsPadding: 'spawnBoundsPadding',
+  spawnSizePadding: 'spawnSizePadding',
+  initialVelocity: 'initialVelocity',
+  
+  // Lifetime
+  spriteLifetimeMs: 'spriteLifetimeMs',
+  fadeWarningMs: 'fadeWarningMs',
+  
+  // Collision
+  collisionPersonalSpaceThreshold: 'collisionPersonalSpaceThreshold',
+  collisionForceMultiplier: 'collisionForceMultiplier',
+  collisionProbabilityScaling: 'collisionProbabilityScaling',
+  collisionProbabilityLow: 'collisionProbabilityLow',
+  collisionProbabilityMedium: 'collisionProbabilityMedium',
+  collisionProbabilityHigh: 'collisionProbabilityHigh',
+  collisionCountThresholdLow: 'collisionCountThresholdLow',
+  collisionCountThresholdHigh: 'collisionCountThresholdHigh',
+  
+  // Explosion
+  explosionForceMultiplier: 'explosionForceMultiplier',
+  explosionRadiusBase: 'explosionRadiusBase',
+  explosionRadiusVar: 'explosionRadiusVar',
+  explosionUpwardBias: 'explosionUpwardBias',
+  spinStrengthFactor: 'spinStrengthFactor',
+  randomJitterFactor: 'randomJitterFactor',
+  explosionTimingJitter: 'explosionTimingJitter',
+  
+  // Roaming
+  roamZoneYOffset: 'roamZoneYOffset',
+  roamDurationBase: 'roamDurationBase',
+  roamDurationVar: 'roamDurationVar',
+  roamDistanceThreshold: 'roamDistanceThreshold',
+  roamWalkForceMultiplier: 'roamWalkForceMultiplier',
+  roamWalkVerticalFactor: 'roamWalkVerticalFactor',
+  roamSteerForceMultiplier: 'roamSteerForceMultiplier',
+  roamSteerVerticalFactor: 'roamSteerVerticalFactor',
+  roamArrivalThreshold: 'roamArrivalThreshold',
+  roamRandomMoveChance: 'roamRandomMoveChance',
+  roamRandomMoveForce: 'roamRandomMoveForce',
+  roamRandomMoveVertical: 'roamRandomMoveVertical',
+  
+  // Visual
+  textWidthPadding: 'textWidthPadding',
+  wiggleRange: 'wiggleRange',
+  
+  // Particles
+  particleCountBase: 'particleCountBase',
+  particleCountVar: 'particleCountVar',
+  particleSpeedBase: 'particleSpeedBase',
+  particleSpeedVar: 'particleSpeedVar',
+  particleGravity: 'particleGravity',
+  particleDecayBase: 'particleDecayBase',
+  particleDecayVar: 'particleDecayVar',
+  particleSizeBase: 'particleSizeBase',
+  particleSizeVar: 'particleSizeVar',
+  particleHueBase: 'particleHueBase',
+  particleHueRange: 'particleHueRange',
+  
+  // Other
+  nameLengthLimit: 'nameLengthLimit',
+  velocityBump: 'velocityBump',
+  draggedGravity: 'draggedGravity',
+  danceGravityFactor: 'danceGravityFactor',
+  danceAngularVelocity: 'danceAngularVelocity',
+  tiltReturnTime: 'tiltReturnTime',
+  danceFrequency: 'danceFrequency',
+  massDivisor: 'massDivisor',
+  momentOfInertiaFactor: 'momentOfInertiaFactor',
+  heightScaleSit: 'heightScaleSit',
+  heightScaleIdle: 'heightScaleIdle',
+  dtCap: 'dtCap',
+  groundYMultiplier: 'groundYMultiplier',
+  safetyNudgeDistance: 'safetyNudgeDistance',
+  angularVelocityDecay: 'angularVelocityDecay',
+  angleDecay: 'angleDecay',
+  tiltAngularDecay: 'tiltAngularDecay',
+  tiltAngleThreshold: 'tiltAngleThreshold',
+  lifetimeCleanupThreshold: 'lifetimeCleanupThreshold',
+  zoneSelectionBias: 'zoneSelectionBias',
+  spatialHashCellSize: 'spatialHashCellSize',
+  numZones: 'numZones',
+  avoidanceRadiusMultiplier: 'avoidanceRadiusMultiplier',
+  sizeSimilarityThreshold: 'sizeSimilarityThreshold',
+  expandedRadiusMultiplier: 'expandedRadiusMultiplier',
+  sizeDiffThresholdLow: 'sizeDiffThresholdLow',
+  sizeDiffAttractionMultiplier: 'sizeDiffAttractionMultiplier',
+  minAttractionDistance: 'minAttractionDistance',
+  sizeDiffFactor: 'sizeDiffFactor',
+  attractionForceBase: 'attractionForceBase',
+  largerRepulsionFactor: 'largerRepulsionFactor',
+  moderateRepulsionRadius: 'moderateRepulsionRadius',
+  moderateRepulsionForce: 'moderateRepulsionForce',
+  centerPushRadius: 'centerPushRadius',
+  centerPushForce: 'centerPushForce',
+  groundYCenterOffset: 'groundYCenterOffset',
+  directionChangeThreshold: 'directionChangeThreshold',
+  resizeDebounceMs: 'resizeDebounceMs'
+};
+
 async function loadSettings() {
   try {
     const response = await fetch('/env');
     if (!response.ok) throw new Error('Failed to load config');
     const config = await response.json();
     
-    // Load debug settings from config.debug or use defaults
+    // Load debug settings
     const debugSettings = config.debug || {
       serverDebug: false,
       twitchDebug: false,
@@ -21,7 +246,6 @@ async function loadSettings() {
       logToFile: false
     };
     
-    // Set checkbox states
     document.getElementById('serverDebug').checked = debugSettings.serverDebug || false;
     document.getElementById('twitchDebug').checked = debugSettings.twitchDebug || false;
     document.getElementById('twitchAuthErrors').checked = debugSettings.twitchAuthErrors || false;
@@ -29,10 +253,26 @@ async function loadSettings() {
     document.getElementById('verboseMessages').checked = debugSettings.verboseMessages || false;
     document.getElementById('logToFile').checked = debugSettings.logToFile || false;
     
-    // Display current settings
-    updateCurrentSettingsDisplay(debugSettings);
+    // Load overlay settings
+    const overlay = config.overlay || {};
+    for (const [fieldId, configKey] of Object.entries(overlayFieldMap)) {
+      const input = document.getElementById(fieldId);
+      if (input) {
+        const value = overlay[configKey];
+        if (value !== undefined) {
+          input.value = value;
+        } else {
+          // Use default if not present
+          const defaultVal = defaultOverlay[configKey];
+          if (defaultVal !== undefined) {
+            input.value = defaultVal;
+          }
+        }
+      }
+    }
     
-    // Clear messages
+    updateCurrentSettingsDisplay(config);
+    
     document.getElementById('settingsStatus').textContent = '';
     document.getElementById('settingsSuccess').textContent = '';
   } catch (err) {
@@ -41,7 +281,8 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  const settings = {
+  // Collect debug settings
+  const debugSettings = {
     serverDebug: document.getElementById('serverDebug').checked,
     twitchDebug: document.getElementById('twitchDebug').checked,
     twitchAuthErrors: document.getElementById('twitchAuthErrors').checked,
@@ -50,16 +291,27 @@ async function saveSettings() {
     logToFile: document.getElementById('logToFile').checked
   };
   
+  // Collect overlay settings
+  const overlaySettings = {};
+  for (const [fieldId, configKey] of Object.entries(overlayFieldMap)) {
+    const input = document.getElementById(fieldId);
+    if (input) {
+      const value = parseValue(input.value, input.type);
+      overlaySettings[configKey] = value;
+    }
+  }
+  
   try {
-    // First, get current config
+    // Get current config
     const configResponse = await fetch('/env');
     if (!configResponse.ok) throw new Error('Failed to load current config');
     const currentConfig = await configResponse.json();
     
-    // Merge settings into config
+    // Merge settings
     const updatedConfig = {
       ...currentConfig,
-      debug: settings
+      debug: debugSettings,
+      overlay: overlaySettings
     };
     
     // Save via admin API
@@ -74,38 +326,48 @@ async function saveSettings() {
       throw new Error(error.error || 'Failed to save settings');
     }
     
-    showSuccess('settingsSuccess', 'Settings saved successfully!');
-    updateCurrentSettingsDisplay(settings);
+    showSuccess('settingsSuccess', 'Settings saved successfully! Server will reload config.');
+    updateCurrentSettingsDisplay(updatedConfig);
     
-    // Apply settings immediately if possible
-    applySettings(settings);
+    // Apply debug settings dynamically
+    applySettings(debugSettings);
   } catch (err) {
     showError('settingsStatus', 'Failed to save settings: ' + err.message);
   }
 }
 
-function resetSettings() {
-  if (confirm('Reset all settings to defaults?')) {
-    document.getElementById('serverDebug').checked = false;
-    document.getElementById('twitchDebug').checked = false;
-    document.getElementById('twitchAuthErrors').checked = false;
-    document.getElementById('twitchOtherErrors').checked = false;
-    document.getElementById('verboseMessages').checked = false;
-    document.getElementById('logToFile').checked = false;
-    
-    const defaults = {
-      serverDebug: false,
-      twitchDebug: false,
-      twitchAuthErrors: false,
-      twitchOtherErrors: false,
-      verboseMessages: false,
-      logToFile: false
-    };
-    
-    updateCurrentSettingsDisplay(defaults);
-    document.getElementById('settingsStatus').textContent = '';
-    document.getElementById('settingsSuccess').textContent = '';
+function parseValue(value, type) {
+  if (type === 'number') {
+    const num = parseFloat(value);
+    return isNaN(num) ? 0 : num;
   }
+  return value;
+}
+
+function resetSettings() {
+  if (!confirm('Reset all settings to defaults? This will clear all custom overlay configuration.')) return;
+  
+  // Reset debug checkboxes
+  document.getElementById('serverDebug').checked = false;
+  document.getElementById('twitchDebug').checked = false;
+  document.getElementById('twitchAuthErrors').checked = false;
+  document.getElementById('twitchOtherErrors').checked = false;
+  document.getElementById('verboseMessages').checked = false;
+  document.getElementById('logToFile').checked = false;
+  
+  // Reset all overlay fields to defaults
+  for (const [fieldId] of Object.entries(overlayFieldMap)) {
+    const input = document.getElementById(fieldId);
+    if (input) {
+      const defaultVal = defaultOverlay[overlayFieldMap[fieldId]];
+      if (defaultVal !== undefined) {
+        input.value = defaultVal;
+      }
+    }
+  }
+  
+  document.getElementById('settingsStatus').textContent = '';
+  document.getElementById('settingsSuccess').textContent = '';
 }
 
 function updateCurrentSettingsDisplay(settings) {
@@ -115,7 +377,7 @@ function updateCurrentSettingsDisplay(settings) {
 }
 
 function applySettings(settings) {
-  // Send settings to server to apply dynamically
+  // Send settings to server to apply dynamically (debug settings only)
   fetch('/api/admin/applySettings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
