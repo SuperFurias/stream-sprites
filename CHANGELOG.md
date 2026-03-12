@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Prevented stale avatars from being restored after server restart by filtering fullState messages with pre-startup timestamps
 - Improved avatar state synchronization between server and overlay clients
+- Fixed !jump command in server mode - jump now properly broadcasts velocity to all clients
+- Removed chat response for !jump command to keep it silent
 
 ## [1.0.0] - 2026-03-11
 
