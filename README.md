@@ -1,6 +1,6 @@
 # Stream Sprites
 
-**Version 1.0.0**
+**Version 1.0.1**
 
 Copyright 2026 SuperFurias
 
