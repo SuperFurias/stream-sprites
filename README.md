@@ -218,7 +218,7 @@ Viewers can interact with the overlay using these chat commands:
 
 | Command | Description | Permissions |
 |---------|-------------|-------------|
-| `!jump` | Makes your sprite jump (fixed in v1.0.1 for server mode) | Everyone |
+| `!jump` | Makes your sprite jump | Everyone |
 | `!sit` | Makes your sprite sit (smaller size) | Everyone |
 | `!unsit` | Returns your sprite to normal size | Everyone |
 | `!boom` | Triggers an explosion effect on all sprites | Everyone |
