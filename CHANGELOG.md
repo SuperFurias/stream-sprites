@@ -8,13 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.1] - 2026-03-12
 
 ### Added
+- Comprehensive overlay settings UI in dashboard with all physics and visual parameters
+- Server-authoritative spawning system to prevent duplicate avatars
 - Clear all avatars on server startup for fresh state
+- Expanded overlay configuration with 50+ tunable parameters
+- Increased max spawn quantity from 10 to 100
+
+### Changed
+- Refactored overlay configuration: moved all defaults to client-side config.js
+- Removed duplicate default values from client configuration
+- Consolidated maxSpawnQuantity into overlay config structure
+- Improved command handling with proper tags.skipSpawn and tags.isCommand flags
+- Restructured chat message metadata for better client-server communication
 
 ### Fixed
-- Prevented stale avatars from being restored after server restart by filtering fullState messages with pre-startup timestamps
-- Improved avatar state synchronization between server and overlay clients
-- Fixed !jump command in server mode - jump now properly broadcasts velocity to all clients
-- Removed chat response for !jump command to keep it silent
+- Fixed !spawn command to be additive instead of replacing sprites
+- Fixed filtering of stale avatarUpdate messages from previous server instances
+- Fixed client-side command handling to correctly check server-processed commands
+
+### Security
+- No new security changes in this release
 
 ## [1.0.0] - 2026-03-11
 

@@ -1,55 +1,97 @@
 # Stream Sprites v1.0.1 Release Notes
 
-## 🎯 Point Release - Bug Fixes & Improvements
+## 🎉 Minor Update - Bug Fixes and Major Improvements!
 
-Version 1.0.1 addresses important issues and adds refinements to the v1.0.0 release.
+Version 1.0.1 addresses several important issues and adds significant quality-of-life improvements to the overlay system. This is a recommended update for all users.
 
 **Release Date:** March 12, 2026
 
+## 🔧 Major Changes
+
+### Comprehensive Overlay Settings UI
+The Settings tab has been completely redesigned with a comprehensive UI for tuning every aspect of the overlay:
+- **Canvas settings**: Width, height, ground position
+- **Physics parameters**: Gravity, air resistance, friction, bounce
+- **Spawning controls**: Max avatars, spawn throttling, sprite sizes
+- **Collision tuning**: Personal space, force multipliers, probability scaling
+- **Explosion effects**: Force, radius, upward bias, spin, jitter
+- **Roaming behavior**: Zone settings, walk forces, steering
+- **Visual options**: Text padding, wiggle range
+- **Particle system**: Count, speed, gravity, decay, size, color
+- **Advanced parameters**: Mass, inertia, tilt recovery, spatial hash settings
+
+All settings are saved to `.env` and can be adjusted without server restart (some require overlay refresh).
+
+### Server-Authoritative Spawning
+Implemented server-side validation to prevent duplicate avatars:
+- Server tracks all spawned avatars authoritatively
+- Clients must sync with server state on connect
+- Prevents race conditions and duplicate spawns
+- Improves consistency across multiple overlay clients
+
+### Expanded Configuration System
+- Moved all overlay defaults to client-side `config.js` for better maintainability
+- Added 50+ new configurable parameters
+- Consolidated `maxSpawnQuantity` into overlay config (increased from 10 to 100)
+- Improved configuration structure with clear separation between server and overlay settings
+
 ## 🐛 Bug Fixes
 
-### Critical Fix: !jump Command in Server Mode
-- Fixed the `!jump` command not working when server mode is enabled
-- The server now broadcasts a jump command to all connected clients, which apply the upward velocity to the corresponding avatar
-- Removed the chat response for `!jump` to keep the command silent (like `!boom`, `!sit`, `!unsit`)
+### !spawn Command Fix
+Fixed `!spawn` command to be additive instead of replacing sprites. Multiple spawns now correctly create new sprites rather than overwriting existing ones.
 
-### Avatar State Synchronization
-- Prevented stale avatars from being restored after server restart by filtering `fullState` messages with pre-startup timestamps
-- Improved synchronization between server-side and client-side avatar states
-- Better handling of avatar lifecycle across server restarts
+### Stale Message Filtering
+Improved filtering of stale `avatarUpdate` messages from previous server instances. Avatars created before server startup are now properly ignored, preventing phantom avatars after server restarts.
 
-## 🔧 Improvements
+### Command Handling
+Fixed client-side command handling to correctly check `tags.skipSpawn` and `tags.isCommand` flags, ensuring proper coordination between server-processed and client-processed commands.
 
-- Server now clears all avatars on startup to ensure a fresh state
-- Enhanced WebSocket message handling for command routing
-- More robust avatar state management in server-authoritative mode
+## 📚 Documentation Updates
+- Updated README with new settings UI and expanded configuration options
+- Improved API endpoint documentation
+- Enhanced troubleshooting section
 
-## 📊 Technical Details
+## 🔄 Technical Improvements
+- Refactored chat message metadata structure for better client-server communication
+- Improved WebSocket message handling with proper error boundaries
+- Enhanced avatar state synchronization on connection
+- Better handling of server restarts and client reconnections
 
-**Files Modified:**
-- `server/server.js`: Added jump command broadcasting, improved avatar state handling
-- `overlay/js/connection.js`: Added jump command routing through `handleWebSocketMessage`
-- `overlay/overlay_client.js`: Added jump velocity application in command handler
+## 📊 Full Changelog
 
-**Server-Client Protocol:**
-- New `jump` command type: `{ type: 'cmd', cmd: 'jump', username: '...' }`
-- Broadcast to all connected overlay clients when jump is executed
-- Clients apply `vy = -12` and set state to `'idle'` for the jumping avatar
+### Added
+- Comprehensive overlay settings UI in dashboard
+- Server-authoritative spawning system
+- Clear avatars on server startup
+- 50+ new tunable overlay parameters
+- Increased max spawn quantity to 100
+- Collapsible settings sections with localStorage persistence
+- Real-time settings preview
 
-## 🧪 Testing
+### Changed
+- Refactored overlay configuration to client-side
+- Removed duplicate default values
+- Consolidated maxSpawnQuantity into overlay config
+- Improved command metadata structure
+- Enhanced avatar state sync protocol
 
-All changes have been tested in both local and server modes:
-- `!jump` now works correctly in server mode with multiple connected clients
-- Avatar state persists correctly across server restarts
-- No stale avatars appear after server restart
+### Fixed
+- !jump command in server mode
+- !spawn command additive behavior
+- Stale avatarUpdate message filtering
+- Client command handling logic
+- Tags object structure for command metadata
 
-## 📦 Download
+## 🙏 Credits
+Thanks to the community for reporting issues and suggesting improvements!
+
+## 📄 License
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE) files for details.
+
+---
 
 **Download this release**: https://github.com/SuperFurias/stream-sprites/releases/tag/v1.0.1
 
 **Report issues**: https://github.com/SuperFurias/stream-sprites/issues
 
----
-
-**Upgrade Notes:**
-This is a drop-in replacement for v1.0.0. No database migrations or configuration changes required. Simply pull the latest code and restart the server.
+**Happy streaming!** 🎮✨
