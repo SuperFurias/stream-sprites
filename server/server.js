@@ -894,6 +894,10 @@ function broadcast(obj){
   wss.clients.forEach(c => { if(c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
+// Constants (matching client config)
+const MAX_SPAWN_QUANTITY = 10;
+const NAME_LENGTH_LIMIT = 20;
+
 // In-memory authoritative avatar state (not persisted to disk)
 const serverAvatars = new Map();
 const serverSpawnTimes = new Map();
@@ -908,6 +912,162 @@ function getUserSkinFromDB(userId) {
     dbg('Error fetching user skin:', e.message);
     return 'default';
   }
+}
+
+// Server-side command processing (authoritative spawning)
+function processServerCommand(username, text, tags) {
+  const cmd = text.trim().split(' ')[0].toLowerCase();
+  const args = text.trim().split(' ').slice(1);
+  const userId = username.toLowerCase();
+  const skin = getUserSkinFromDB(userId);
+  const now = Date.now();
+  let stateChanged = false;
+  let response = null;
+  
+  // Constants (should match client config)
+  const MAX_AVATARS = (cfg.overlay && cfg.overlay.maxAvatars) || 1500;
+  const SPAWN_THROTTLE_MS = (cfg.overlay && cfg.overlay.spawnThrottleMs) || 700;
+  const SPRITE_SIZE_MIN = 30;
+  const SPRITE_SIZE_MAX = 80;
+  const GROUND_Y = (cfg.overlay && cfg.overlay.groundY) || 920;
+  const W = (cfg.overlay && cfg.overlay.canvasWidth) || 1920;
+  
+  // Spawn helper function
+  function spawnSprite(name, skinId) {
+    const uniqueId = name.toLowerCase();
+    
+    // Check if already exists
+    if (serverAvatars.has(uniqueId)) {
+      const av = serverAvatars.get(uniqueId);
+      av.lastActivity = now;
+      if (av.skin !== skinId) {
+        av.skin = skinId;
+      }
+      return av;
+    }
+    
+    // Check avatar limit
+    if (serverAvatars.size >= MAX_AVATARS) {
+      // Remove oldest 5%
+      const arr = Array.from(serverAvatars.values()).sort((a, b) => a.createdAt - b.createdAt);
+      const removeCount = Math.max(1, Math.floor(arr.length * 0.05));
+      for (let i = 0; i < removeCount; i++) {
+        serverAvatars.delete(arr[i].id);
+      }
+    }
+    
+    // Create new avatar
+    const newAv = {
+      id: uniqueId,
+      username: name,
+      skin: skinId,
+      createdAt: now,
+      lastActivity: now
+    };
+    serverAvatars.set(uniqueId, newAv);
+    stateChanged = true;
+    return newAv;
+  }
+  
+  if (cmd === '!jump') {
+    // Jump command - apply to user's own avatar if it exists
+    if (serverAvatars.has(userId)) {
+      const av = serverAvatars.get(userId);
+      av.lastActivity = now;
+      // Note: velocity not stored server-side, will be applied client-side
+      stateChanged = true;
+      response = `${username} jumped!`;
+    } else {
+      response = 'You need to appear first!';
+    }
+  } else if (cmd === '!sit') {
+    if (serverAvatars.has(userId)) {
+      const av = serverAvatars.get(userId);
+      av.state = 'sit';
+      av.lastActivity = now;
+      stateChanged = true;
+      response = `${username} is now sitting.`;
+    } else {
+      response = 'You need to appear first!';
+    }
+  } else if (cmd === '!unsit') {
+    if (serverAvatars.has(userId)) {
+      const av = serverAvatars.get(userId);
+      av.state = 'idle';
+      av.lastActivity = now;
+      stateChanged = true;
+      response = `${username} is no longer sitting.`;
+    } else {
+      response = 'You need to appear first!';
+    }
+  } else if (cmd === '!boom') {
+    // Boom - doesn't change avatar count, just physics (handled client-side)
+    response = '💥 BOOM!';
+  } else if (cmd === '!skin') {
+    if (args[0]) {
+      const allSkins = detectSkinsFromAssets();
+      const validSkin = allSkins.find(s => s.id === args[0]);
+      if (validSkin) {
+        // Update user's assigned skin in database
+        try {
+          db.prepare('UPDATE users SET assigned_skin = ? WHERE id = ?').run(args[0], userId);
+          // Update existing avatar if present
+          if (serverAvatars.has(userId)) {
+            const av = serverAvatars.get(userId);
+            av.skin = args[0];
+            av.lastActivity = now;
+            stateChanged = true;
+          }
+          response = `${username}'s skin changed to ${args[0]}`;
+        } catch (e) {
+          response = 'Failed to change skin.';
+        }
+      } else {
+        response = `Invalid skin: ${args[0]}`;
+      }
+    } else {
+      response = 'Usage: !skin <skinname>';
+    }
+  } else if (cmd === '!skins') {
+    const skinList = detectSkinsFromAssets().map(s => s.id).sort();
+    response = `Available skins: ${skinList.join(', ')}`;
+  } else if (cmd === '!spawn') {
+    // Only allow broadcaster, mods, or bot to spawn
+    const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
+    const isBot = username === cfg.botUsername;
+    const isMod = tags?.mod === '1' || tags?.badges?.moderator;
+    
+    if (isBroadcaster || isBot || isMod) {
+      let quantity = 1;
+      let skinIndex = 0;
+      let nameIndex = 1;
+      
+      if (args[0] && /^\d+$/.test(args[0])) {
+        quantity = Math.min(MAX_SPAWN_QUANTITY || 10, Math.max(1, parseInt(args[0], 10)));
+        skinIndex = 1;
+        nameIndex = 2;
+      }
+      
+      const targetSkin = (args[skinIndex] && detectSkinsFromAssets().some(s => s.id === args[skinIndex])) ? args[skinIndex] : 'default';
+      let targetName = args[nameIndex] ? args[nameIndex].trim() : '';
+      if (!targetName) {
+        targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
+      } else {
+        targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, NAME_LENGTH_LIMIT || 20);
+      }
+      
+      for (let i = 0; i < quantity; i++) {
+        const uniqueName = quantity > 1 ? targetName + '_' + (i + 1) : targetName;
+        spawnSprite(uniqueName, targetSkin);
+      }
+      
+      response = `Spawned ${quantity} ${targetSkin === 'default' ? 'sprite' : targetSkin + ' sprite'}`;
+    } else {
+      response = 'Only broadcaster/mods can use !spawn';
+    }
+  }
+  
+  return { result: response, stateChanged: stateChanged };
 }
 
 // Update server-side avatar state (called when user sends chat message)
@@ -1157,11 +1317,41 @@ async function connectTwitchBot(){
       db.prepare("INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,COALESCE((SELECT assigned_skin FROM users WHERE id=?), 'default'))")
         .run(username.toLowerCase(), displayName, username.toLowerCase());
       
-      // Update server-side avatar state
+      // Update server-side avatar state for the chatting user
       updateServerAvatar(username, tags);
       
-      broadcast({type:'chat', username, message, tags});
+      // Check if message is a command and process it server-side
+      const text = message.trim();
+      const isCommand = text.startsWith('!');
+      let commandResult = null;
+      let stateChanged = false;
+      
+      if (isCommand) {
+        dbg('Processing command on server:', text);
+        commandResult = processServerCommand(username, text, tags);
+        if (commandResult) {
+          stateChanged = commandResult.stateChanged;
+        }
+      }
+      
+      // Broadcast chat to clients with metadata
+      const chatMsg = {
+        type: 'chat',
+        username,
+        message: text,
+        tags,
+        skipSpawn: isCommand, // only skip spawn for commands (server-authoritative)
+        isCommand: isCommand,
+        commandResult: commandResult
+      };
+      broadcast(chatMsg);
       dbg('Message broadcasted to overlay clients');
+      
+      // If state changed (from command or normal chat), broadcast updated state
+      if (stateChanged) {
+        broadcastAvatarState();
+        dbg('Avatar state broadcasted');
+      }
     } catch (err) {
       dbg('DB error:', err.message);
     }
