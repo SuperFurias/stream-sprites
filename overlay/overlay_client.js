@@ -271,17 +271,17 @@ function dbg(...args) {
               fetchUserSkin(username, userSkinCache).then(() => {});
             }
             // Only spawn locally if server didn't handle it (skipSpawn not set)
-            // skipSpawn is at data level, not inside tags
-            if (!data.skipSpawn) {
+            // skipSpawn and isCommand are in tags object
+            if (!tags?.skipSpawn) {
               spawnAvatar(username);
             }
             // Only process command locally if server didn't already (isCommand not set)
-            if (message && message.trim().startsWith('!') && !data.isCommand) {
+            if (message && message.trim().startsWith('!') && !tags?.isCommand) {
               handleUserCommand(username, message, tags);
             }
             // If server processed command and has a response, display it
-            if (data.isCommand && data.commandResult && data.commandResult.result) {
-              dbg('Server command result:', data.commandResult.result);
+            if (tags?.isCommand && tags?.commandResult && tags.commandResult.result) {
+              dbg('Server command result:', tags.commandResult.result);
             }
           },
           (cmd) => {
