@@ -313,18 +313,132 @@ app.get('/env', (req,res) => {
   
   // Provide default overlay settings (not stored in .env)
   const defaultOverlay = {
+    // Canvas
     canvasWidth: 1920,
     canvasHeight: 1080,
     groundY: 920,
+    
+    // Physics
     gravity: 0.6,
+    airResistance: 0.992,
+    groundFriction: 0.92,
+    bounceDamping: 0.65,
+    minVelocity: 0.15,
+    
+    // Spawning
     maxAvatars: 1500,
     spawnThrottleMs: 700,
-    currencyPerMessage: 1,
-    maxSpawnQuantity: 100
+    maxSpawnQuantity: 100,
+    spriteSizeMin: 30,
+    spriteSizeMax: 80,
+    spawnMaxTries: 8,
+    spawnYOffset: 40,
+    spawnJitter: 6,
+    spawnBoundsPadding: 60,
+    spawnSizePadding: 120,
+    initialVelocity: 2,
+    
+    // Lifetime
+    spriteLifetimeMs: 30 * 60 * 1000,
+    fadeWarningMs: 5 * 60 * 1000,
+    
+    // Collision
+    collisionPersonalSpaceThreshold: 0.1,
+    collisionForceMultiplier: 0.02,
+    collisionProbabilityScaling: 1,
+    collisionProbabilityLow: 0.0,
+    collisionProbabilityMedium: 0.5,
+    collisionProbabilityHigh: 1.0,
+    collisionCountThresholdLow: 5,
+    collisionCountThresholdHigh: 15,
+    
+    // Explosion
+    explosionForceMultiplier: 60,
+    explosionRadiusBase: 400,
+    explosionRadiusVar: 300,
+    explosionUpwardBias: 0.7,
+    spinStrengthFactor: 0.05,
+    randomJitterFactor: 0.2,
+    explosionTimingJitter: 0.3,
+    
+    // Roaming
+    roamZoneYOffset: 30,
+    roamDurationBase: 3000,
+    roamDurationVar: 4000,
+    roamDistanceThreshold: 5,
+    roamWalkForceMultiplier: 0.2,
+    roamWalkVerticalFactor: 0.3,
+    roamSteerForceMultiplier: 0.1,
+    roamSteerVerticalFactor: 0.2,
+    roamArrivalThreshold: 10,
+    roamRandomMoveChance: 0.03,
+    roamRandomMoveForce: 0.3,
+    roamRandomMoveVertical: 0.1,
+    
+    // Visual
+    textWidthPadding: 4,
+    wiggleRange: 1000,
+    
+    // Particles
+    particleCountBase: 30,
+    particleCountVar: 20,
+    particleSpeedBase: 2,
+    particleSpeedVar: 4,
+    particleGravity: 0.1,
+    particleDecayBase: 0.01,
+    particleDecayVar: 0.02,
+    particleSizeBase: 3,
+    particleSizeVar: 5,
+    particleHueBase: 10,
+    particleHueRange: 60,
+    
+    // Other
+    nameLengthLimit: 32,
+    velocityBump: 3,
+    draggedGravity: 0.5,
+    danceGravityFactor: -0.2,
+    danceAngularVelocity: 0.1,
+    tiltReturnTime: 1000,
+    danceFrequency: 200,
+    massDivisor: 1000,
+    momentOfInertiaFactor: 0.5,
+    heightScaleSit: 0.75,
+    heightScaleIdle: 1.0,
+    dtCap: 0.05,
+    groundYMultiplier: 0.99,
+    safetyNudgeDistance: 0.5,
+    angularVelocityDecay: 0.98,
+    angleDecay: 0.95,
+    tiltAngularDecay: 0.9,
+    tiltAngleThreshold: 0.01,
+    lifetimeCleanupThreshold: 10,
+    zoneSelectionBias: 0.7,
+    spatialHashCellSize: 64,
+    numZones: 5,
+    avoidanceRadiusMultiplier: 2.0,
+    sizeSimilarityThreshold: 0.85,
+    expandedRadiusMultiplier: 4.0,
+    sizeDiffThresholdLow: 0.7,
+    sizeDiffAttractionMultiplier: 1.5,
+    minAttractionDistance: 20,
+    sizeDiffFactor: 2.0,
+    attractionForceBase: 0.08,
+    largerRepulsionFactor: 0.3,
+    moderateRepulsionRadius: 1.0,
+    moderateRepulsionForce: 0.08,
+    centerPushRadius: 150,
+    centerPushForce: 0.02,
+    groundYCenterOffset: 0.8,
+    directionChangeThreshold: 0.3,
+    resizeDebounceMs: 100,
+    collisionProbabilityScaling: 1
   };
   
-  // Return config with auto-detected skins and default overlay (no hardcoded ones)
-  const mergedCfg = { ...cfg, skins: autoDetected, overlay: defaultOverlay };
+  // Merge overlay config: use .env values if present, otherwise defaults
+  const overlayConfig = cfg.overlay ? { ...defaultOverlay, ...cfg.overlay } : defaultOverlay;
+  
+  // Return config with auto-detected skins and merged overlay config
+  const mergedCfg = { ...cfg, skins: autoDetected, overlay: overlayConfig };
   dbg('Returning config with skins:', mergedCfg.skins.map(s => s.id));
   res.json(mergedCfg);
 });
