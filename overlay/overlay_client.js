@@ -271,18 +271,17 @@ function dbg(...args) {
               fetchUserSkin(username, userSkinCache).then(() => {});
             }
             // Only spawn locally if server didn't handle it (skipSpawn not set)
-            if (!tags?.skipSpawn) {
+            // skipSpawn is at data level, not inside tags
+            if (!data.skipSpawn) {
               spawnAvatar(username);
             }
-            // Only process command locally if server didn't already (isCommand not set or no commandResult)
-            if (message && message.trim().startsWith('!') && !tags?.isCommand) {
+            // Only process command locally if server didn't already (isCommand not set)
+            if (message && message.trim().startsWith('!') && !data.isCommand) {
               handleUserCommand(username, message, tags);
             }
             // If server processed command and has a response, display it
-            if (tags?.isCommand && tags?.commandResult && tags.commandResult.result) {
-              // The server already sent a response, we should display it locally
-              // In a full implementation, this would be shown in an overlay message
-              dbg('Server command result:', tags.commandResult.result);
+            if (data.isCommand && data.commandResult && data.commandResult.result) {
+              dbg('Server command result:', data.commandResult.result);
             }
           },
           (cmd) => {

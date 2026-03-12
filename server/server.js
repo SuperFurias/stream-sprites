@@ -1335,14 +1335,18 @@ async function connectTwitchBot(){
       }
       
       // Broadcast chat to clients with metadata
+      // Merge skipSpawn, isCommand, commandResult into tags so they're passed to onChat
+      const chatTags = {
+        ...tags,
+        skipSpawn: isCommand, // only skip spawn for commands (server-authoritative)
+        isCommand: isCommand,
+        commandResult: commandResult
+      };
       const chatMsg = {
         type: 'chat',
         username,
         message: text,
-        tags,
-        skipSpawn: isCommand, // only skip spawn for commands (server-authoritative)
-        isCommand: isCommand,
-        commandResult: commandResult
+        tags: chatTags
       };
       broadcast(chatMsg);
       dbg('Message broadcasted to overlay clients');
