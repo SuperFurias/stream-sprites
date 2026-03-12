@@ -35,6 +35,9 @@ Stream Sprites is an interactive overlay application that brings your Twitch cha
 - **OAuth Token Management**: Secure token generation with optional persistence
 - **WebSocket Communication**: Real-time updates to overlay clients
 - **SQLite Database**: Lightweight, file-based storage for user assignments and exclusions
+- **Comprehensive Overlay Settings UI**: Full control over all overlay parameters (physics, spawning, collision, explosions, roaming, particles, and more) via the dashboard Settings tab
+- **Server-Authoritative Spawning**: Server-side validation prevents duplicate avatars and ensures consistency across multiple overlay clients
+- **50+ Tunable Parameters**: Customize every aspect of the overlay behavior including canvas size, gravity, friction, spawn rates, collision forces, explosion effects, and particle systems
 
 ## Quick Start
 
@@ -144,7 +147,17 @@ Access the dashboard at `http://localhost:3000` to manage your Stream Sprites in
 - **Config**: Manage Twitch credentials and bot settings
 - **Skins**: View available skins and their assignments
 - **Users**: Manage user exclusions and skin assignments
-- **Settings**: Adjust debug and logging options
+- **Settings**: Comprehensive overlay configuration including:
+  - Canvas settings (width, height, ground position)
+  - Physics parameters (gravity, air resistance, friction, bounce)
+  - Spawning controls (max avatars, spawn throttling, sprite sizes)
+  - Collision tuning (personal space, force multipliers, probability scaling)
+  - Explosion effects (force, radius, upward bias, spin, jitter)
+  - Roaming behavior (zone settings, walk forces, steering)
+  - Visual options (text padding, wiggle range)
+  - Particle system (count, speed, gravity, decay, size, color)
+  - Advanced parameters (mass, inertia, tilt recovery, spatial hash settings)
+  - Debug and logging options
 
 ### Skin Assignment
 
@@ -180,7 +193,24 @@ The overlay is available at `http://localhost:3000/overlay/overlay.html`. It dis
 
 ### Customization
 
-Overlay settings (canvas size, gravity, spawn rate, etc.) are configured in the server code and can be adjusted via the Settings tab in the dashboard.
+Overlay settings are fully configurable via the **Settings** tab in the dashboard. All parameters are saved to `.env` and can be adjusted without server restart (some require overlay refresh). The Settings tab features:
+
+- **Collapsible sections** for organized navigation with localStorage persistence
+- **Real-time preview** of current configuration
+- **50+ tunable parameters** covering every aspect of overlay behavior
+- **Reset to defaults** functionality
+
+Key settings include:
+- **Canvas**: Width (800-3840px), height (600-2160px), ground position
+- **Physics**: Gravity, air resistance, ground friction, bounce damping
+- **Spawning**: Max avatars (up to 1500), spawn quantity (up to 100), throttle timing, sprite size ranges
+- **Collision**: Personal space thresholds, force multipliers, probability scaling
+- **Explosions**: Force strength, radius, upward bias, spin, jitter
+- **Roaming**: Zone settings, walk/steer forces, random movement
+- **Particles**: Count, speed, gravity, decay, size, color range
+- **Advanced**: Mass, inertia, tilt recovery, spatial hash optimization
+
+Settings are automatically merged with defaults and saved to the `.env` file's `overlay` section.
 
 ## Chat Commands
 
@@ -188,7 +218,7 @@ Viewers can interact with the overlay using these chat commands:
 
 | Command | Description | Permissions |
 |---------|-------------|-------------|
-| `!jump` | Makes your sprite jump | Everyone |
+| `!jump` | Makes your sprite jump (fixed in v1.0.1 for server mode) | Everyone |
 | `!sit` | Makes your sprite sit (smaller size) | Everyone |
 | `!unsit` | Returns your sprite to normal size | Everyone |
 | `!boom` | Triggers an explosion effect on all sprites | Everyone |
@@ -273,6 +303,19 @@ Logs are written to `logs/debug.log` when `debug.logToFile` is enabled. View the
 ```bash
 Get-Content logs/debug.log -Wait  # PowerShell
 ```
+
+## v1.0.1 Highlights (March 12, 2026)
+
+This release brings significant improvements to the overlay system:
+
+- **Comprehensive Overlay Settings UI**: The Settings tab has been completely redesigned with a full-featured UI for tuning every aspect of the overlay
+- **Server-Authoritative Spawning**: Server-side validation prevents duplicate avatars and ensures consistency across multiple overlay clients
+- **Expanded Configuration**: 50+ new tunable parameters moved to client-side config.js for better maintainability
+- **Increased Spawn Limit**: Max spawn quantity increased from 10 to 100
+- **Bug Fixes**: Fixed !spawn command additive behavior, stale message filtering, and client command handling
+- **Improved Settings Management**: Collapsible sections with localStorage persistence and real-time configuration preview
+
+See the [CHANGELOG.md](CHANGELOG.md) for full details.
 
 ## Development
 
