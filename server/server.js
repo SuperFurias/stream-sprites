@@ -1009,6 +1009,15 @@ wss.on('connection', (ws) => {
         const username = msg.username;
         const skin = msg.skin || 'default';
         const now = Date.now();
+        const clientCreatedAt = msg.createdAt || now;
+        
+        // Ignore avatars created before server startup (stale from previous server instance)
+        if (clientCreatedAt < serverStartTime) {
+          dbg('Ignoring stale avatarUpdate from client:', avatarId, 'created:', new Date(clientCreatedAt).toISOString());
+          // Still broadcast current state to ensure client syncs with server
+          broadcastAvatarState();
+          return;
+        }
         
         if (serverAvatars.has(avatarId)) {
           // Update existing
@@ -1023,7 +1032,7 @@ wss.on('connection', (ws) => {
             id: avatarId,
             username: username,
             skin: skin,
-            createdAt: msg.createdAt || now,
+            createdAt: clientCreatedAt,
             lastActivity: now
           });
         }
