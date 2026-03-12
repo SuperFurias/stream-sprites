@@ -319,7 +319,8 @@ app.get('/env', (req,res) => {
     gravity: 0.6,
     maxAvatars: 1500,
     spawnThrottleMs: 700,
-    currencyPerMessage: 1
+    currencyPerMessage: 1,
+    maxSpawnQuantity: 100
   };
   
   // Return config with auto-detected skins and default overlay (no hardcoded ones)
@@ -894,8 +895,7 @@ function broadcast(obj){
   wss.clients.forEach(c => { if(c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// Constants (matching client config)
-const MAX_SPAWN_QUANTITY = 100;
+// NAME_LENGTH_LIMIT is still a hardcoded constant (not user-configurable)
 const NAME_LENGTH_LIMIT = 20;
 
 // In-memory authoritative avatar state (not persisted to disk)
@@ -924,8 +924,9 @@ function processServerCommand(username, text, tags) {
   let stateChanged = false;
   let response = null;
   
-  // Constants (should match client config)
+  // Constants (from overlay config)
   const MAX_AVATARS = (cfg.overlay && cfg.overlay.maxAvatars) || 1500;
+  const MAX_SPAWN_QUANTITY = (cfg.overlay && cfg.overlay.maxSpawnQuantity) || 100;
   const SPAWN_THROTTLE_MS = (cfg.overlay && cfg.overlay.spawnThrottleMs) || 700;
   const SPRITE_SIZE_MIN = 30;
   const SPRITE_SIZE_MAX = 80;

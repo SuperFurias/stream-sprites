@@ -53,6 +53,7 @@ function dbg(...args) {
     OAUTH,
     DEBUG,
     MAX_AVATARS,
+    MAX_SPAWN_QUANTITY,
     GRAVITY,
     AIR_RESISTANCE,
     GROUND_FRICTION,
@@ -210,7 +211,7 @@ function dbg(...args) {
   async function handleUserCommand(username, text, tags = {}) {
     console.log('[DEBUG] handleUserCommand:', { username, text });
     const response = handleCommand(username, text, tags, cfg, avatars, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
-                  spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdateToServer, DEBUG);
+                  spawnTimes, MAX_AVATARS, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createAvatarWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdateToServer, DEBUG);
     
     console.log('[DEBUG] Command response:', response);
     

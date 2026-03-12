@@ -1,6 +1,6 @@
 // Command handling module
 import { spawn } from './avatar.js';
-import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, MAX_SPAWN_QUANTITY, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD } from './config.js';
+import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD } from './config.js';
 
 // Debug utility
 function dbg(...args) {
@@ -12,7 +12,7 @@ function dbg(...args) {
 }
 
 export function handleCommand(username, text, tags, cfg, avatars, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
-                              spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatar, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate, DEBUG = false) {
+                              spawnTimes, MAX_AVATARS, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createAvatar, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate, DEBUG = false) {
   dbg('handleCommand:', { username, text, cmd: text.trim().split(' ')[0].toLowerCase() });
   const cmd = text.trim().split(' ')[0].toLowerCase();
   const args = text.trim().split(' ').slice(1);
@@ -56,7 +56,7 @@ export function handleCommand(username, text, tags, cfg, avatars, skins, W, GROU
     dbg('Skins response:', response);
   } else if (cmd === '!spawn') {
     dbg('Spawn command by', username, 'args:', args);
-    handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate);
+    handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate);
   }
 
   return response;
@@ -97,7 +97,7 @@ function handleBoomCommand(avatars, W, GROUND_Y, explosionParticles, createExplo
   }
 }
 
-function handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate, DEBUG = false) {
+function handleSpawnCommand(username, args, tags, cfg, avatars, spawn, createAvatar, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_AVATARS, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdate, DEBUG = false) {
   if (DEBUG) console.log('!spawn command received:', { username, args, tags, channel: cfg.channel, botUsername: cfg.botUsername });
   
   const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();

@@ -18,6 +18,7 @@ export function getConfigConstants(cfg, overlay) {
     OAUTH: cfg.oauth,
     DEBUG: cfg.debug || false,
     MAX_AVATARS: overlay.maxAvatars || 500,
+    MAX_SPAWN_QUANTITY: overlay.maxSpawnQuantity || 100,
     GRAVITY: overlay.gravity || 0.4,
     AIR_RESISTANCE: 0.992,
     GROUND_FRICTION: 0.92,
