@@ -115,6 +115,16 @@ function loadConfig(){
   try{
     if(fs.existsSync(cfgPath)){
       cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      // Clean up: remove skins property if present (skins are auto-detected)
+      if (cfg.skins) {
+        delete cfg.skins;
+        try {
+          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+          console.log('✓ Removed skins from .env (auto-detected from assets)');
+        } catch (e) {
+          console.warn('⚠ Could not remove skins from .env:', e.message);
+        }
+      }
       console.log('✓ Loaded config from .env');
       return true;
     }
@@ -308,13 +318,10 @@ app.get('/env', (req,res) => {
     dbg('Failed to reload config from disk, using in-memory:', e.message);
   }
   
-  // Auto-detect skins - ONLY return auto-detected, ignore .env hardcoded skins
-  const autoDetected = detectSkinsFromAssets();
-  
-  // Return config with auto-detected skins and overlay config from .env (no server-side defaults)
+  // Return config without skins - skins are fetched separately via /api/skins endpoints
   // Client (overlay/js/config.js) provides defaults if .env values are missing
-  const mergedCfg = { ...cfg, skins: autoDetected, overlay: cfg.overlay || {} };
-  dbg('Returning config with skins:', mergedCfg.skins.map(s => s.id));
+  const mergedCfg = { ...cfg, overlay: cfg.overlay || {} };
+  dbg('Returning config (skins excluded, use /api/skins for skin data)');
   res.json(mergedCfg);
 });
 
@@ -475,9 +482,12 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
     }
     const merged = deepMerge(cfg, newCfg);
     merged.twitch.redirectUri = merged.twitch.redirectUri || `http://localhost:${merged.serverPort || 3000}/auth/callback`;
-    // Don't save overlay or skins to config - they are auto-managed
-    delete merged.overlay;
+    // Skins are auto-detected from assets, never save them to config
     delete merged.skins;
+    // Also remove skins from the in-memory config if present
+    if (cfg.skins) {
+      delete cfg.skins;
+    }
     
     // Handle OAuth token based on persistOAuthToken setting
     const tokenForMemory = cfg.twitch?.botOAuthToken || '';
@@ -555,6 +565,8 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
         configToSave.twitch.botOAuthToken = '';
       }
     }
+    // Skins are auto-detected from assets, never save them to config
+    delete configToSave.skins;
     fs.writeFileSync(cfgPath, JSON.stringify(configToSave, null, 2));
     // Restore token in memory if not persisting
     if(cfg.twitch && !cfg.persistOAuthToken) {
@@ -951,6 +963,7 @@ function processServerCommand(username, text, tags) {
       id: uniqueId,
       username: name,
       skin: skinId,
+      state: 'idle',
       createdAt: now,
       lastActivity: now
     };
@@ -966,7 +979,8 @@ function processServerCommand(username, text, tags) {
       av.lastActivity = now;
       // Note: velocity not stored server-side, will be applied client-side
       stateChanged = true;
-      response = `${username} jumped!`;
+      broadcast({ type: 'cmd', cmd: 'jump', username: username });
+      // No chat response for !jump
     } else {
       response = 'You need to appear first!';
     }
@@ -976,7 +990,7 @@ function processServerCommand(username, text, tags) {
       av.state = 'sit';
       av.lastActivity = now;
       stateChanged = true;
-      response = `${username} is now sitting.`;
+      // No chat response for !sit
     } else {
       response = 'You need to appear first!';
     }
@@ -986,13 +1000,15 @@ function processServerCommand(username, text, tags) {
       av.state = 'idle';
       av.lastActivity = now;
       stateChanged = true;
-      response = `${username} is no longer sitting.`;
+      // No chat response for !unsit
     } else {
       response = 'You need to appear first!';
     }
   } else if (cmd === '!boom') {
-    // Boom - doesn't change avatar count, just physics (handled client-side)
-    response = '💥 BOOM!';
+    // Boom - broadcast explosion effect to all clients
+    dbg('Boom command - broadcasting explosion effect');
+    broadcast({ type: 'cmd', cmd: 'boom' });
+    // No chat response for !boom
   } else if (cmd === '!skin') {
     if (args[0]) {
       const allSkins = detectSkinsFromAssets();
@@ -1095,6 +1111,7 @@ function broadcastAvatarState() {
     id: av.id,
     username: av.username,
     skin: av.skin,
+    state: av.state || 'idle',
     createdAt: av.createdAt,
     lastActivity: av.lastActivity
   }));
@@ -1112,6 +1129,7 @@ function sendAvatarStateToClient(ws) {
     id: av.id,
     username: av.username,
     skin: av.skin,
+    state: av.state || 'idle',
     createdAt: av.createdAt,
     lastActivity: av.lastActivity
   }));
@@ -1158,6 +1176,7 @@ wss.on('connection', (ws) => {
         const avatarId = msg.id; // Full unique ID (e.g., 'cat_1', 'bunbun_2')
         const username = msg.username;
         const skin = msg.skin || 'default';
+        const state = msg.state || 'idle';
         const now = Date.now();
         const clientCreatedAt = msg.createdAt || now;
         
@@ -1176,12 +1195,16 @@ wss.on('connection', (ws) => {
           if (av.skin !== skin) {
             av.skin = skin;
           }
+          if (av.state !== state) {
+            av.state = state;
+          }
         } else {
           // Create new - use the full ID as the key to preserve multiple avatars
           serverAvatars.set(avatarId, {
             id: avatarId,
             username: username,
             skin: skin,
+            state: state,
             createdAt: clientCreatedAt,
             lastActivity: now
           });
@@ -1198,6 +1221,7 @@ wss.on('connection', (ws) => {
         for (const clientAv of msg.avatars) {
           const avatarId = clientAv.id; // Use full ID as key
           const skin = clientAv.skin || 'default';
+          const state = clientAv.state || 'idle';
           const clientCreatedAt = clientAv.createdAt || now;
           
           // Ignore avatars created before server startup (stale from previous server instance)
@@ -1214,12 +1238,17 @@ wss.on('connection', (ws) => {
               av.skin = skin;
               changed = true;
             }
+            if (av.state !== state) {
+              av.state = state;
+              changed = true;
+            }
           } else {
             // Create new - preserve the full ID from client
             serverAvatars.set(avatarId, {
               id: avatarId,
               username: clientAv.username,
               skin: skin,
+              state: state,
               createdAt: clientCreatedAt,
               lastActivity: now
             });
@@ -1268,7 +1297,16 @@ async function connectTwitchBot(){
     dbg('Twitch bot already connected');
     return;
   }
-
+  
+  // Ensure any existing client is disconnected to prevent duplicates
+  if (twitchClient) {
+    try {
+      twitchClient.disconnect();
+    } catch (e) {
+      dbg('Error disconnecting old Twitch client:', e.message);
+    }
+  }
+  
   const twitchDebug = cfg.debug?.twitchDebug || false;
   const messagesLogLevel = cfg.debug?.verboseMessages ? 'debug' : 'warn';
   
@@ -1321,6 +1359,13 @@ async function connectTwitchBot(){
         commandResult = processServerCommand(username, text, tags);
         if (commandResult) {
           stateChanged = commandResult.stateChanged;
+          // Send response to Twitch chat if command returned a message
+          if (commandResult.result) {
+            const responseMsg = `@${username}, ${commandResult.result}`;
+            twitchClient.say(cfg.channel, responseMsg).catch(err => {
+              dbg('Failed to send command response:', err.message);
+            });
+          }
         }
       }
       
@@ -1440,6 +1485,7 @@ function updateServerAvatar(username, tags) {
     if (av.skin !== skin) {
       av.skin = skin;
     }
+    // State is preserved from previous interactions (e.g., sit command)
   } else {
     // Create new avatar entry with minimal state
     // Position will be randomized on client side
@@ -1447,6 +1493,7 @@ function updateServerAvatar(username, tags) {
       id: userId,
       username: username,
       skin: skin,
+      state: 'idle',
       createdAt: Date.now(),
       lastActivity: Date.now()
       // Note: x, y, vx, vy, etc. are managed by client physics
@@ -1455,49 +1502,6 @@ function updateServerAvatar(username, tags) {
   }
   
   // Broadcast updated avatar state to all clients
-  broadcastAvatarState();
-}
-
-// Broadcast full avatar state to all connected clients
-function broadcastAvatarState() {
-  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
-    id: av.id,
-    username: av.username,
-    skin: av.skin,
-    createdAt: av.createdAt,
-    lastActivity: av.lastActivity
-  }));
-  
-  broadcast({
-    type: 'avatarState',
-    avatars: avatarArray,
-    timestamp: Date.now()
-  });
-}
-
-// Send avatar state to a specific client (for initial sync)
-function sendAvatarStateToClient(ws) {
-  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
-    id: av.id,
-    username: av.username,
-    skin: av.skin,
-    createdAt: av.createdAt,
-    lastActivity: av.lastActivity
-  }));
-  
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'avatarState',
-      avatars: avatarArray,
-      timestamp: Date.now()
-    }));
-  }
-}
-
-// Clear all server-side avatars (for admin command)
-function clearServerAvatars() {
-  serverAvatars.clear();
-  serverSpawnTimes.clear();
   broadcastAvatarState();
 }
 

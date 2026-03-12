@@ -12,6 +12,7 @@ import { draw as render, updateAvatarCountDisplay } from './js/renderer.js';
 import { createGameLoop } from './js/loop.js';
 import { setupWebSocket, setupTmiFallback, handleWebSocketMessage } from './js/connection.js';
 import { createGifRenderer } from './js/gifRenderer.js';
+import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD } from './js/config.js';
 
 // Debug utility
 function dbg(...args) {
@@ -130,6 +131,7 @@ function dbg(...args) {
         id: av.id,
         username: av.username,
         skin: av.skin,
+        state: av.state || 'idle',
         lastActivity: Date.now(),
         createdAt: av.createdAt,
         action: 'spawn'
@@ -162,10 +164,23 @@ function dbg(...args) {
     for (const serverAv of serverAvatarList) {
       const existingAv = avatars.get(serverAv.id);
       if (existingAv) {
-        // Update skin and activity from server (preserve physics state)
+        // Update skin, state, and activity from server (preserve physics state)
         if (existingAv.skin !== serverAv.skin) {
           existingAv.skin = serverAv.skin;
           dbg('Updated skin for', serverAv.username, 'to', serverAv.skin);
+        }
+        // Sync state from server - always set heightScale based on state
+        if (serverAv.state !== undefined && existingAv.state !== serverAv.state) {
+          existingAv.state = serverAv.state;
+          dbg('Updated state for', serverAv.username, 'to', serverAv.state);
+        }
+        // Always apply heightScale and velocity based on current state
+        if (existingAv.state === 'sit') {
+          existingAv.heightScale = 0.75;
+          existingAv.vx = 0;
+          existingAv.vy = 0;
+        } else {
+          existingAv.heightScale = 1.0;
         }
         existingAv.lastActivity = serverAv.lastActivity;
         existingAv.createdAt = serverAv.createdAt;
@@ -173,10 +188,19 @@ function dbg(...args) {
         // Create new avatar from server state
         const newAv = createAvatarWithContext(serverAv.username);
         newAv.skin = serverAv.skin;
+        newAv.state = serverAv.state || 'idle';
+        // Always set heightScale based on state
+        if (newAv.state === 'sit') {
+          newAv.heightScale = 0.75;
+          newAv.vx = 0;
+          newAv.vy = 0;
+        } else {
+          newAv.heightScale = 1.0;
+        }
         newAv.lastActivity = serverAv.lastActivity;
         newAv.createdAt = serverAv.createdAt;
         avatars.set(newAv.id, newAv);
-        dbg('Created new avatar from server:', serverAv.username);
+        dbg('Created new avatar from server:', serverAv.username, 'with state:', newAv.state);
       }
     }
     
@@ -194,6 +218,7 @@ function dbg(...args) {
       id: av.id,
       username: av.username,
       skin: av.skin,
+      state: av.state || 'idle',
       createdAt: av.createdAt,
       lastActivity: Date.now()
     }));
@@ -209,11 +234,21 @@ function dbg(...args) {
   
   // Command handler wrapper
   async function handleUserCommand(username, text, tags = {}) {
+    // In server mode, the server handles all command responses to avoid duplicates
+    if (USE_SERVER) {
+      return;
+    }
     console.log('[DEBUG] handleUserCommand:', { username, text });
     const response = handleCommand(username, text, tags, cfg, avatars, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
                   spawnTimes, MAX_AVATARS, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createAvatarWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdateToServer, DEBUG);
     
     console.log('[DEBUG] Command response:', response);
+    
+    // If server already processed this command and sent a response, don't send another one
+    if (tags?.commandResult && tags.commandResult.result) {
+      console.log('[DEBUG] Server already sent response for this command, skipping duplicate');
+      return;
+    }
     
     // If command returned a response, send it back to chat
     if (response) {
@@ -233,6 +268,35 @@ function dbg(...args) {
         console.error('[DEBUG] Failed to send chat response:', err);
       }
     }
+  }
+  
+  // Send chat response via server
+  async function sendChatResponse(username, message) {
+    try {
+      const res = await fetch('/api/chat/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, message })
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        console.error('[DEBUG] Failed to send chat response:', res.status, err);
+      } else {
+        console.log('[DEBUG] Chat response sent successfully');
+      }
+    } catch (err) {
+      console.error('[DEBUG] Failed to send chat response:', err);
+    }
+  }
+  
+  // Handle server-processed commands (for visual effects)
+  // Note: Most command effects are now handled via the onCommand callback (boom, jump) or state sync (sit)
+  function handleServerCommand(commandResult) {
+    dbg('handleServerCommand:', commandResult);
+    // No additional handling needed - effects are applied through:
+    // - onCommand('boom') for explosion
+    // - onCommand('jump') for jump velocity
+    // - avatarState sync for sit/unsit state changes
   }
   
   // Physics update wrapper
@@ -276,13 +340,14 @@ function dbg(...args) {
             if (!tags?.skipSpawn) {
               spawnAvatar(username);
             }
-            // Only process command locally if server didn't already (isCommand not set)
-            if (message && message.trim().startsWith('!') && !tags?.isCommand) {
-              handleUserCommand(username, message, tags);
-            }
-            // If server processed command and has a response, display it
-            if (tags?.isCommand && tags?.commandResult && tags.commandResult.result) {
+            // If server processed command, handle visual effects (server is authoritative)
+            if (tags?.isCommand && tags?.commandResult) {
+              handleServerCommand(tags.commandResult);
+              // Server already sent response via Twitch bot, no need to send again
               dbg('Server command result:', tags.commandResult.result);
+            } else if (message && message.trim().startsWith('!') && !tags?.commandResult) {
+              // Command was not processed by server (USE_SERVER=false or local mode)
+              handleUserCommand(username, message, tags);
             }
           },
           (cmd) => {
@@ -291,6 +356,53 @@ function dbg(...args) {
               dbg('Clearing all avatars');
               avatars.clear();
               gifRenderer.clear();
+            } else if (cmd === 'boom') {
+              dbg('Boom command - applying explosion effect');
+              // Random epicenter
+              const epicenterX = Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
+              const epicenterY = GROUND_Y;
+              const explosionRadius = EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
+              
+              // Create explosion visual effect
+              createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
+              
+              // Apply physics to all avatars
+              for (const av of avatars.values()) {
+                const dx = av.x - epicenterX;
+                const dy = av.y - epicenterY;
+                const dist = Math.hypot(dx, dy);
+                
+                if (dist < explosionRadius && dist > COLLISION_PERSONAL_SPACE_THRESHOLD) {
+                  const nx = dx / dist;
+                  const ny = dy / dist;
+                  const falloff = Math.pow(1 - dist / explosionRadius, 2);
+                  const force = EXPLOSION_FORCE_MULTIPLIER * Math.max(0, falloff);
+                  
+                  av.vx += nx * force;
+                  av.vy += ny * force * (1 - EXPLOSION_UPWARD_BIAS) - force * EXPLOSION_UPWARD_BIAS;
+                  
+                  const spinStrength = force * SPIN_STRENGTH_FACTOR;
+                  av.angularVelocity += (Math.random() - 0.5) * spinStrength;
+                  av.lastTiltTime = Date.now();
+                  
+                  av.vx += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
+                  av.vy += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
+                }
+              }
+            } else if (cmd === 'jump') {
+              dbg('Jump command - applying velocity to avatar');
+              // Apply jump velocity to the user's avatar
+              if (data && data.username) {
+                const userId = data.username.toLowerCase();
+                const av = avatars.get(userId);
+                if (av) {
+                  av.vy = -12;
+                  av.state = 'idle';
+                  dbg('Applied jump velocity to', userId);
+                } else {
+                  dbg('Avatar not found for jump:', userId);
+                }
+              }
             }
           },
           (avatarState) => {

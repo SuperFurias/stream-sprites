@@ -140,7 +140,7 @@ export function handleWebSocketMessage(data, onChat, onCommand, onAvatarState) {
   } else if (data.type === 'cmd') {
     if (data.cmd === 'clearAvatars') {
       dbg('clearAvatars command');
-      onCommand('clearAvatars');
+      onCommand('clearAvatars', data);
     } else if (data.cmd === 'refresh') {
       const delay = Math.random() * 1000;
       dbg(`Overlay refresh scheduled in ${delay.toFixed(0)}ms`);
@@ -148,6 +148,18 @@ export function handleWebSocketMessage(data, onChat, onCommand, onAvatarState) {
         dbg('Reloading overlay page...');
         window.location.reload();
       }, delay);
+    } else if (data.cmd === 'boom') {
+      dbg('boom command received from server');
+      onCommand('boom', data);
+    } else if (data.cmd === 'sit') {
+      dbg('sit command received from server');
+      onCommand('sit', data);
+    } else if (data.cmd === 'unsit') {
+      dbg('unsit command received from server');
+      onCommand('unsit', data);
+    } else if (data.cmd === 'jump') {
+      dbg('jump command received from server');
+      onCommand('jump', data);
     }
   } else if (data.type === 'avatarState' && onAvatarState) {
     dbg('avatarState update received');

@@ -1,7 +1,33 @@
 // Settings tab functionality
 window.tabInitializers = window.tabInitializers || {};
 
+// Initialize collapsible sections
+function initCollapsibleSections() {
+  const sections = document.querySelectorAll('.settings-section');
+  
+  sections.forEach(section => {
+    const header = section.querySelector('.settings-section-header');
+    if (!header) return;
+    
+    // Load saved state from localStorage, default to collapsed
+    const sectionName = section.dataset.section;
+    const savedState = localStorage.getItem('settingsSection_' + sectionName);
+    const shouldBeCollapsed = savedState === null ? true : savedState === 'collapsed';
+    
+    if (shouldBeCollapsed) {
+      section.classList.add('collapsed');
+    }
+    
+    header.addEventListener('click', () => {
+      section.classList.toggle('collapsed');
+      const isCollapsed = section.classList.contains('collapsed');
+      localStorage.setItem('settingsSection_' + sectionName, isCollapsed ? 'collapsed' : 'expanded');
+    });
+  });
+}
+
 tabInitializers.settings = async function() {
+  initCollapsibleSections();
   await loadSettings();
 };
 
