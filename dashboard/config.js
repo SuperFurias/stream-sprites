@@ -2,7 +2,7 @@
 
 async function loadConfig(){
   try{
-    const res = await fetch('/config.json');
+    const res = await fetch('/env');
     if(!res.ok) throw new Error('config not found');
     const cfg = await res.json();
     updateFormFields(cfg, false);
@@ -45,7 +45,7 @@ async function saveConfig(){
   saveBtn.textContent = 'Saving...';
 
   try{
-    const res = await fetch('/config.json');
+    const res = await fetch('/env');
     if(!res.ok) throw new Error('config not found');
     const currentCfg = await res.json();
 
@@ -59,7 +59,7 @@ async function saveConfig(){
         ...currentCfg.twitch || {},
         clientId: document.getElementById('clientId').value.trim(),
         clientSecret: document.getElementById('clientSecret').value.trim(),
-        redirectUri: 'http://localhost:3000/auth/callback'
+        redirectUri: `http://localhost:${currentCfg.serverPort || 3000}/auth/callback`
       },
       botUsername: document.getElementById('botUsername').value.trim(),
       channel: document.getElementById('channel').value.trim()

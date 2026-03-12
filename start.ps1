@@ -7,6 +7,25 @@ param(
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $projectRoot
 
+# Read server port from .env file
+$envFile = Join-Path $projectRoot "server\.env"
+$serverPort = 3000  # default fallback
+if (Test-Path $envFile) {
+    try {
+        $envContent = Get-Content $envFile -Raw | ConvertFrom-Json
+        if ($envContent.serverPort) {
+            $serverPort = $envContent.serverPort
+            Write-Host "Using port $serverPort from .env file" -ForegroundColor Green
+        } else {
+            Write-Host "serverPort not found in .env, using default 3000" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Failed to parse .env file, using default port 3000" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host ".env file not found, using default port 3000" -ForegroundColor Yellow
+}
+
 # Check if Node.js is installed
 Write-Host "Checking for Node.js installation..." -ForegroundColor Cyan
 $nodeJustInstalled = $false
@@ -100,16 +119,16 @@ while ($true) {
     Write-Host "Starting Enhanced Stream Sprites Server" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
 
-    # Kill any existing node processes on port 3000
-    Write-Host "Checking for existing server processes..." -ForegroundColor Yellow
-    $connections = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }
+    # Kill any existing node processes on the configured port
+    Write-Host "Checking for existing server processes on port $serverPort..." -ForegroundColor Yellow
+    $connections = Get-NetTCPConnection -LocalPort $serverPort -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }
     if ($connections) {
         $connections | ForEach-Object {
             Write-Host "Killing process $($_.OwningProcess)" -ForegroundColor Yellow
             Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
         }
     } else {
-        Write-Host "No processes found on port 3000" -ForegroundColor Gray
+        Write-Host "No processes found on port $serverPort" -ForegroundColor Gray
     }
 
     # Wait a moment for ports to release

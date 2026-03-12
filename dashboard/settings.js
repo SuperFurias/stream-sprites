@@ -7,7 +7,7 @@ tabInitializers.settings = async function() {
 
 async function loadSettings() {
   try {
-    const response = await fetch('/config.json');
+    const response = await fetch('/env');
     if (!response.ok) throw new Error('Failed to load config');
     const config = await response.json();
     
@@ -52,7 +52,7 @@ async function saveSettings() {
   
   try {
     // First, get current config
-    const configResponse = await fetch('/config.json');
+    const configResponse = await fetch('/env');
     if (!configResponse.ok) throw new Error('Failed to load current config');
     const currentConfig = await configResponse.json();
     

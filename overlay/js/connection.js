@@ -75,7 +75,14 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
     connect: connect,
     stopReconnectLoop: stopReconnectLoop,
     getWebSocket: () => ws,
-    isConnected: () => isConnected
+    isConnected: () => isConnected,
+    send: (data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      } else {
+        dbg('Cannot send: WebSocket not open');
+      }
+    }
   };
   
   // Start initial connection
@@ -126,7 +133,7 @@ export function setupTmiFallback(cfg, onMessage) {
   document.head.appendChild(script);
 }
 
-export function handleWebSocketMessage(data, onChat, onCommand) {
+export function handleWebSocketMessage(data, onChat, onCommand, onAvatarState) {
   dbg('handleWebSocketMessage:', data);
   if (data.type === 'chat') {
     onChat(data.username, data.message, data.tags || {});
@@ -142,5 +149,8 @@ export function handleWebSocketMessage(data, onChat, onCommand) {
         window.location.reload();
       }, delay);
     }
+  } else if (data.type === 'avatarState' && onAvatarState) {
+    dbg('avatarState update received');
+    onAvatarState(data);
   }
 }

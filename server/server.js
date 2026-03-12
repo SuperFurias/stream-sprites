@@ -138,12 +138,14 @@ function loadConfig(){
       clientId: "",
       clientSecret: "",
       botOAuthToken: "",
-      redirectUri: "http://localhost:3000/auth/callback"
+      redirectUri: ""
     },
     channel: "",
     botUsername: "",
     persistOAuthToken: false
   };
+  // Set redirectUri based on serverPort
+  defaultCfg.twitch.redirectUri = `http://localhost:${defaultCfg.serverPort}/auth/callback`;
   
   try{
     fs.writeFileSync(cfgPath, JSON.stringify(defaultCfg, null, 2));
@@ -285,8 +287,8 @@ app.get('/api/skins/auto', (req,res) => {
   res.json(skins);
 });
 
-app.get('/config.json', (req,res) => {
-  dbg('GET /config.json');
+app.get('/env', (req,res) => {
+  dbg('GET /env');
   
   // Reload config from disk to reflect any manual changes
   let fileCfg;
@@ -482,7 +484,7 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
       return res.status(400).json({error: 'Missing required fields'});
     }
     const merged = deepMerge(cfg, newCfg);
-    merged.twitch.redirectUri = merged.twitch.redirectUri || 'http://localhost:3000/auth/callback';
+    merged.twitch.redirectUri = merged.twitch.redirectUri || `http://localhost:${merged.serverPort || 3000}/auth/callback`;
     // Don't save overlay or skins to config - they are auto-managed
     delete merged.overlay;
     delete merged.skins;
@@ -577,12 +579,29 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
   }
 });
 
-// Admin: Clear all avatars
+// Admin: Clear all avatars (both client and server)
 app.post('/api/admin/clearAvatars', requireAdminAuth, (req,res)=>{
   dbg('POST /api/admin/clearAvatars');
+  // Clear server-side in-memory avatars
+  clearServerAvatars();
+  // Also broadcast clear command to clients (for immediate visual feedback)
   broadcast({type:'cmd', cmd:'clearAvatars'});
-  dbg('Clear avatars command broadcasted');
+  dbg('Clear avatars command broadcasted and server memory cleared');
   res.json({ok:true});
+});
+
+// Admin: Clear all avatars (server-side authoritative) - alias for backward compatibility
+app.post('/api/admin/clearAvatarsServer', requireAdminAuth, (req,res)=>{
+  dbg('POST /api/admin/clearAvatarsServer');
+  try{
+    clearServerAvatars();
+    broadcast({type:'cmd', cmd:'clearAvatars'});
+    dbg('Server avatars cleared and clients notified');
+    res.json({ok:true});
+  }catch(err){
+    dbg('Error clearing server avatars:', err.message);
+    res.status(500).json({error: err.message});
+  }
 });
 
 // Admin: Delete user skin assignment
@@ -723,6 +742,19 @@ app.post('/api/admin/refreshAllOverlays', requireAdminAuth, (req,res)=>{
   }
 });
 
+// Admin: Clear all avatars (server-side)
+app.post('/api/admin/clearAvatarsServer', requireAdminAuth, (req,res)=>{
+  dbg('POST /api/admin/clearAvatarsServer');
+  try{
+    clearServerAvatars();
+    dbg('Server avatars cleared');
+    res.json({ok:true});
+  }catch(err){
+    dbg('Error clearing server avatars:', err.message);
+    res.status(500).json({error: err.message});
+  }
+});
+
 // Admin: Restart server
 app.post('/api/admin/restartServer', requireAdminAuth, (req,res)=>{
   try{
@@ -798,6 +830,10 @@ const server = app.listen(port, () => {
   console.log(`✓ Dashboard: http://localhost:${port}/`);
   console.log(`✓ Overlay: http://localhost:${port}/overlay/overlay.html`);
   
+  // Clear avatars on startup
+  clearServerAvatars();
+  console.log('✓ Cleared all avatars on startup');
+  
   // Auto-open browser to admin panel (if enabled, default true)
   if(cfg.autoOpenBrowser !== false){
     setTimeout(async () => {
@@ -858,6 +894,207 @@ function broadcast(obj){
   wss.clients.forEach(c => { if(c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
+// In-memory authoritative avatar state (not persisted to disk)
+const serverAvatars = new Map();
+const serverSpawnTimes = new Map();
+const serverStartTime = Date.now();
+
+// Get user's assigned skin from database
+function getUserSkinFromDB(userId) {
+  try {
+    const row = db.prepare('SELECT assigned_skin FROM users WHERE id = ?').get(userId.toLowerCase());
+    return row ? row.assigned_skin : 'default';
+  } catch (e) {
+    dbg('Error fetching user skin:', e.message);
+    return 'default';
+  }
+}
+
+// Update server-side avatar state (called when user sends chat message)
+function updateServerAvatar(username, tags) {
+  const userId = username.toLowerCase();
+  const skin = getUserSkinFromDB(userId);
+  
+  // For backward compatibility, also check for any existing avatars with this username
+  // to maintain the single-avatar-per-user model for regular chat messages
+  // But for spawned avatars, the client sends the full ID which should be preserved
+  // This function is only called from chat messages, not from avatarUpdate
+  // So we keep the original behavior here.
+  if (serverAvatars.has(userId)) {
+    const av = serverAvatars.get(userId);
+    av.lastActivity = Date.now();
+    if (av.skin !== skin) {
+      av.skin = skin;
+    }
+  } else {
+    serverAvatars.set(userId, {
+      id: userId,
+      username: username,
+      skin: skin,
+      createdAt: Date.now(),
+      lastActivity: Date.now()
+    });
+  }
+  
+  broadcastAvatarState();
+}
+
+// Broadcast full avatar state to all connected clients
+function broadcastAvatarState() {
+  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
+    id: av.id,
+    username: av.username,
+    skin: av.skin,
+    createdAt: av.createdAt,
+    lastActivity: av.lastActivity
+  }));
+  
+  broadcast({
+    type: 'avatarState',
+    avatars: avatarArray,
+    timestamp: Date.now()
+  });
+}
+
+// Send avatar state to a specific client (for initial sync)
+function sendAvatarStateToClient(ws) {
+  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
+    id: av.id,
+    username: av.username,
+    skin: av.skin,
+    createdAt: av.createdAt,
+    lastActivity: av.lastActivity
+  }));
+  
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'avatarState',
+      avatars: avatarArray,
+      timestamp: Date.now()
+    }));
+  }
+}
+
+// Clear all server-side avatars (for admin command)
+function clearServerAvatars() {
+  serverAvatars.clear();
+  serverSpawnTimes.clear();
+  broadcastAvatarState();
+}
+
+// WebSocket connection handling
+wss.on('connection', (ws) => {
+  dbg('WebSocket client connected');
+  
+  // Send current avatar state to newly connected client
+  sendAvatarStateToClient(ws);
+  
+  // Send initial config/environment data
+  ws.send(JSON.stringify({
+    type: 'config',
+    data: cfg
+  }));
+  
+  // Handle messages from clients
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'cmd' && msg.cmd === 'clearAvatars') {
+        dbg('clearAvatars command received from client');
+        clearServerAvatars();
+      } else if (msg.type === 'avatarUpdate') {
+        // Client notifies server about avatar spawn/update
+        dbg('avatarUpdate received from client:', msg);
+        const avatarId = msg.id; // Full unique ID (e.g., 'cat_1', 'bunbun_2')
+        const username = msg.username;
+        const skin = msg.skin || 'default';
+        const now = Date.now();
+        
+        if (serverAvatars.has(avatarId)) {
+          // Update existing
+          const av = serverAvatars.get(avatarId);
+          av.lastActivity = now;
+          if (av.skin !== skin) {
+            av.skin = skin;
+          }
+        } else {
+          // Create new - use the full ID as the key to preserve multiple avatars
+          serverAvatars.set(avatarId, {
+            id: avatarId,
+            username: username,
+            skin: skin,
+            createdAt: msg.createdAt || now,
+            lastActivity: now
+          });
+        }
+        
+        // Broadcast updated state to all clients
+        broadcastAvatarState();
+      } else if (msg.type === 'fullState') {
+        // Client sends full current state to server (for initial sync after reconnect)
+        dbg('fullState received from client:', msg.avatars.length, 'avatars');
+        const now = Date.now();
+        let changed = false;
+        
+        for (const clientAv of msg.avatars) {
+          const avatarId = clientAv.id; // Use full ID as key
+          const skin = clientAv.skin || 'default';
+          const clientCreatedAt = clientAv.createdAt || now;
+          
+          // Ignore avatars created before server startup (stale from previous server instance)
+          if (clientCreatedAt < serverStartTime) {
+            dbg('Ignoring stale avatar from client:', avatarId, 'created:', new Date(clientCreatedAt).toISOString());
+            continue;
+          }
+          
+          if (serverAvatars.has(avatarId)) {
+            // Update existing
+            const av = serverAvatars.get(avatarId);
+            av.lastActivity = now;
+            if (av.skin !== skin) {
+              av.skin = skin;
+              changed = true;
+            }
+          } else {
+            // Create new - preserve the full ID from client
+            serverAvatars.set(avatarId, {
+              id: avatarId,
+              username: clientAv.username,
+              skin: skin,
+              createdAt: clientCreatedAt,
+              lastActivity: now
+            });
+            changed = true;
+          }
+        }
+        
+        if (changed) {
+          broadcastAvatarState();
+        }
+      }
+    } catch (e) {
+      dbg('WebSocket message parse error:', e);
+    }
+  });
+});
+
+// Periodic cleanup of stale avatars (every minute)
+setInterval(() => {
+  const now = Date.now();
+  const lifetime = (cfg.overlay && cfg.overlay.spriteLifetimeMs) || 30 * 60 * 1000;
+  let changed = false;
+  for (const [id, av] of serverAvatars) {
+    if (now - av.lastActivity > lifetime) {
+      serverAvatars.delete(id);
+      changed = true;
+    }
+  }
+  if (changed) {
+    dbg('Cleaned up old avatars');
+    broadcastAvatarState();
+  }
+}, 60 * 1000);
+
 // Twitch bot
 let twitchClient = null;
 let botTokenInfo = null;
@@ -910,6 +1147,9 @@ async function connectTwitchBot(){
       // Use INSERT OR REPLACE with COALESCE to preserve existing skin
       db.prepare("INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,COALESCE((SELECT assigned_skin FROM users WHERE id=?), 'default'))")
         .run(username.toLowerCase(), displayName, username.toLowerCase());
+      
+      // Update server-side avatar state
+      updateServerAvatar(username, tags);
       
       broadcast({type:'chat', username, message, tags});
       dbg('Message broadcasted to overlay clients');
@@ -980,6 +1220,92 @@ async function connectTwitchBot(){
 function scheduleReconnect(){
   if(reconnectTimeout) clearTimeout(reconnectTimeout);
   reconnectTimeout = setTimeout(connectTwitchBot, 5000);
+}
+
+// Get user's assigned skin from database
+function getUserSkinFromDB(userId) {
+  try {
+    const row = db.prepare('SELECT assigned_skin FROM users WHERE id = ?').get(userId.toLowerCase());
+    return row ? row.assigned_skin : 'default';
+  } catch (e) {
+    dbg('Error fetching user skin:', e.message);
+    return 'default';
+  }
+}
+
+// Update server-side avatar state (called when user sends chat message)
+function updateServerAvatar(username, tags) {
+  const userId = username.toLowerCase();
+  const skin = getUserSkinFromDB(userId);
+  
+  // Check if avatar already exists
+  if (serverAvatars.has(userId)) {
+    const av = serverAvatars.get(userId);
+    // Update last activity
+    av.lastActivity = Date.now();
+    // Update skin if changed
+    if (av.skin !== skin) {
+      av.skin = skin;
+    }
+  } else {
+    // Create new avatar entry with minimal state
+    // Position will be randomized on client side
+    serverAvatars.set(userId, {
+      id: userId,
+      username: username,
+      skin: skin,
+      createdAt: Date.now(),
+      lastActivity: Date.now()
+      // Note: x, y, vx, vy, etc. are managed by client physics
+      // Server only tracks existence and skin assignment
+    });
+  }
+  
+  // Broadcast updated avatar state to all clients
+  broadcastAvatarState();
+}
+
+// Broadcast full avatar state to all connected clients
+function broadcastAvatarState() {
+  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
+    id: av.id,
+    username: av.username,
+    skin: av.skin,
+    createdAt: av.createdAt,
+    lastActivity: av.lastActivity
+  }));
+  
+  broadcast({
+    type: 'avatarState',
+    avatars: avatarArray,
+    timestamp: Date.now()
+  });
+}
+
+// Send avatar state to a specific client (for initial sync)
+function sendAvatarStateToClient(ws) {
+  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
+    id: av.id,
+    username: av.username,
+    skin: av.skin,
+    createdAt: av.createdAt,
+    lastActivity: av.lastActivity
+  }));
+  
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'avatarState',
+      avatars: avatarArray,
+      timestamp: Date.now()
+    }));
+  }
+}
+
+// Clear all server-side avatars (for admin command)
+function clearServerAvatars() {
+  serverAvatars.clear();
+  serverSpawnTimes.clear();
+  broadcastAvatarState();
 }
 
 if(cfg.useServer){

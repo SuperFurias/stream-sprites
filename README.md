@@ -218,7 +218,7 @@ Skins are automatically detected on startup and when the `/api/skins/auto` endpo
 
 ### Public Endpoints
 
-- `GET /config.json` - Returns merged configuration (from `.env` + auto-detected skins + overlay defaults) as JSON
+- `GET /env` - Returns merged configuration (from `.env` + auto-detected skins + overlay defaults) as JSON
 - `GET /api/skins` - List all available skins
 - `GET /api/skins/auto` - Auto-detect skins from assets folder
 - `GET /api/user/:id` - Get user's assigned skin

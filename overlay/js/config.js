@@ -1,9 +1,9 @@
 // Configuration and constants module
 export async function loadConfig() {
-  const cfgResp = await fetch('/config.json').catch(() => null);
+  const cfgResp = await fetch('/env').catch(() => null);
   const cfg = cfgResp ? await cfgResp.json() : null;
   if (!cfg) {
-    document.body.innerHTML = '<div style="color:#fff;padding:20px">Missing /config.json. Copy server/.env to server/.env and edit it, then run server.</div>';
+    document.body.innerHTML = '<div style="color:#fff;padding:20px">Missing /env endpoint. Copy server/.env to server/.env and edit it, then run server.</div>';
     return null;
   }
   return cfg;

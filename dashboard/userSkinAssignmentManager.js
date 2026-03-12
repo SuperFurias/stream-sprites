@@ -9,7 +9,7 @@ let userPageSize = 5;
 // Load config and populate skin select
 async function loadConfigForUsers() {
   try {
-    const res = await fetch('/config.json');
+    const res = await fetch('/env');
     if (!res.ok) throw new Error('config not found');
     const cfg = await res.json();
 
@@ -174,7 +174,7 @@ function showEditSkinModal(userId, currentSkin) {
   skinSelect.appendChild(defaultOpt);
   
   // Get available skins from config
-  fetch('/config.json')
+  fetch('/env')
     .then(res => res.json())
     .then(cfg => {
       // Try to fetch auto-detected skins

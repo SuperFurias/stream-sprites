@@ -2,7 +2,7 @@
 
 async function loadSkins(){
   try{
-    const res = await fetch('/config.json');
+    const res = await fetch('/env');
     if(!res.ok) throw new Error('config not found');
     const cfg = await res.json();
 
