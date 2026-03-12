@@ -895,7 +895,7 @@ function broadcast(obj){
 }
 
 // Constants (matching client config)
-const MAX_SPAWN_QUANTITY = 10;
+const MAX_SPAWN_QUANTITY = 100;
 const NAME_LENGTH_LIMIT = 20;
 
 // In-memory authoritative avatar state (not persisted to disk)
