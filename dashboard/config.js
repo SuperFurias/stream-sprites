@@ -58,8 +58,7 @@ async function saveConfig(){
       twitch: {
         ...currentCfg.twitch || {},
         clientId: document.getElementById('clientId').value.trim(),
-        clientSecret: document.getElementById('clientSecret').value.trim(),
-        redirectUri: `http://localhost:${currentCfg.serverPort || 3000}/auth/callback`
+        clientSecret: document.getElementById('clientSecret').value.trim()
       },
       botUsername: document.getElementById('botUsername').value.trim(),
       channel: document.getElementById('channel').value.trim()

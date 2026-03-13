@@ -37,19 +37,19 @@ async function restartServer(){
 }
 
 // Preview functionality
-let overlayPort = 3000; // default
+let overlayPort = 8080; // default
 
 async function loadOverlayPort() {
   try {
     const res = await fetch('/env');
     if (!res.ok) throw new Error('config not found');
     const cfg = await res.json();
-    overlayPort = cfg.serverPort || 3000;
+    overlayPort = cfg.serverPort || 8080;
     console.log('Overlay port loaded:', overlayPort);
     updateOverlayPreview();
   } catch (e) {
     console.error('Failed to load config for preview:', e);
-    overlayPort = 3000;
+    overlayPort = 8080;
     updateOverlayPreview();
   }
 }

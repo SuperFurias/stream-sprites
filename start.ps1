@@ -9,7 +9,7 @@ Set-Location $projectRoot
 
 # Read server port from .env file
 $envFile = Join-Path $projectRoot "server\.env"
-$serverPort = 3000  # default fallback
+$serverPort = 8080  # default fallback
 if (Test-Path $envFile) {
     try {
         $envContent = Get-Content $envFile -Raw | ConvertFrom-Json
@@ -17,13 +17,13 @@ if (Test-Path $envFile) {
             $serverPort = $envContent.serverPort
             Write-Host "Using port $serverPort from .env file" -ForegroundColor Green
         } else {
-            Write-Host "serverPort not found in .env, using default 3000" -ForegroundColor Yellow
+            Write-Host "serverPort not found in .env, using default 8080" -ForegroundColor Yellow
         }
     } catch {
-        Write-Host "Failed to parse .env file, using default port 3000" -ForegroundColor Yellow
+        Write-Host "Failed to parse .env file, using default port 8080" -ForegroundColor Yellow
     }
 } else {
-    Write-Host ".env file not found, using default port 3000" -ForegroundColor Yellow
+    Write-Host ".env file not found, using default port 8080" -ForegroundColor Yellow
 }
 
 # Check if Node.js is installed

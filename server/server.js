@@ -112,61 +112,115 @@ const cfgPath = path.join(__dirname, '.env');
 // Load config
 let cfg;
 function loadConfig(){
+  let configFromFile = null;
+  let fileExists = false;
   try{
     if(fs.existsSync(cfgPath)){
-      cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-      // Clean up: remove skins property if present (skins are auto-detected)
-      if (cfg.skins) {
-        delete cfg.skins;
-        try {
-          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-          console.log('✓ Removed skins from .env (auto-detected from assets)');
-        } catch (e) {
-          console.warn('⚠ Could not remove skins from .env:', e.message);
-        }
-      }
-      console.log('✓ Loaded config from .env');
-      return true;
+      fileExists = true;
+      configFromFile = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      cfg = configFromFile;
     }
   }catch(e){
-    console.warn('⚠ .env invalid:', e.message);
+    console.warn('⚠ .env invalid or missing:', e.message);
   }
   
-  // If .env doesn't exist, create it with default values
+  // Define complete default configuration
   const defaultCfg = {
     useServer: true,
-    serverPort: 3000,
+    serverPort: 8080,
     debug: {
       serverDebug: false,
-      twitchDebug: false,
-      twitchAuthErrors: false,
-      twitchOtherErrors: false,
+      twitchDebug: true,
+      twitchAuthErrors: true,
+      twitchOtherErrors: true,
       verboseMessages: false,
       logToFile: false
     },
     twitch: {
       clientId: "",
       clientSecret: "",
-      botOAuthToken: "",
-      redirectUri: ""
+      botOAuthToken: ""
     },
     channel: "",
     botUsername: "",
-    persistOAuthToken: false
+    persistOAuthToken: false,
+    autoOpenBrowser: true
   };
-  // Set redirectUri based on serverPort
-  defaultCfg.twitch.redirectUri = `http://localhost:${defaultCfg.serverPort}/auth/callback`;
   
-  try{
-    fs.writeFileSync(cfgPath, JSON.stringify(defaultCfg, null, 2));
-    cfg = defaultCfg;
-    console.log('✓ Created default .env');
-    return true;
-  }catch(e){
-    console.error('✗ Failed to create .env:', e.message);
+  // If no config loaded, start with defaults
+  if (!cfg) {
+    cfg = { ...defaultCfg };
+  } else {
+    // Deep merge defaults to fill in any missing properties
+    let configChanged = false;
+    
+    // Helper to recursively ensure all default properties exist
+    function ensureDefaults(target, defaults, path = '') {
+      let changed = false;
+      Object.keys(defaults).forEach(key => {
+        const fullPath = path ? `${path}.${key}` : key;
+        const defaultValue = defaults[key];
+        
+        if (typeof defaultValue === 'object' && defaultValue !== null && !Array.isArray(defaultValue)) {
+          // Ensure the object exists in target
+          if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) {
+            target[key] = { ...defaultValue };
+            changed = true;
+            console.log(`✓ Added missing config section: ${fullPath}`);
+          } else {
+            // Recursively check nested properties
+            const nestedChanged = ensureDefaults(target[key], defaultValue, fullPath);
+            changed = changed || nestedChanged;
+          }
+        } else {
+          // Check if property exists and has correct type
+          if (!(key in target)) {
+            target[key] = defaultValue;
+            changed = true;
+            console.log(`✓ Added missing config: ${fullPath} (default: ${JSON.stringify(defaultValue)})`);
+          } else if (typeof target[key] !== typeof defaultValue && defaultValue !== null) {
+            // Type mismatch, replace with default
+            target[key] = defaultValue;
+            changed = true;
+            console.log(`✓ Fixed type mismatch in config: ${fullPath} (set to default: ${JSON.stringify(defaultValue)})`);
+          }
+        }
+      });
+      return changed;
+    }
+    
+    configChanged = ensureDefaults(cfg, defaultCfg);
+    
+    // Clean up: remove skins property if present (skins are auto-detected)
+    if (cfg.skins) {
+      delete cfg.skins;
+      configChanged = true;
+    }
+    
+    // Write back to file if any changes were made
+    if (configChanged) {
+      try {
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        console.log('✓ Updated .env with missing default values');
+      } catch (e) {
+        console.warn('⚠ Could not update .env with defaults:', e.message);
+      }
+    }
   }
   
-  return false;
+  // If file didn't exist, create it with defaults
+  if (!fileExists && cfg) {
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      console.log('✓ Created .env with default values');
+    } catch (e) {
+      console.error('✗ Failed to create .env:', e.message);
+      return false;
+    }
+  }
+  
+  console.log('✓ Loaded config from .env');
+  return true;
 }
 
 loadConfig();
@@ -201,7 +255,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'dashboard', 'index.html'));
 });
 
-const port = cfg.serverPort || 3000;
+const port = cfg.serverPort || 8080;
 
 // Database - simple: just store assigned skins
 const dbDir = path.join(__dirname, 'db');
@@ -481,7 +535,6 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
       return res.status(400).json({error: 'Missing required fields'});
     }
     const merged = deepMerge(cfg, newCfg);
-    merged.twitch.redirectUri = merged.twitch.redirectUri || `http://localhost:${merged.serverPort || 3000}/auth/callback`;
     // Skins are auto-detected from assets, never save them to config
     delete merged.skins;
     // Also remove skins from the in-memory config if present
@@ -1301,7 +1354,10 @@ async function connectTwitchBot(){
   // Ensure any existing client is disconnected to prevent duplicates
   if (twitchClient) {
     try {
-      twitchClient.disconnect();
+      const state = twitchClient.readyState ? twitchClient.readyState() : null;
+      if (state === 1 || state === 'OPEN') {
+        await twitchClient.disconnect();
+      }
     } catch (e) {
       dbg('Error disconnecting old Twitch client:', e.message);
     }
@@ -1403,7 +1459,7 @@ async function connectTwitchBot(){
 
   twitchClient.on('disconnected', () => {
     dbg('Twitch disconnected');
-    scheduleReconnect();
+    // Not automatically reconnecting - manual reconnect required via admin panel
   });
 
   twitchClient.on('error', (err) => {
@@ -1412,7 +1468,7 @@ async function connectTwitchBot(){
 
   twitchClient.connect().catch((err) => {
     dbg('Twitch connection failed:', err.message);
-    scheduleReconnect();
+    // Not automatically reconnecting - manual reconnect required via admin panel
   });
 
   // Token refresh every 30 min
@@ -1444,7 +1500,16 @@ async function connectTwitchBot(){
         }
         
         if(twitchClient){
-          twitchClient.disconnect();
+          try {
+            const state = twitchClient.readyState ? twitchClient.readyState() : null;
+            if (state === 1 || state === 'OPEN') {
+              twitchClient.disconnect().catch(e => {
+                dbg('Error disconnecting Twitch client during token refresh:', e.message);
+              });
+            }
+          } catch (e) {
+            dbg('Error during token refresh disconnect check:', e.message);
+          }
           twitchClient.opts.identity.password = access_token;
           setTimeout(() => twitchClient.connect(), 2000);
         }
@@ -1455,10 +1520,11 @@ async function connectTwitchBot(){
   }, 30 * 60 * 1000);
 }
 
-function scheduleReconnect(){
-  if(reconnectTimeout) clearTimeout(reconnectTimeout);
-  reconnectTimeout = setTimeout(connectTwitchBot, 5000);
-}
+// Automatic reconnection disabled - use admin panel to reconnect manually
+// function scheduleReconnect(){
+//   if(reconnectTimeout) clearTimeout(reconnectTimeout);
+//   reconnectTimeout = setTimeout(connectTwitchBot, 5000);
+// }
 
 // Get user's assigned skin from database
 function getUserSkinFromDB(userId) {
@@ -1514,7 +1580,7 @@ if(cfg.useServer){
 }
 
 // Graceful shutdown
-function shutdown(signal) {
+async function shutdown(signal) {
   dbg(`Shutting down (${signal})...`);
   
   // Handle OAuth token based on persistOAuthToken setting
@@ -1534,7 +1600,16 @@ function shutdown(signal) {
     }
   }
   
-  if(twitchClient) twitchClient.disconnect();
+  if(twitchClient) {
+    try {
+      const state = twitchClient.readyState ? twitchClient.readyState() : null;
+      if (state === 1 || state === 'OPEN') {
+        await twitchClient.disconnect();
+      }
+    } catch (e) {
+      dbg('Error disconnecting Twitch client during shutdown:', e.message);
+    }
+  }
   db.close(() => {
     dbg('Database closed');
     process.exit(0);
@@ -1548,7 +1623,9 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 app.get('/auth/twitch', (req,res)=>{
   dbg('GET /auth/twitch - redirecting to Twitch OAuth');
   const state = req.query.state || 'random';
-  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twitch.clientId}&redirect_uri=${encodeURIComponent(cfg.twitch.redirectUri)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
+  // Build OAuth Redirect URL (must match the one configured in Twitch Dev Console)
+  const oauthRedirectUrl = `http://localhost:${cfg.serverPort || 8080}/auth/callback`;
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twitch.clientId}&redirect_uri=${encodeURIComponent(oauthRedirectUrl)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
   res.redirect(url);
 });
 
@@ -1561,12 +1638,14 @@ app.get('/auth/callback', async (req,res)=>{
   }
   try{
     dbg('Exchanging code for token');
+    // Build OAuth Redirect URL (must match what Twitch expects)
+    const oauthRedirectUrl = `http://localhost:${cfg.serverPort || 8080}/auth/callback`;
     const params = new URLSearchParams({
       client_id: cfg.twitch.clientId,
       client_secret: cfg.twitch.clientSecret,
       code,
       grant_type: 'authorization_code',
-      redirect_uri: cfg.twitch.redirectUri
+      redirect_uri: oauthRedirectUrl
     });
     const tokenResp = await axios.post('https://id.twitch.tv/oauth2/token', params.toString(), {
       headers: {'Content-Type': 'application/x-www-form-urlencoded'}
@@ -1587,11 +1666,19 @@ app.get('/auth/callback', async (req,res)=>{
       dbg('OAuth token stored in memory only (persistOAuthToken=false)');
     }
     
+    // After successful OAuth, redirect to the dashboard on the correct port (serverPort)
+    const dashboardUrl = `http://localhost:${cfg.serverPort || 8080}/`;
     res.send(`
       <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
         <h2>✓ OAuth Token Generated</h2>
         <p>Token ${cfg.persistOAuthToken ? 'saved to .env' : 'stored in memory only'}</p>
-        <p><a href="/" style="color:#0af">Go to Admin</a></p>
+        <p><a href="${dashboardUrl}" style="color:#0af">Go to Admin Dashboard</a></p>
+        <p>Redirecting in 3 seconds...</p>
+        <script>
+          setTimeout(() => {
+            window.location.href = "${dashboardUrl}";
+          }, 3000);
+        </script>
       </body></html>
     `);
   }catch(e){

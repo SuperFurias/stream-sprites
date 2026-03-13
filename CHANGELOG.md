@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Comprehensive overlay settings UI in dashboard with all physics and visual parameters
 - Server-authoritative spawning system to prevent duplicate avatars
+- Configuration auto-recovery: server automatically restores missing .env values on startup
 - Clear all avatars on server startup for fresh state
 - Expanded overlay configuration with 50+ tunable parameters
 - Increased max spawn quantity from 10 to 100
+- Enhanced debug logging enabled by default (twitchDebug, twitchAuthErrors, twitchOtherErrors)
 
 ### Changed
 - Refactored overlay configuration: moved all defaults to client-side config.js
@@ -20,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Consolidated maxSpawnQuantity into overlay config structure
 - Improved command handling with proper tags.skipSpawn and tags.isCommand flags
 - Restructured chat message metadata for better client-server communication
+- Updated OAuth variable naming: redirectUri → oauthRedirectUrl for clarity
+- Default debug settings: twitchDebug, twitchAuthErrors, twitchOtherErrors now true
 
 ### Fixed
 - Fixed !spawn command to be additive instead of replacing sprites

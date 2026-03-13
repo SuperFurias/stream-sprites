@@ -29,11 +29,30 @@ Implemented server-side validation to prevent duplicate avatars:
 - Prevents race conditions and duplicate spawns
 - Improves consistency across multiple overlay clients
 
+### Configuration Auto-Recovery
+The server now automatically validates and restores missing configuration values on startup:
+- Recursively checks all properties in `.env` (including nested objects)
+- Adds any missing values with their defaults
+- Fixes type mismatches
+- Writes updated configuration back to disk
+- Logs what was added or fixed
+
+This prevents crashes and ensures the server always has the required configuration, even if values are manually deleted or the file becomes corrupted.
+
 ### Expanded Configuration System
 - Moved all overlay defaults to client-side `config.js` for better maintainability
 - Added 50+ new configurable parameters
 - Consolidated `maxSpawnQuantity` into overlay config (increased from 10 to 100)
 - Improved configuration structure with clear separation between server and overlay settings
+
+### Enhanced Default Debug Settings
+Twitch-related debug logging is now enabled by default for better out-of-the-box troubleshooting:
+- `debug.twitchDebug`: `true`
+- `debug.twitchAuthErrors`: `true`
+- `debug.twitchOtherErrors`: `true`
+
+### OAuth Terminology Update
+Updated code to use Twitch's official "OAuth Redirect URL" terminology for clarity and consistency with Twitch documentation.
 
 ## 🐛 Bug Fixes
 
@@ -62,9 +81,12 @@ Fixed client-side command handling to correctly check `tags.skipSpawn` and `tags
 ### Added
 - Comprehensive overlay settings UI in dashboard
 - Server-authoritative spawning system
+- Configuration auto-recovery (missing .env values restored on startup)
 - Clear avatars on server startup
 - 50+ new tunable overlay parameters
 - Increased max spawn quantity to 100
+- Enhanced debug logging enabled by default (twitchDebug, twitchAuthErrors, twitchOtherErrors)
+- OAuth redirect terminology aligned with Twitch documentation
 - Collapsible settings sections with localStorage persistence
 - Real-time settings preview
 
@@ -81,6 +103,10 @@ Fixed client-side command handling to correctly check `tags.skipSpawn` and `tags
 - Stale avatarUpdate message filtering
 - Client command handling logic
 - Tags object structure for command metadata
+
+### Changed
+- Updated OAuth variable naming: `redirectUri` → `oauthRedirectUrl` for clarity
+- Default debug settings: twitchDebug, twitchAuthErrors, twitchOtherErrors now `true`
 
 ## 🙏 Credits
 Thanks to the community for reporting issues and suggesting improvements!

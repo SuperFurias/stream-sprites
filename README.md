@@ -35,13 +35,13 @@ The script automatically:
    ```bash
    npm start
    ```
-4. Open `http://localhost:3000` in your browser
+4. Open `http://localhost:8080` in your browser
 
 ---
 
 ## First-Time Configuration
 
-1. Open the dashboard at `http://localhost:3000`
+1. Open the dashboard at `http://localhost:8080`
 2. Go to the **Config** tab
 3. Enter your Twitch credentials:
    - **Client ID** and **Client Secret** (from your Twitch developer application)
@@ -62,22 +62,21 @@ Configuration is stored in `server/.env` (JSON format):
 ```json
 {
   "useServer": true,
-  "serverPort": 3000,
+  "serverPort": 8080,
   "autoOpenBrowser": true,
   "twitch": {
     "clientId": "",
     "clientSecret": "",
-    "botOAuthToken": "",
-    "redirectUri": "http://localhost:3000/auth/callback"
+    "botOAuthToken": ""
   },
   "channel": "",
   "botUsername": "",
   "persistOAuthToken": false,
   "debug": {
     "serverDebug": false,
-    "twitchDebug": false,
-    "twitchAuthErrors": false,
-    "twitchOtherErrors": false,
+    "twitchDebug": true,
+    "twitchAuthErrors": true,
+    "twitchOtherErrors": true,
     "verboseMessages": false,
     "logToFile": false
   },
@@ -137,17 +136,30 @@ Configuration is stored in `server/.env` (JSON format):
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `debug.serverDebug` | boolean | `false` | Enable server-side debug logging |
-| `debug.twitchDebug` | boolean | `false` | Enable Twitch client debug logging |
-| `debug.twitchAuthErrors` | boolean | `false` | Log authentication errors |
-| `debug.twitchOtherErrors` | boolean | `false` | Log other Twitch errors |
+| `debug.twitchDebug` | boolean | `true` | Enable Twitch client debug logging |
+| `debug.twitchAuthErrors` | boolean | `true` | Log authentication errors |
+| `debug.twitchOtherErrors` | boolean | `true` | Log other Twitch errors |
 | `debug.verboseMessages` | boolean | `false` | Log all chat messages |
 | `debug.logToFile` | boolean | `false` | Write logs to `logs/debug.log` |
 
 ---
 
+## Configuration Auto-Recovery
+
+The server automatically checks for missing configuration values on startup and restores any missing defaults. If you manually remove a property from `.env` or it becomes corrupted, the server will:
+
+- Detect missing properties (including nested objects like `debug` and `twitch`)
+- Add them back with default values
+- Write the updated configuration to `.env`
+- Log what was added or fixed
+
+This ensures the server always has the required configuration and prevents crashes due to missing values.
+
+---
+
 ## Dashboard
 
-Access the dashboard at `http://localhost:3000` to manage your Stream Sprites instance.
+Access the dashboard at `http://localhost:8080` to manage your Stream Sprites instance.
 
 ### Tabs
 
@@ -202,17 +214,17 @@ Features:
 
 ## Overlay
 
-The overlay is available at `http://localhost:3000/overlay/overlay.html`.
+The overlay is available at `http://localhost:8080/overlay/overlay.html`.
 
 ### OBS Setup
 
 1. In OBS Studio, add a **Browser Source** to your scene
-2. Set the URL to: `http://localhost:3000/overlay/overlay.html`
+2. Set the URL to: `http://localhost:8080/overlay/overlay.html`
 3. Set width to `1920` and height to `1080` (matches default 1080p canvas)
 4. Check **"Control audio via OBS"** (optional)
 5. The overlay will display sprites and chat messages in real-time
 
-**Note:** The overlay connects via WebSocket to the server. Ensure your firewall allows connections on port 3000.
+**Note:** The overlay connects via WebSocket to the server. Ensure your firewall allows connections on port 8080.
 
 ### Features
 
@@ -333,10 +345,13 @@ Get-Content logs/debug.log -Wait  # PowerShell
 
 - **Comprehensive Overlay Settings UI**: Full-featured Settings tab with 50+ tunable parameters
 - **Server-Authoritative Spawning**: Prevents duplicate avatars and ensures consistency across multiple overlay clients
+- **Configuration Auto-Recovery**: Server automatically restores missing default values in `.env` on startup
 - **Expanded Configuration**: All overlay defaults moved to client-side `config.js` for better maintainability
 - **Increased Spawn Limit**: Max spawn quantity increased from 10 to 100
+- **Enhanced Debug Logging**: Twitch debug flags (`twitchDebug`, `twitchAuthErrors`, `twitchOtherErrors`) now enabled by default
 - **Bug Fixes**: Fixed `!spawn` additive behavior, stale message filtering, and client command handling
 - **Improved Settings Management**: Collapsible sections with localStorage persistence and real-time configuration preview
+- **OAuth Terminology**: Updated code to use Twitch's official "OAuth Redirect URL" terminology
 
 See [CHANGELOG.md](CHANGELOG.md) for full details.
 

@@ -137,7 +137,7 @@ export function getConfigConstants(cfg, overlay) {
   
   return {
     USE_SERVER: !!cfg.useServer,
-    WS_URL: (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (location.hostname || 'localhost') + ':' + (cfg.serverPort || 3000),
+    WS_URL: (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (location.hostname || 'localhost') + ':' + (cfg.serverPort || 8080),
     CHANNEL: cfg.channel || '--',
     BOT_USERNAME: cfg.botUsername,
     OAUTH: cfg.oauth,
