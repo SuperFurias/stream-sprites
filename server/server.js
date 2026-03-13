@@ -144,7 +144,127 @@ function loadConfig(){
     channel: "",
     botUsername: "",
     persistOAuthToken: false,
-    autoOpenBrowser: true
+    autoOpenBrowser: true,
+    overlay: {
+      // Canvas
+      canvasWidth: 1920,
+      canvasHeight: 1080,
+      groundY: 920,
+      
+      // Physics
+      gravity: 0.6,
+      airResistance: 0.992,
+      groundFriction: 0.92,
+      bounceDamping: 0.65,
+      minVelocity: 0.15,
+      
+      // Spawning
+      maxAvatars: 1500,
+      maxSpawnQuantity: 100,
+      spawnThrottleMs: 700,
+      spriteSizeMin: 30,
+      spriteSizeMax: 80,
+      spawnMaxTries: 8,
+      spawnYOffset: 40,
+      spawnJitter: 6,
+      spawnBoundsPadding: 60,
+      spawnSizePadding: 120,
+      initialVelocity: 2,
+      
+      // Lifetime
+      spriteLifetimeMs: 1800000,
+      fadeWarningMs: 300000,
+      
+      // Collision
+      collisionPersonalSpaceThreshold: 0.1,
+      collisionForceMultiplier: 0.02,
+      collisionProbabilityScaling: 1,
+      collisionProbabilityLow: 0.0,
+      collisionProbabilityMedium: 0.5,
+      collisionProbabilityHigh: 1.0,
+      collisionCountThresholdLow: 5,
+      collisionCountThresholdHigh: 15,
+      
+      // Explosion
+      explosionForceMultiplier: 60,
+      explosionRadiusBase: 400,
+      explosionRadiusVar: 300,
+      explosionUpwardBias: 0.7,
+      spinStrengthFactor: 0.05,
+      randomJitterFactor: 0.2,
+      explosionTimingJitter: 0.3,
+      
+      // Roaming
+      roamZoneYOffset: 30,
+      roamDurationBase: 3000,
+      roamDurationVar: 4000,
+      roamDistanceThreshold: 5,
+      roamWalkForceMultiplier: 0.2,
+      roamWalkVerticalFactor: 0.3,
+      roamSteerForceMultiplier: 0.1,
+      roamSteerVerticalFactor: 0.2,
+      roamArrivalThreshold: 10,
+      roamRandomMoveChance: 0.03,
+      roamRandomMoveForce: 0.3,
+      roamRandomMoveVertical: 0.1,
+      
+      // Visual
+      textWidthPadding: 4,
+      wiggleRange: 1000,
+      
+      // Particles
+      particleCountBase: 30,
+      particleCountVar: 20,
+      particleSpeedBase: 2,
+      particleSpeedVar: 4,
+      particleGravity: 0.1,
+      particleDecayBase: 0.01,
+      particleDecayVar: 0.02,
+      particleSizeBase: 3,
+      particleSizeVar: 5,
+      particleHueBase: 10,
+      particleHueRange: 60,
+      
+      // Other
+      nameLengthLimit: 32,
+      velocityBump: 3,
+      draggedGravity: 0.5,
+      danceGravityFactor: -0.2,
+      danceAngularVelocity: 0.1,
+      tiltReturnTime: 1000,
+      danceFrequency: 200,
+      massDivisor: 1000,
+      momentOfInertiaFactor: 0.5,
+      heightScaleSit: 0.75,
+      heightScaleIdle: 1.0,
+      dtCap: 0.05,
+      groundYMultiplier: 0.99,
+      safetyNudgeDistance: 0.5,
+      angularVelocityDecay: 0.98,
+      angleDecay: 0.95,
+      tiltAngularDecay: 0.9,
+      tiltAngleThreshold: 0.01,
+      lifetimeCleanupThreshold: 10,
+      zoneSelectionBias: 0.7,
+      spatialHashCellSize: 64,
+      numZones: 5,
+      avoidanceRadiusMultiplier: 2.0,
+      sizeSimilarityThreshold: 0.85,
+      expandedRadiusMultiplier: 4.0,
+      sizeDiffThresholdLow: 0.7,
+      sizeDiffAttractionMultiplier: 1.5,
+      minAttractionDistance: 20,
+      sizeDiffFactor: 2.0,
+      attractionForceBase: 0.08,
+      largerRepulsionFactor: 0.3,
+      moderateRepulsionRadius: 1.0,
+      moderateRepulsionForce: 0.08,
+      centerPushRadius: 150,
+      centerPushForce: 0.02,
+      groundYCenterOffset: 0.8,
+      directionChangeThreshold: 0.3,
+      resizeDebounceMs: 100
+    }
   };
   
   // If no config loaded, start with defaults
@@ -301,6 +421,38 @@ function deepMerge(target, source){
 }
 function isObject(item){
   return item && typeof item === 'object' && !Array.isArray(item);
+}
+
+// Filter out properties that match default values
+function filterDefaults(config, defaults) {
+  const result = {};
+  
+  for (const key in config) {
+    if (config.hasOwnProperty(key)) {
+      const value = config[key];
+      const defaultValue = defaults[key];
+      
+      // Skip skins (always auto-detected)
+      if (key === 'skins') continue;
+      
+      // If it's an object, recurse
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const nestedDefaults = defaultValue && typeof defaultValue === 'object' ? defaultValue : {};
+        const filtered = filterDefaults(value, nestedDefaults);
+        // Only add if there are non-default properties
+        if (Object.keys(filtered).length > 0) {
+          result[key] = filtered;
+        }
+      } else {
+        // Compare primitive values (including undefined)
+        if (value !== defaultValue) {
+          result[key] = value;
+        }
+      }
+    }
+  }
+  
+  return result;
 }
 
 // Reusable function to detect skins from assets folder
@@ -553,7 +705,9 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
       }
     }
     
-    fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2));
+    // Filter out default values to keep .env clean
+    const filteredConfig = filterDefaults(merged, defaultCfg);
+    fs.writeFileSync(cfgPath, JSON.stringify(filteredConfig, null, 2));
     // Restore token in memory if not persisting
     if(cfg.twitch && !cfg.persistOAuthToken) {
       cfg.twitch.botOAuthToken = tokenForMemory;
@@ -620,7 +774,9 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
     }
     // Skins are auto-detected from assets, never save them to config
     delete configToSave.skins;
-    fs.writeFileSync(cfgPath, JSON.stringify(configToSave, null, 2));
+    // Filter out default values to keep .env clean
+    const filteredConfig = filterDefaults(configToSave, defaultCfg);
+    fs.writeFileSync(cfgPath, JSON.stringify(filteredConfig, null, 2));
     // Restore token in memory if not persisting
     if(cfg.twitch && !cfg.persistOAuthToken) {
       cfg.twitch.botOAuthToken = tokenForMemory;

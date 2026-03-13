@@ -5,6 +5,19 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-03-13
+
+### Changed
+- Configuration saving now filters out default values to keep `.env` minimal
+- Server `defaultCfg` expanded to include all overlay defaults for proper filtering
+- `filterDefaults()` function added to recursively remove default-valued properties
+- Both `saveConfig` and `applySettings` endpoints now use filtered config writes
+
+### Technical
+- No functional changes to how configuration works
+- Backward compatible: old `.env` files continue to work
+- Auto-recovery ensures all required properties exist in memory
+
 ## [1.0.2] - 2026-03-13
 
 ### Fixed
