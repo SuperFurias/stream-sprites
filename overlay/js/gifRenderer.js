@@ -57,6 +57,20 @@ export function createGifRenderer() {
           `;
           container.appendChild(img);
           gifElements.set(a.id, img);
+        } else if (img.src !== skin.file) {
+          // Skin changed to a different GIF - create new element to ensure animation restarts
+          img.remove();
+          img = document.createElement('img');
+          img.src = skin.file;
+          img.alt = `${a.username}'s GIF`;
+          img.style.cssText = `
+            position: absolute;
+            transform-origin: center center;
+            pointer-events: none;
+            will-change: transform, opacity;
+          `;
+          container.appendChild(img);
+          gifElements.set(a.id, img);
         }
 
         // Calculate position (canvas coordinates to screen coordinates)
