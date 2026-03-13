@@ -21,7 +21,7 @@ The script automatically:
 - Installs npm dependencies on first run
 - Starts the server with auto-restart on crashes
 - Opens the dashboard in your browser
-- Handles port conflicts (kills existing processes on port 3000)
+- Handles port conflicts (kills existing processes on port 8080)
 
 ### Manual Setup (Any Platform)
 
@@ -122,7 +122,7 @@ Configuration is stored in `server/.env` (JSON format):
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `useServer` | boolean | `true` | Enable/disable Twitch bot connection |
-| `serverPort` | number | `3000` | Port for the web server |
+| `serverPort` | number | `8080` | Port for the web server |
 | `autoOpenBrowser` | boolean | `true` | Auto-open dashboard on server start |
 | `persistOAuthToken` | boolean | `false` | Save OAuth token to disk (false = memory only) |
 | `twitch.clientId` | string | `""` | Twitch application client ID |
@@ -315,7 +315,7 @@ Skins are automatically detected on startup and when the `/api/skins/auto` endpo
 
 ### Port Already in Use
 
-If you see `Port 3000 in use`, change the `serverPort` in your `.env` file or stop the other process.
+If you see `Port 8080 in use`, change the `serverPort` in your `.env` file or stop the other process.
 
 ### Bot Not Connecting
 
