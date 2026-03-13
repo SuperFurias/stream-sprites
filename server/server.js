@@ -320,7 +320,9 @@ function loadConfig(){
     // Write back to file if any changes were made
     if (configChanged) {
       try {
-        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        // Filter out defaults to keep .env clean
+        const filtered = filterDefaults(cfg, defaultCfg);
+        fs.writeFileSync(cfgPath, JSON.stringify(filtered, null, 2));
         console.log('✓ Updated .env with missing default values');
       } catch (e) {
         console.warn('⚠ Could not update .env with defaults:', e.message);
@@ -331,7 +333,9 @@ function loadConfig(){
   // If file didn't exist, create it with defaults
   if (!fileExists && cfg) {
     try {
-      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      // Filter out defaults - if everything is default, write minimal config
+      const filtered = filterDefaults(cfg, defaultCfg);
+      fs.writeFileSync(cfgPath, JSON.stringify(filtered, null, 2));
       console.log('✓ Created .env with default values');
     } catch (e) {
       console.error('✗ Failed to create .env:', e.message);
@@ -1646,7 +1650,9 @@ async function connectTwitchBot(){
         // Save to disk if persistOAuthToken is enabled
         if(cfg.persistOAuthToken) {
           try {
-            fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+            // Filter out defaults to keep .env clean
+            const filtered = filterDefaults(cfg, defaultCfg);
+            fs.writeFileSync(cfgPath, JSON.stringify(filtered, null, 2));
             dbg('Token refreshed and saved to .env');
           } catch(e) {
             dbg('Token refreshed but failed to save to config:', e.message);
@@ -1745,7 +1751,9 @@ async function shutdown(signal) {
       // Clear token from memory and disk if not persisting
       cfg.twitch.botOAuthToken = '';
       try {
-        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        // Filter out defaults to keep .env clean
+        const filtered = filterDefaults(cfg, defaultCfg);
+        fs.writeFileSync(cfgPath, JSON.stringify(filtered, null, 2));
         dbg('OAuth token cleared from .env (persistOAuthToken=false)');
       } catch(e) {
         dbg('Failed to clear OAuth token:', e.message);
@@ -1813,7 +1821,9 @@ app.get('/auth/callback', async (req,res)=>{
     // Save to disk if persistOAuthToken is enabled
     if(cfg.persistOAuthToken) {
       try {
-        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+        // Filter out defaults to keep .env clean
+        const filtered = filterDefaults(cfg, defaultCfg);
+        fs.writeFileSync(cfgPath, JSON.stringify(filtered, null, 2));
         dbg('OAuth token saved to .env (persistOAuthToken=true)');
       } catch(e) {
         dbg('Failed to save token to config:', e.message);
