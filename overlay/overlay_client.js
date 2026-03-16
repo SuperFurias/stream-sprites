@@ -11,7 +11,7 @@ import { createExplosionEffect, updateExplosionParticles } from './js/explosion.
 import { draw as render, updateAvatarCountDisplay } from './js/renderer.js';
 import { createGameLoop } from './js/loop.js';
 import { setupWebSocket, setupTmiFallback, handleWebSocketMessage } from './js/connection.js';
-import { createGifRenderer } from './js/gifRenderer.js';
+import { createAnimatedMediaRenderer } from './js/animatedMediaRenderer.js';
 import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD } from './js/config.js';
 
 // Debug utility
@@ -82,7 +82,7 @@ function dbg(...args) {
   const spawnTimes = new Map();
   const explosionParticles = [];
   const userSkinCache = createUserSkinCache();
-  const gifRenderer = createGifRenderer();
+  const animatedMediaRenderer = createAnimatedMediaRenderer();
   
   // Initialize window._SA early so connection can be added
   window._SA = {};
@@ -315,7 +315,7 @@ function dbg(...args) {
   // Render wrapper
   function renderWrapper() {
     render(ctx, W, H, GROUND_Y, avatars, skins, explosionParticles);
-    gifRenderer.update(avatars, skins, W, H, GROUND_Y);
+    animatedMediaRenderer.update(avatars, skins, W, H, GROUND_Y);
     updateAvatarCountDisplay(avatars);
   }
   
@@ -355,7 +355,7 @@ function dbg(...args) {
             if (cmd === 'clearAvatars') {
               dbg('Clearing all avatars');
               avatars.clear();
-              gifRenderer.clear();
+              animatedMediaRenderer.clear();
             } else if (cmd === 'boom') {
               dbg('Boom command - applying explosion effect');
               // Random epicenter
@@ -436,13 +436,13 @@ function dbg(...args) {
   window._SA.spawn = spawnAvatar;
   window._SA.avatars = avatars;
   window._SA.skins = skins;
-  window._SA.gifRenderer = gifRenderer;
+  window._SA.animatedMediaRenderer = animatedMediaRenderer;
   
   // Debug
   dbg('Overlay initialized successfully');
   
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
-    gifRenderer.destroy();
+    animatedMediaRenderer.destroy();
   });
 })();

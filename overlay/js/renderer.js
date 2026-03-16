@@ -43,8 +43,8 @@ function drawAvatar(ctx, a, skins, GROUND_Y) {
   // Only draw static images on canvas; GIFs and WebMs are rendered as DOM elements
   if (s && s.img && !s.isGif && !s.isWebm) {
     ctx.drawImage(s.img, -a.size / 2, -scaledHeight / 2, a.size, scaledHeight);
-  } else if (!s || !s.img || s.isWebm) {
-    // Fallback: draw colored circle with eyes
+  } else if (!s || (!s.img && !s.isGif && !s.isWebm)) {
+    // Fallback: draw colored circle with eyes (only for non-animated skins without an image)
     ctx.beginPath();
     ctx.fillStyle = a.color;
     ctx.arc(0, 0, scaledHeight / 2, 0, Math.PI * 2);

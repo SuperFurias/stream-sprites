@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Extended skin detection to include `.webm` extension
-- Updated gifRenderer to handle both GIF and WebM animated media
+- Updated animatedMediaRenderer (formerly gifRenderer) to handle both GIF and WebM animated media
 - Dashboard now creates `<video>` elements for WebM files instead of `<img>`
 - Overlay CSS updated to style video elements alongside images
 
