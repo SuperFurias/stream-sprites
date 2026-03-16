@@ -154,15 +154,23 @@ export function createAnimatedMediaRenderer() {
         
         // Debug: log dimensions for sit state
         if (a.state === 'sit' && skin.isWebm) {
-          console.log('[ANIMATED MEDIA] WebM sit dimensions:', {
+          const rect = element.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(element);
+          console.log('[ANIMATED MEDIA] WebM sit full debug:', {
             id: a.id,
             aSize: a.size,
             heightScale: a.heightScale,
             scaledHeight: scaledHeight,
             screenWidth: screenWidth,
             screenHeight: screenHeight,
-            elementWidth: element.style.width,
-            elementHeight: element.style.height
+            elementStyleWidth: element.style.width,
+            elementStyleHeight: element.style.height,
+            elementAttrWidth: element.width,
+            elementAttrHeight: element.height,
+            rectWidth: rect.width,
+            rectHeight: rect.height,
+            objectFit: computedStyle.objectFit,
+            objectPosition: computedStyle.objectPosition
           });
         }
       }
