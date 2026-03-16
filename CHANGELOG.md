@@ -15,12 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Extended skin detection to include `.webm` extension
-- Updated animatedMediaRenderer (formerly gifRenderer) to handle both GIF and WebM animated media
+- Renamed `gifRenderer` to `animatedMediaRenderer` to better reflect its capabilities
+- Updated animatedMediaRenderer to handle both GIF and WebM animated media
 - Dashboard now creates `<video>` elements for WebM files instead of `<img>`
 - Overlay CSS updated to style video elements alongside images
+- WebM videos now use `object-fit: fill` and explicit dimensions for precise control
 
 ### Fixed
-- Proper skin change detection using data attributes to avoid URL comparison issues
+- Proper skin change detection using data attributes to avoid URL comparison bugs
+- Fixed `!sit` command for WebM skins: now only height scales to 0.75, width remains constant
+- Removed unwanted fallback circle rendering behind WebM videos
 
 ## [1.0.3] - 2026-03-13
 
