@@ -314,14 +314,18 @@ function detectSkinsFromAssets() {
       dbg('Found files:', files);
       files.forEach(file => {
         const ext = path.extname(file).toLowerCase();
-        if(['.png', '.gif', '.jpg', '.jpeg', '.webp'].includes(ext)){
+        if(['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm'].includes(ext)){
           const id = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          const isGif = ['.gif'].includes(ext);
+          const isWebm = ['.webm'].includes(ext);
           detected.push({
             id: id,
             name: path.basename(file, ext),
             file: `../assets/skins/${file}`,
             price: 0,
-            autoDetected: true
+            autoDetected: true,
+            isGif: isGif,
+            isWebm: isWebm
           });
         }
       });

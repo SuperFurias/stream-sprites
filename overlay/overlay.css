@@ -3,7 +3,8 @@ html,body{height:100%;margin:0;background:transparent;overflow:hidden;font-famil
 body.browser-mode{background:#000;}
 canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh;max-width:100%;max-height:100%;}
 #gif-container{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;}
-#gif-container img{position:absolute;transform-origin:center center;pointer-events:none;will-change:transform,opacity;image-rendering:pixelated;}
+#gif-container img,
+#gif-container video{position:absolute;transform-origin:center center;pointer-events:none;will-change:transform,opacity;image-rendering:pixelated;}
 #ui{position:fixed;left:12px;top:12px;z-index:9999;color:#fff;}
 .panel{background:rgba(0,0,0,0.45);padding:8px;border-radius:8px;font-size:13px;min-width:180px;}
 .hidden{display:none;}

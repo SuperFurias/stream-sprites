@@ -5,6 +5,23 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-03-16
+
+### Added
+- WebM video support for animated skins
+- Automatic detection of `.webm` files from `assets/skins/` folder
+- Video element rendering for WebM files in overlay (autoplay, loop, muted)
+- WebM support in dashboard skins tab with video preview
+
+### Changed
+- Extended skin detection to include `.webm` extension
+- Updated gifRenderer to handle both GIF and WebM animated media
+- Dashboard now creates `<video>` elements for WebM files instead of `<img>`
+- Overlay CSS updated to style video elements alongside images
+
+### Fixed
+- Proper skin change detection using data attributes to avoid URL comparison issues
+
 ## [1.0.3] - 2026-03-13
 
 ### Changed

@@ -37,20 +37,40 @@ function displaySkins(skins){
     div.style.alignItems = 'center';
     div.style.gap = '8px';
 
-    // Create image element
-    const img = document.createElement('img');
-    img.src = s.file;
-    img.style.maxWidth = '150px';
-    img.style.maxHeight = '150px';
-    img.style.objectFit = 'contain';
-    img.style.borderRadius = '4px';
-    img.style.background = '#333';
-
-    // Check if it's a GIF
+    // Check if it's a GIF or WebM
     const isGif = s.file.toLowerCase().endsWith('.gif');
-    if(isGif){
-      img.title = 'GIF - will animate in overlay';
+    const isWebm = s.file.toLowerCase().endsWith('.webm');
+
+    // Create appropriate element for the media type
+    let mediaElement;
+    if(isWebm){
+      mediaElement = document.createElement('video');
+      mediaElement.src = s.file;
+      mediaElement.alt = `${s.name} (WebM)`;
+      mediaElement.loop = true;
+      mediaElement.muted = true;
+      mediaElement.playsInline = true;
+      mediaElement.controls = false;
+      // Try to autoplay
+      mediaElement.autoplay = true;
+      mediaElement.onerror = () => {
+        mediaElement.style.display = 'none';
+        console.warn('Failed to load WebM:', s.file);
+      };
+    } else {
+      mediaElement = document.createElement('img');
+      mediaElement.src = s.file;
+      mediaElement.alt = s.name;
+      if(isGif){
+        mediaElement.title = 'GIF - will animate in overlay';
+      }
     }
+
+    mediaElement.style.maxWidth = '150px';
+    mediaElement.style.maxHeight = '150px';
+    mediaElement.style.objectFit = 'contain';
+    mediaElement.style.borderRadius = '4px';
+    mediaElement.style.background = '#333';
 
     const nameDiv = document.createElement('div');
     nameDiv.innerHTML = `<strong>${s.name}</strong>`;
@@ -60,7 +80,7 @@ function displaySkins(skins){
     fileDiv.style.fontSize = '11px';
     fileDiv.style.color = '#aaa';
 
-    div.appendChild(img);
+    div.appendChild(mediaElement);
     div.appendChild(nameDiv);
     div.appendChild(fileDiv);
     list.appendChild(div);

@@ -1,6 +1,6 @@
 # Stream Sprites
 
-**Version 1.0.3** | Copyright 2026 SuperFurias | Apache License 2.0
+**Version 1.0.4** | Copyright 2026 SuperFurias | Apache License 2.0
 
 Stream Sprites is an interactive overlay application that brings your Twitch chat to life with animated sprites. Each viewer gets their own sprite that appears on your overlay, creating a dynamic and engaging experience.
 

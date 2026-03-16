@@ -40,10 +40,10 @@ function drawAvatar(ctx, a, skins, GROUND_Y) {
   ctx.rotate(a.angle || 0);
   if (!a.facingRight) { ctx.scale(-1, 1); }
   
-  // Only draw static images on canvas; GIFs are rendered as DOM elements
-  if (s && s.img && !s.isGif) {
+  // Only draw static images on canvas; GIFs and WebMs are rendered as DOM elements
+  if (s && s.img && !s.isGif && !s.isWebm) {
     ctx.drawImage(s.img, -a.size / 2, -scaledHeight / 2, a.size, scaledHeight);
-  } else if (!s || !s.img) {
+  } else if (!s || !s.img || s.isWebm) {
     // Fallback: draw colored circle with eyes
     ctx.beginPath();
     ctx.fillStyle = a.color;
