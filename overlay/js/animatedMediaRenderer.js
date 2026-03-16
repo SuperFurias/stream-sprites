@@ -64,6 +64,7 @@ export function createAnimatedMediaRenderer() {
             element.muted = true;
             element.playsInline = true;
             element.autoplay = true;
+            element.style.objectFit = 'fill'; // Stretch to fill exact dimensions
             element.onerror = () => {
               console.warn('Failed to load WebM video:', skin.file);
             };
@@ -100,6 +101,7 @@ export function createAnimatedMediaRenderer() {
               element.muted = true;
               element.playsInline = true;
               element.autoplay = true;
+              element.style.objectFit = 'fill'; // Stretch to fill exact dimensions
               element.onerror = () => {
                 console.warn('Failed to load WebM video:', skin.file);
               };
@@ -141,6 +143,28 @@ export function createAnimatedMediaRenderer() {
         element.style.width = `${screenWidth}px`;
         element.style.height = `${screenHeight}px`;
         element.style.opacity = a.opacity !== undefined ? a.opacity : 1;
+        
+        // For video elements, ensure dimensions are strictly enforced
+        if (skin.isWebm) {
+          element.width = Math.round(screenWidth);
+          element.height = Math.round(screenHeight);
+          element.style.aspectRatio = 'auto';
+          element.style.objectFit = 'fill';
+        }
+        
+        // Debug: log dimensions for sit state
+        if (a.state === 'sit' && skin.isWebm) {
+          console.log('[ANIMATED MEDIA] WebM sit dimensions:', {
+            id: a.id,
+            aSize: a.size,
+            heightScale: a.heightScale,
+            scaledHeight: scaledHeight,
+            screenWidth: screenWidth,
+            screenHeight: screenHeight,
+            elementWidth: element.style.width,
+            elementHeight: element.style.height
+          });
+        }
       }
     },
 
