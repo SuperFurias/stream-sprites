@@ -125,17 +125,22 @@ function dbg(...args) {
   
   // Send sprite update to server
   function sendSpriteUpdateToServer(sprite) {
-    if (USE_SERVER && window._SA && window._SA.connection && window._SA.connection.isConnected()) {
-      window._SA.connection.send(JSON.stringify({
-        type: 'spriteUpdate',
-        id: sprite.id,
-        username: sprite.username,
-        skin: sprite.skin,
-        state: sprite.state || 'idle',
-        lastActivity: Date.now(),
-        createdAt: sprite.createdAt,
-        action: 'spawn'
-      }));
+    if (USE_SERVER && window._SA && window._SA.connection) {
+      const ws = window._SA.connection.getWebSocket();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        window._SA.connection.send(JSON.stringify({
+          type: 'spriteUpdate',
+          id: sprite.id,
+          username: sprite.username,
+          skin: sprite.skin,
+          state: sprite.state || 'idle',
+          lastActivity: Date.now(),
+          createdAt: sprite.createdAt,
+          action: 'spawn'
+        }));
+      } else {
+        dbg('WebSocket not open (state:', ws?.readyState, '), skipping spriteUpdate for', sprite.username);
+      }
     } else if (USE_SERVER) {
       dbg('WebSocket not connected, skipping spriteUpdate for', sprite.username);
     }

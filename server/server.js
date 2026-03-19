@@ -2,14 +2,14 @@
 //
 // SECURITY MODEL:
 // This application is designed for LOCAL-ONLY use on the same machine as the OBS Studio
-// streaming setup. The admin API endpoints are intentionally left without authentication
+// streaming setup. The local control API endpoints are intentionally left without authentication
 // because:
 // - Server runs on localhost (127.0.0.1) only by default
 // - Dashboard and overlay are intended for the streamer's personal computer
 // - No external network access is expected or required
 //
 // IMPORTANT: Do NOT expose this server to external networks without adding proper
-// authentication and authorization mechanisms to the admin endpoints.
+// authentication and authorization mechanisms to the local control endpoints.
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -537,8 +537,19 @@ app.get('/env', (req,res) => {
     overlay: overlayConfig,
     defaultOverlay: DEFAULT_OVERLAY // Also provide defaults explicitly for reference
   };
-  dbg('Returning config (skins excluded, use /api/skins for skin data)');
-  res.json(mergedCfg);
+  
+  // Filter only the OAuth token (most sensitive)
+  // clientSecret is needed for OAuth flow and is kept (app is local-only)
+  const safeCfg = JSON.parse(JSON.stringify(mergedCfg)); // Deep clone
+  if (safeCfg.twitch) {
+    // Store whether token exists without exposing the actual token
+    safeCfg.hasOAuthToken = !!(cfg.twitch?.botOAuthToken && cfg.twitch.botOAuthToken.trim() !== '');
+    safeCfg.twitch.botOAuthToken = undefined; // Never expose OAuth token to client
+    // Note: clientSecret is included as it's needed for OAuth and app is local-only
+  }
+  
+  dbg('Returning config (skins excluded, OAuth token filtered, use /api/skins for skin data)');
+  res.json(safeCfg);
 });
 
 
@@ -612,10 +623,10 @@ app.post('/api/viewer/updateSkin', (req,res) => {
   }
 });
 
-// Admin: Assign skin to user
-app.post('/api/admin/assignSkin', (req,res)=>{
+// Local control: Assign skin to user
+app.post('/api/local/assignSkin', (req,res)=>{
   const {userId, skinId} = req.body;
-  dbg('POST /api/admin/assignSkin', { userId, skinId });
+  dbg('POST /api/local/assignSkin', { userId, skinId });
   
   // Validate userId
   if (!isValidUsername(userId)) {
@@ -641,9 +652,9 @@ app.post('/api/admin/assignSkin', (req,res)=>{
   }
 });
 
-// Admin: List all users with their assigned skins
-app.get('/api/admin/users', (req,res)=>{
-  dbg('GET /api/admin/users');
+// Local control: List all users with their assigned skins
+app.get('/api/local/users', (req,res)=>{
+  dbg('GET /api/local/users');
   try {
     const rows = db.prepare('SELECT id, display_name, assigned_skin FROM users ORDER BY id LIMIT 100').all();
     dbg('Returning', rows.length, 'users');
@@ -654,9 +665,9 @@ app.get('/api/admin/users', (req,res)=>{
   }
 });
 
-// Admin: Manually connect to Twitch
-app.post('/api/admin/connectTwitch', (req,res)=>{
-  dbg('POST /api/admin/connectTwitch');
+// Local control: Manually connect to Twitch
+app.post('/api/local/connectTwitch', (req,res)=>{
+  dbg('POST /api/local/connectTwitch');
   try{
     if(!cfg.twitch.botOAuthToken || cfg.twitch.botOAuthToken === 'oauth:your_bot_oauth_token_here' || cfg.twitch.botOAuthToken.trim() === ''){
       dbg('Missing OAuth token');
@@ -676,9 +687,9 @@ app.post('/api/admin/connectTwitch', (req,res)=>{
   }
 });
 
-// Admin: Disconnect Twitch bot
-app.post('/api/admin/disconnectTwitch', (req,res)=>{
-  dbg('POST /api/admin/disconnectTwitch');
+// Local control: Disconnect Twitch bot
+app.post('/api/local/disconnectTwitch', (req,res)=>{
+  dbg('POST /api/local/disconnectTwitch');
   try{
     if(twitchClient){
       twitchClient.disconnect();
@@ -698,8 +709,8 @@ app.post('/api/admin/disconnectTwitch', (req,res)=>{
   }
 });
 
-// Admin: Save config
-app.post('/api/admin/saveConfig', (req,res)=>{
+// Local control: Save config
+app.post('/api/local/saveConfig', (req,res)=>{
   try{
     const newCfg = req.body;
     if(!newCfg.twitch?.clientId || !newCfg.twitch?.clientSecret || !newCfg.botUsername || !newCfg.channel){
@@ -741,8 +752,8 @@ app.post('/api/admin/saveConfig', (req,res)=>{
   }
 });
 
-// Admin: Apply settings dynamically without restart
-app.post('/api/admin/applySettings', (req,res)=>{
+// Local control: Apply settings dynamically without restart
+app.post('/api/local/applySettings', (req,res)=>{
   try {
     const settings = req.body;
     // Validate settings structure
@@ -805,9 +816,9 @@ app.post('/api/admin/applySettings', (req,res)=>{
   }
 });
 
-// Admin: Clear all sprites (both client and server)
-app.post('/api/admin/clearSprites', (req,res)=>{
-  dbg('POST /api/admin/clearSprites');
+// Local control: Clear all sprites (both client and server)
+app.post('/api/local/clearSprites', (req,res)=>{
+  dbg('POST /api/local/clearSprites');
   // Clear server-side in-memory sprites
   clearServerSprites();
   // Also broadcast clear command to clients (for immediate visual feedback)
@@ -816,9 +827,9 @@ app.post('/api/admin/clearSprites', (req,res)=>{
   res.json({ok:true});
 });
 
-// Admin: Clear all sprites (server-side authoritative) - alias for backward compatibility
-app.post('/api/admin/clearSpritesServer', (req,res)=>{
-  dbg('POST /api/admin/clearSpritesServer');
+// Local control: Clear all sprites (server-side authoritative) - alias for backward compatibility
+app.post('/api/local/clearSpritesServer', (req,res)=>{
+  dbg('POST /api/local/clearSpritesServer');
   try{
     clearServerSprites();
     broadcast({type:'cmd', cmd:'clearSprites'});
@@ -830,10 +841,10 @@ app.post('/api/admin/clearSpritesServer', (req,res)=>{
   }
 });
 
-// Admin: Delete user skin assignment
-app.post('/api/admin/resetUser', (req,res)=>{
+// Local control: Delete user skin assignment
+app.post('/api/local/resetUser', (req,res)=>{
   const {id} = req.body;
-  dbg('POST /api/admin/resetUser', { id });
+  dbg('POST /api/local/resetUser', { id });
   
   if (!isValidUsername(id)) {
     dbg('Invalid id:', id);
@@ -850,9 +861,9 @@ app.post('/api/admin/resetUser', (req,res)=>{
   }
 });
 
-// Admin: Reset all user assignments
-app.post('/api/admin/resetAll', (req,res)=>{
-  dbg('POST /api/admin/resetAll');
+// Local control: Reset all user assignments
+app.post('/api/local/resetAll', (req,res)=>{
+  dbg('POST /api/local/resetAll');
   try {
     const result = db.prepare('DELETE FROM users').run();
     dbg('All users deleted, rows affected:', result.changes);
@@ -863,9 +874,9 @@ app.post('/api/admin/resetAll', (req,res)=>{
   }
 });
 
-// Admin: Get excluded users list
-app.get('/api/admin/excluded', (req,res)=>{
-  dbg('GET /api/admin/excluded');
+// Local control: Get excluded users list
+app.get('/api/local/excluded', (req,res)=>{
+  dbg('GET /api/local/excluded');
   try {
     const rows = db.prepare('SELECT id, reason FROM excluded_users ORDER BY id LIMIT 100').all();
     dbg('Returning', rows.length, 'excluded users');
@@ -876,10 +887,10 @@ app.get('/api/admin/excluded', (req,res)=>{
   }
 });
 
-// Admin: Add excluded user
-app.post('/api/admin/exclude', (req,res)=>{
+// Local control: Add excluded user
+app.post('/api/local/exclude', (req,res)=>{
   const {userId, reason} = req.body;
-  dbg('POST /api/admin/exclude', { userId, reason });
+  dbg('POST /api/local/exclude', { userId, reason });
   
   if (!isValidUsername(userId)) {
     dbg('Invalid userId:', userId);
@@ -898,10 +909,10 @@ app.post('/api/admin/exclude', (req,res)=>{
   }
 });
 
-// Admin: Remove excluded user
-app.post('/api/admin/unexclude', (req,res)=>{
+// Local control: Remove excluded user
+app.post('/api/local/unexclude', (req,res)=>{
   const {userId} = req.body;
-  dbg('POST /api/admin/unexclude', { userId });
+  dbg('POST /api/local/unexclude', { userId });
   
   if (!isValidUsername(userId)) {
     dbg('Invalid userId:', userId);
@@ -918,10 +929,10 @@ app.post('/api/admin/unexclude', (req,res)=>{
   }
 });
 
-// Admin: Update exclusion reason
-app.post('/api/admin/updateExclusionReason', (req,res)=>{
+// Local control: Update exclusion reason
+app.post('/api/local/updateExclusionReason', (req,res)=>{
   const {userId, reason} = req.body;
-  dbg('POST /api/admin/updateExclusionReason', { userId, reason });
+  dbg('POST /api/local/updateExclusionReason', { userId, reason });
   
   if (!isValidUsername(userId)) {
     dbg('Invalid userId:', userId);
@@ -961,9 +972,9 @@ app.get('/api/stats', (req,res)=>{
   }
 });
 
-// Admin: Refresh all overlay clients
-app.post('/api/admin/refreshAllOverlays', (req,res)=>{
-  dbg('POST /api/admin/refreshAllOverlays');
+// Local control: Refresh all overlay clients
+app.post('/api/local/refreshAllOverlays', (req,res)=>{
+  dbg('POST /api/local/refreshAllOverlays');
   try{
     // Broadcast refresh command to all connected WebSocket clients
     broadcast({type:'cmd', cmd:'refresh'});
@@ -976,21 +987,8 @@ app.post('/api/admin/refreshAllOverlays', (req,res)=>{
   }
 });
 
-// Admin: Clear all sprites (server-side)
-app.post('/api/admin/clearSpritesServer', (req,res)=>{
-  dbg('POST /api/admin/clearSpritesServer');
-  try{
-    clearServerSprites();
-    dbg('Server sprites cleared');
-    res.json({ok:true});
-  }catch(err){
-    dbg('Error clearing server sprites:', err.message);
-    res.status(500).json({error: err.message});
-  }
-});
-
-// Admin: Restart server
-app.post('/api/admin/restartServer', (req,res)=>{
+// Local control: Restart server
+app.post('/api/local/restartServer', (req,res)=>{
   try{
     res.json({ok:true, message:'Server restarting...'});
     // Exit immediately - the parent PowerShell script will restart us
@@ -1025,15 +1023,23 @@ app.get('/api/dashboard/isOpen', (req,res)=>{
 app.post('/api/chat/respond', (req,res) => {
   const { username, message } = req.body;
   console.log('[SERVER DEBUG] /api/chat/respond called:', { username, message, twitchState: twitchClient ? twitchClient.readyState() : 'null' });
-  if(!username || !message) {
-    console.log('[SERVER DEBUG] Missing username or message');
-    return res.status(400).json({error: 'missing username or message'});
+  
+  // Input validation
+  if(!username || !message || 
+     typeof username !== 'string' || typeof message !== 'string' ||
+     username.length > 25 || message.length > 500) {
+    console.log('[SERVER DEBUG] Invalid input:', { username, message });
+    return res.status(400).json({error: 'Invalid username or message'});
   }
+  
+  // Sanitize username (remove dangerous characters)
+  const sanitizedUsername = username.replace(/[^\p{L}\p{N}_]/gu, '_');
+  
   try {
     const state = twitchClient && twitchClient.readyState ? twitchClient.readyState() : null;
     console.log('[SERVER DEBUG] Twitch state:', state);
     if(twitchClient && state && (state === 1 || state === 'OPEN')) {
-      const fullMessage = `@${username}, ${message}`;
+      const fullMessage = `@${sanitizedUsername}, ${message}`;
       console.log('[SERVER DEBUG] Sending to Twitch:', fullMessage);
       twitchClient.say(cfg.channel, fullMessage).then(() => {
         console.log('[SERVER DEBUG] Message sent successfully');
@@ -1068,29 +1074,34 @@ const server = app.listen(port, () => {
   clearServerSprites();
   console.log('✓ Cleared all sprites on startup');
   
-  // Auto-open browser to admin panel (if enabled, default true)
+   // Auto-open browser to local control panel (if enabled, default true)
   if(cfg.autoOpenBrowser !== false){
     setTimeout(async () => {
       try{
         const url = `http://localhost:${port}/`;
         
-        // Check if dashboard is already open by querying our presence tracker
-        // Retry up to 5 times over 3 seconds to give dashboard time to start
-        let isOpen = false;
-        for(let i = 0; i < 5; i++){
-          try{
-            const checkRes = await axios.get(`http://localhost:${port}/api/dashboard/isOpen`, { timeout: 500 });
-            if(checkRes.data && checkRes.data.isOpen){
-              isOpen = true;
-              break;
-            }
-          }catch(e){
-            // Check failed, continue to retry
-            dbg('Dashboard presence check attempt ' + (i+1) + ' failed:', e.message);
-          }
-          // Wait 600ms before next retry
-          await new Promise(resolve => setTimeout(resolve, 600));
-        }
+         // Check if dashboard is already open by querying our presence tracker
+         // Retry up to 5 times over 3 seconds to give dashboard time to start
+         let isOpen = false;
+         for(let i = 0; i < 5; i++){
+           try{
+             const checkRes = await axios.get(`http://localhost:${port}/api/dashboard/isOpen`, { timeout: 500 });
+             if(checkRes.data && checkRes.data.isOpen){
+               isOpen = true;
+               break;
+             }
+           }catch(e){
+             // Check failed, continue to retry
+             dbg('Dashboard presence check attempt ' + (i+1) + ' failed:', e.message);
+             // If we get a connection error on first attempt, break early (server not ready)
+             if (i === 0 && e.code === 'ECONNREFUSED') {
+               dbg('Server not ready, will not retry');
+               break;
+             }
+           }
+           // Wait 600ms before next retry
+           await new Promise(resolve => setTimeout(resolve, 600));
+         }
         
         if(isOpen){
           console.log('✓ Dashboard already open, skipping browser launch');
@@ -1135,6 +1146,7 @@ const getNameLengthLimit = () => (cfg.overlay && cfg.overlay.nameLengthLimit) ||
 const serverSprites = new Map();
 const serverSpawnTimes = new Map();
 const serverStartTime = Date.now();
+let cleanupIntervalId = null;
 
 // Get user's assigned skin from database
 function getUserSkinFromDB(userId) {
@@ -1349,7 +1361,7 @@ function sendSpriteStateToClient(ws) {
   }
 }
 
-// Clear all server-side sprites (for admin command)
+// Clear all server-side sprites (for local control command)
 function clearServerSprites() {
   serverSprites.clear();
   serverSpawnTimes.clear();
@@ -1474,7 +1486,7 @@ wss.on('connection', (ws) => {
 });
 
 // Periodic cleanup of stale sprites (every minute)
-setInterval(() => {
+cleanupIntervalId = setInterval(() => {
   const now = Date.now();
   const lifetime = (cfg.overlay && cfg.overlay.spriteLifetimeMs) || 30 * 60 * 1000;
   let changed = false;
@@ -1497,7 +1509,7 @@ let reconnectTimeout = null;
 
 async function connectTwitchBot(){
   if(!cfg.twitch.botOAuthToken || cfg.twitch.botOAuthToken === 'oauth:your_bot_oauth_token_here'){
-    console.log('⚠ No bot token. Get it via the admin panel UI');
+    console.log('⚠ No bot token. Get it via the local control panel UI');
     return;
   }
   if(twitchClient && twitchClient.readyState && (twitchClient.readyState() === 1 || twitchClient.readyState() === 'OPEN')) {
@@ -1613,7 +1625,7 @@ async function connectTwitchBot(){
 
   twitchClient.on('disconnected', () => {
     dbg('Twitch disconnected');
-    // Not automatically reconnecting - manual reconnect required via admin panel
+    // Not automatically reconnecting - manual reconnect required via local control panel
   });
 
   twitchClient.on('error', (err) => {
@@ -1622,10 +1634,13 @@ async function connectTwitchBot(){
 
   twitchClient.connect().catch((err) => {
     dbg('Twitch connection failed:', err.message);
-    // Not automatically reconnecting - manual reconnect required via admin panel
+    // Not automatically reconnecting - manual reconnect required via local control panel
   });
 
   // Token refresh every 30 min
+  let refreshFailures = 0;
+  const MAX_REFRESH_FAILURES = 3;
+  
   setInterval(async ()=>{
     if(botTokenInfo && Date.now() > (botTokenInfo.expires_at - 3600000)){
       dbg('Refreshing token...');
@@ -1636,10 +1651,12 @@ async function connectTwitchBot(){
           client_id: cfg.twitch.clientId,
           client_secret: cfg.twitch.clientSecret
         });
-        const resp = await axios.post('https://id.twitch.tv/oauth2/token', params.toString());
+        const resp = await axios.post('https://id.twitch.tv/oauth2/token', params.toString(), { timeout: 10000 });
         const {access_token, refresh_token, expires_in} = resp.data;
         botTokenInfo = {access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000)};
         cfg.twitch.botOAuthToken = access_token;
+        
+        refreshFailures = 0; // Reset on success
         
         // Save to disk if persistOAuthToken is enabled
         if(cfg.persistOAuthToken) {
@@ -1668,13 +1685,18 @@ async function connectTwitchBot(){
           setTimeout(() => twitchClient.connect(), 2000);
         }
       }catch(e){
-        dbg('Token refresh failed:', e.message);
+        refreshFailures++;
+        dbg('Token refresh failed:', e.message, 'Failures:', refreshFailures);
+        if (refreshFailures >= MAX_REFRESH_FAILURES) {
+           console.error('Token refresh failed multiple times. Manual reconnection required via local control panel.');
+          // Could also broadcast to dashboard or emit event for UI notification
+        }
       }
     }
   }, 30 * 60 * 1000);
 }
 
-// Automatic reconnection disabled - use admin panel to reconnect manually
+// Automatic reconnection disabled - use local control panel to reconnect manually
 // function scheduleReconnect(){
 //   if(reconnectTimeout) clearTimeout(reconnectTimeout);
 //   reconnectTimeout = setTimeout(connectTwitchBot, 5000);
@@ -1725,6 +1747,12 @@ if(cfg.useServer){
 // Graceful shutdown
 async function shutdown(signal) {
   dbg(`Shutting down (${signal})...`);
+  
+  // Clear cleanup interval
+  if (cleanupIntervalId) {
+    clearInterval(cleanupIntervalId);
+    dbg('Cleanup interval cleared');
+  }
   
   // Handle OAuth token based on persistOAuthToken setting
   if(cfg && cfg.twitch) {
@@ -1815,7 +1843,8 @@ app.get('/auth/callback', async (req,res)=>{
       redirect_uri: oauthRedirectUrl
     });
     const tokenResp = await axios.post('https://id.twitch.tv/oauth2/token', params.toString(), {
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      timeout: 10000
     });
     const {access_token, refresh_token, expires_in} = tokenResp.data;
     cfg.twitch.botOAuthToken = access_token;
@@ -1839,7 +1868,7 @@ app.get('/auth/callback', async (req,res)=>{
       <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
         <h2>✓ OAuth Token Generated</h2>
         <p>Token ${cfg.persistOAuthToken ? 'saved to .env' : 'stored in memory only'}</p>
-        <p><a href="${dashboardUrl}" style="color:#0af">Go to Admin Dashboard</a></p>
+         <p><a href="${dashboardUrl}" style="color:#0af">Go to Local Control Dashboard</a></p>
         <p>Redirecting in 3 seconds...</p>
         <script>
           setTimeout(() => {

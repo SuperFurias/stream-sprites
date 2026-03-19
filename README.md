@@ -239,23 +239,23 @@ Enable in Settings tab:
 | **Users** | View all users, assign/edit skins, manage exclusions |
 | **Skins** | Preview all detected skins (including animations) |
 
-### Admin API Endpoints
+### Local Control API Endpoints
 
-All admin endpoints require no authentication in development mode (production should add auth):
+All local control endpoints are intended for localhost use only (no external exposure):
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/admin/saveConfig` | POST | Save configuration to `.env` |
-| `/api/admin/connectTwitch` | POST | Initiate Twitch connection |
-| `/api/admin/disconnectTwitch` | POST | Disconnect Twitch |
-| `/api/admin/users` | GET | List all users with assignments |
-| `/api/admin/assignSkin` | POST | `{userId, skinId}` – Assign skin |
-| `/api/admin/resetUser` | POST | `{id}` – Remove user assignment |
-| `/api/admin/resetAll` | POST | Delete all user assignments |
-| `/api/admin/excluded` | GET | List excluded users |
-| `/api/admin/exclude` | POST | `{userId, reason}` – Exclude user |
-| `/api/admin/unexclude` | POST | `{userId}` – Remove from exclusion |
-| `/api/admin/updateExclusionReason` | POST | `{userId, reason}` – Edit reason |
+| `/api/local/saveConfig` | POST | Save configuration to `.env` |
+| `/api/local/connectTwitch` | POST | Initiate Twitch connection |
+| `/api/local/disconnectTwitch` | POST | Disconnect Twitch |
+| `/api/local/users` | GET | List all users with assignments |
+| `/api/local/assignSkin` | POST | `{userId, skinId}` – Assign skin |
+| `/api/local/resetUser` | POST | `{id}` – Remove user assignment |
+| `/api/local/resetAll` | POST | Delete all user assignments |
+| `/api/local/excluded` | GET | List excluded users |
+| `/api/local/exclude` | POST | `{userId, reason}` – Exclude user |
+| `/api/local/unexclude` | POST | `{userId}` – Remove from exclusion |
+| `/api/local/updateExclusionReason` | POST | `{userId, reason}` – Edit reason |
 
 ### Server Controls
 
@@ -306,7 +306,7 @@ Twitch Chat → TMI.js → Server → WebSocket → Overlay Client
 
 ### Sprite Lifecycle
 
-1. **Spawn** – User types in chat or admin uses `!spawn`
+1. **Spawn** – User types in chat or broadcaster/mod uses `!spawn`
 2. **Validation** – Server checks throttle, max sprites, exclusions
 3. **Creation** – Client creates sprite with skin from cache/DB
 4. **Physics** – Updated every frame (gravity, collisions, roaming)
@@ -407,7 +407,7 @@ Stream Sprites/
 - **Development Mode**: Admin endpoints have no authentication. Add reverse proxy auth or implement JWT for production.
 - **OAuth Token**: By default, tokens are stored in memory only and cleared on restart. Set `persistOAuthToken=true` to save to `.env`.
 - **.env File**: Automatically added to `.gitignore`. Never commit credentials.
-- **Input Validation**: Usernames limited to 25 characters in admin UI. Server should validate all inputs.
+- **Input Validation**: Usernames limited to 25 characters in the dashboard UI. Server validates all inputs.
 
 ---
 

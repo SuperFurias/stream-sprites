@@ -7,7 +7,16 @@ async function loadConfig(){
     const cfg = await res.json();
     updateFormFields(cfg, false);
     const tokenEl = document.getElementById('currentToken');
-    if(tokenEl) tokenEl.textContent = cfg.twitch?.botOAuthToken || 'Not set';
+    if(tokenEl) {
+      // Use hasOAuthToken flag to show status without exposing token
+      if (cfg.hasOAuthToken) {
+        tokenEl.textContent = 'Set (hidden)';
+        tokenEl.style.color = '#48bb78'; // green color for set status
+      } else {
+        tokenEl.textContent = 'Not set';
+        tokenEl.style.color = '#a0aec0'; // gray color for not set
+      }
+    }
   }catch(e){
     console.error('Failed to load config:', e);
     updateFormFields({}, true);
@@ -71,7 +80,7 @@ async function saveConfig(){
       return;
     }
 
-    const result = await sharedAPI('/api/admin/saveConfig', { method:'POST', body: JSON.stringify(cfg) });
+     const result = await sharedAPI('/api/local/saveConfig', { method:'POST', body: JSON.stringify(cfg) });
     alert('✓ Config saved! ' + (result.message || ''));
     await loadConfig();
   }catch(e){
@@ -89,7 +98,8 @@ async function generateOAuth(){
     alert('Set Client ID and Bot Username first');
     return;
   }
-  window.location.href = '/auth/twitch?state=' + encodeURIComponent(botUsername);
+  // Let server generate proper CSRF state and handle OAuth flow
+  window.location.href = '/auth/twitch';
 }
 
 async function connectTwitch(){
@@ -100,8 +110,8 @@ async function connectTwitch(){
   btn.textContent = 'Connecting...';
   status.textContent = '';
 
-  try{
-    const result = await sharedAPI('/api/admin/connectTwitch', { method: 'POST' });
+   try{
+     const result = await sharedAPI('/api/local/connectTwitch', { method: 'POST' });
     if(result.error){
       throw new Error(result.error);
     }
@@ -124,8 +134,8 @@ async function disconnectTwitch(){
   btn.textContent = 'Disconnecting...';
   status.textContent = '';
 
-  try{
-    const result = await sharedAPI('/api/admin/disconnectTwitch', { method: 'POST' });
+   try{
+     const result = await sharedAPI('/api/local/disconnectTwitch', { method: 'POST' });
     if(result.error){
       throw new Error(result.error);
     }

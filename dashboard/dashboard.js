@@ -2,19 +2,19 @@
 
 async function clearSprites(){
   if(!confirm('Clear all sprites from overlay?')) return;
-  await sharedAPI('/api/admin/clearSprites', { method:'POST' });
+  await sharedAPI('/api/local/clearSprites', { method:'POST' });
   alert('Sprites cleared');
 }
 
 async function resetAll(){
   if(!confirm('Delete ALL user skin assignments? This cannot be undone.')) return;
-  await sharedAPI('/api/admin/resetAll', { method:'POST' });
+  await sharedAPI('/api/local/resetAll', { method:'POST' });
   alert('All assignments reset');
 }
 
 async function refreshAllOverlays(){
   try{
-    const res = await fetch('/api/admin/refreshAllOverlays', { method:'POST' });
+    const res = await fetch('/api/local/refreshAllOverlays', { method:'POST' });
     if(!res.ok) throw new Error('Failed to send refresh command');
     const data = await res.json();
     alert('✓ Refresh command sent to ' + data.clients + ' overlay clients');
@@ -26,7 +26,7 @@ async function refreshAllOverlays(){
 async function restartServer(){
   if(!confirm('Restart the server? This will briefly disconnect all users.')) return;
   try{
-    const res = await fetch('/api/admin/restartServer', { method:'POST' });
+    const res = await fetch('/api/local/restartServer', { method:'POST' });
     if(!res.ok) throw new Error('Failed to restart');
     const data = await res.json();
     alert('✓ ' + data.message + ' The dashboard will automatically reconnect...');

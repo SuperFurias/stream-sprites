@@ -364,8 +364,8 @@ async function saveSettings() {
       overlay: overlaySettings
     };
     
-    // Save via admin API
-    const saveResponse = await fetch('/api/admin/saveConfig', {
+     // Save via local control API
+     const saveResponse = await fetch('/api/local/saveConfig', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedConfig)
@@ -427,8 +427,8 @@ function updateCurrentSettingsDisplay(settings) {
 }
 
 function applySettings(settings) {
-  // Send settings to server to apply dynamically (debug settings only)
-  fetch('/api/admin/applySettings', {
+   // Send settings to server to apply dynamically (debug settings only)
+   fetch('/api/local/applySettings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings)

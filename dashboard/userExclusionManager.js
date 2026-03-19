@@ -9,8 +9,8 @@ let currentEditingUserId = null;
 
 // Load excluded users from API
 async function loadExcluded() {
-  try {
-    allExcluded = await sharedAPI('/api/admin/excluded');
+   try {
+     allExcluded = await sharedAPI('/api/local/excluded');
     const search = document.getElementById('excludedSearch');
     const searchVal = search ? search.value.toLowerCase() : '';
     filteredExcluded = allExcluded.filter(u => u.id.toLowerCase().includes(searchVal));
@@ -111,7 +111,7 @@ async function excludeUser() {
   if (!userId) return alert('Enter a username to exclude');
   if (userId.length > 25) return alert('Error: Username cannot exceed 25 characters');
   try {
-    await sharedAPI('/api/admin/exclude', { method: 'POST', body: JSON.stringify({ userId, reason }) });
+     await sharedAPI('/api/local/exclude', { method: 'POST', body: JSON.stringify({ userId, reason }) });
     alert('✓ User ' + userId + ' excluded');
     document.getElementById('excludeUser').value = '';
     document.getElementById('excludeReason').value = '';
@@ -124,7 +124,7 @@ async function excludeUser() {
 // Remove user from exclusion list
 async function unexcludeUser(username) {
   if (!confirm('Remove ' + username + ' from exclusion list?')) return;
-  await sharedAPI('/api/admin/unexclude', { method: 'POST', body: JSON.stringify({ userId: username }) });
+   await sharedAPI('/api/local/unexclude', { method: 'POST', body: JSON.stringify({ userId: username }) });
   loadExcluded();
 }
 
@@ -166,7 +166,7 @@ async function saveEditedReason() {
   const newReason = input.value.trim();
 
   try {
-    await sharedAPI('/api/admin/updateExclusionReason', {
+     await sharedAPI('/api/local/updateExclusionReason', {
       method: 'POST',
       body: JSON.stringify({ userId: currentEditingUserId, reason: newReason })
     });

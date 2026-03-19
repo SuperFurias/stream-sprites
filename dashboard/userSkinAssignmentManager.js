@@ -54,8 +54,8 @@ function populateSkinSelect(skins) {
 
 // Load users from API
 async function loadUsers() {
-  try {
-    allUsers = await sharedAPI('/api/admin/users');
+   try {
+     allUsers = await sharedAPI('/api/local/users');
     const search = document.getElementById('userSearch');
     const searchVal = search ? search.value.toLowerCase() : '';
     filteredUsers = allUsers.filter(u => u.id.toLowerCase().includes(searchVal));
@@ -140,7 +140,7 @@ async function assignSkin() {
   if (!userId || !skinId) return alert('Enter username and select a skin');
   if (userId.length > 25) return alert('Error: Username cannot exceed 25 characters');
   try {
-    await sharedAPI('/api/admin/assignSkin', { method: 'POST', body: JSON.stringify({ userId, skinId }) });
+     await sharedAPI('/api/local/assignSkin', { method: 'POST', body: JSON.stringify({ userId, skinId }) });
     alert('✓ Skin assigned to ' + userId);
     document.getElementById('assignUser').value = '';
     await loadUsers();
@@ -152,7 +152,7 @@ async function assignSkin() {
 // Reset user's skin assignment
 async function resetUser(username) {
   if (!confirm('Remove skin assignment for ' + username + '?')) return;
-  await sharedAPI('/api/admin/resetUser', { method: 'POST', body: JSON.stringify({ id: username }) });
+   await sharedAPI('/api/local/resetUser', { method: 'POST', body: JSON.stringify({ id: username }) });
   loadUsers();
 }
 
@@ -216,7 +216,7 @@ async function saveEditedSkin() {
   const newSkinId = skinSelect.value;
   
   try {
-    await sharedAPI('/api/admin/assignSkin', {
+     await sharedAPI('/api/local/assignSkin', {
       method: 'POST',
       body: JSON.stringify({ userId: currentEditingSkinUserId, skinId: newSkinId })
     });
