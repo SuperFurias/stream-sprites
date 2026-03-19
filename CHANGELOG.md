@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.5] - 2026-03-19
 
+### Changed
+- Completed terminology rename: `avatar`/`avatars` → `sprite`/`sprites` throughout codebase
+- Configuration key `maxAvatars` renamed to `maxSprites` for consistency
+
 ### Fixed
-- Renamed `maxAvatars` to `maxSprites` in configuration for consistency
-- Fixed WebSocket `fullState` message parsing to handle undefined sprites array
+- Fixed WebSocket `fullState` message parsing to handle undefined sprites array (crash fix)
 
 ## [1.0.4] - 2026-03-16
 
