@@ -5,6 +5,12 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-03-19
+
+### Fixed
+- Renamed `maxAvatars` to `maxSprites` in configuration for consistency
+- Fixed WebSocket `fullState` message parsing to handle undefined sprites array
+
 ## [1.0.4] - 2026-03-16
 
 ### Added
@@ -52,9 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Comprehensive overlay settings UI in dashboard with all physics and visual parameters
-- Server-authoritative spawning system to prevent duplicate avatars
+- Server-authoritative spawning system to prevent duplicate sprites
 - Configuration auto-recovery: server automatically restores missing .env values on startup
-- Clear all avatars on server startup for fresh state
+- Clear all sprites on server startup for fresh state
 - Expanded overlay configuration with 50+ tunable parameters
 - Increased max spawn quantity from 10 to 100
 - Enhanced debug logging enabled by default (twitchDebug, twitchAuthErrors, twitchOtherErrors)
@@ -70,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed !spawn command to be additive instead of replacing sprites
-- Fixed filtering of stale avatarUpdate messages from previous server instances
+- Fixed filtering of stale spriteUpdate messages from previous server instances
 - Fixed client-side command handling to correctly check server-processed commands
 
 ### Security

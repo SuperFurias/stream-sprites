@@ -1,9 +1,9 @@
 // Dashboard tab functions
 
-async function clearAvatars(){
-  if(!confirm('Clear all avatars from overlay?')) return;
-  await sharedAPI('/api/admin/clearAvatars', { method:'POST' });
-  alert('Avatars cleared');
+async function clearSprites(){
+  if(!confirm('Clear all sprites from overlay?')) return;
+  await sharedAPI('/api/admin/clearSprites', { method:'POST' });
+  alert('Sprites cleared');
 }
 
 async function resetAll(){

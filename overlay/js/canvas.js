@@ -8,7 +8,7 @@ export function setupCanvas() {
   return { canvas, ctx, DPR };
 }
 
-export function resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, avatars) {
+export function resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites) {
   // Make canvas exactly match window size (no aspect ratio preservation)
   const winW = window.innerWidth;
   const winH = window.innerHeight;
@@ -25,10 +25,10 @@ export function resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, avatars) {
   const newH = winH;
   const newGROUND_Y = newH * 0.99;
   
-  // Adjust existing avatars to stay on the new ground
-  for (const av of avatars.values()) {
-    const offsetFromGround = av.y - oldGroundY;
-    av.y = newGROUND_Y + offsetFromGround;
+  // Adjust existing sprites to stay on the new ground
+  for (const sprite of sprites.values()) {
+    const offsetFromGround = sprite.y - oldGroundY;
+    sprite.y = newGROUND_Y + offsetFromGround;
   }
   
   // Reset transform for new size

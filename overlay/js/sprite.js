@@ -1,8 +1,8 @@
-// Avatar creation and spawning module
+// Sprite creation and spawning module
 import { getUserSkinFromCache } from './userSkinCache.js';
 import { colorFromName } from './utils.js';
 
-export function createAvatar(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
+export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
   // Random size within configured range
   const size = SPRITE_SIZE_MIN + Math.random() * (SPRITE_SIZE_MAX - SPRITE_SIZE_MIN);
   const skinId = getUserSkinFromCache(userSkinCache, username);
@@ -18,7 +18,7 @@ export function createAvatar(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_S
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
     x = Math.random() * (W - 120) + 60;
     y = GROUND_Y - Math.random() * 40 - size / 2;
-    // Note: overlap check will be done by caller passing avatars
+    // Note: overlap check will be done by caller passing sprites
   }
   if (typeof x === 'undefined') {
     x = Math.random() * (W - 120) + 60;
@@ -60,30 +60,30 @@ export function createAvatar(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_S
   };
 }
 
-export function spawn(username, avatars, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarFn, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
+export function spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSpriteFn, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
   const key = username.toLowerCase();
   const last = spawnTimes.get(key) || 0;
-  if (Date.now() - last < SPAWN_THROTTLE_MS && avatars.has(key)) {
-    const a = avatars.get(key);
-    a.vx += (Math.random() - 0.5) * 3;
-    a.vy -= Math.random() * 3;
-    a.lastActivity = Date.now();
-    return a;
+  if (Date.now() - last < SPAWN_THROTTLE_MS && sprites.has(key)) {
+    const sprite = sprites.get(key);
+    sprite.vx += (Math.random() - 0.5) * 3;
+    sprite.vy -= Math.random() * 3;
+    sprite.lastActivity = Date.now();
+    return sprite;
   }
   spawnTimes.set(key, Date.now());
-  if (avatars.has(key)) {
-    const a = avatars.get(key);
-    a.lastActivity = Date.now();
-    return a;
+  if (sprites.has(key)) {
+    const sprite = sprites.get(key);
+    sprite.lastActivity = Date.now();
+    return sprite;
   }
-  if (avatars.size >= MAX_AVATARS) {
-    const arr = Array.from(avatars.values()).sort((a, b) => a.createdAt - b.createdAt);
+  if (sprites.size >= MAX_SPRITES) {
+    const arr = Array.from(sprites.values()).sort((a, b) => a.createdAt - b.createdAt);
     const removeCount = Math.max(1, Math.floor(arr.length * 0.05));
     for (let i = 0; i < removeCount; i++) {
-      avatars.delete(arr[i].id);
+      sprites.delete(arr[i].id);
     }
   }
-  const av = createAvatarFn(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
-  avatars.set(av.id, av);
-  return av;
+  const sprite = createSpriteFn(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+  sprites.set(sprite.id, sprite);
+  return sprite;
 }

@@ -4,11 +4,11 @@ import { setupCanvas, resizeCanvas, initializeCanvasDisplay } from './js/canvas.
 import { setupInputHandlers } from './js/input.js';
 import { createSkinsMap, loadSkinsFromConfig, fetchAutoSkins, preloadSkins } from './js/skins.js';
 import { createUserSkinCache, fetchUserSkin } from './js/userSkinCache.js';
-import { createAvatar, spawn } from './js/avatar.js';
+import { createSprite, spawn } from './js/sprite.js';
 import { handleCommand } from './js/commands.js';
 import { updatePhysics, manageLifetime } from './js/physics.js';
 import { createExplosionEffect, updateExplosionParticles } from './js/explosion.js';
-import { draw as render, updateAvatarCountDisplay } from './js/renderer.js';
+import { draw as render, updateSpriteCountDisplay } from './js/renderer.js';
 import { createGameLoop } from './js/loop.js';
 import { setupWebSocket, setupTmiFallback, handleWebSocketMessage } from './js/connection.js';
 import { createAnimatedMediaRenderer } from './js/animatedMediaRenderer.js';
@@ -53,7 +53,7 @@ function dbg(...args) {
     BOT_USERNAME,
     OAUTH,
     DEBUG,
-    MAX_AVATARS,
+    MAX_SPRITES,
     MAX_SPAWN_QUANTITY,
     GRAVITY,
     AIR_RESISTANCE,
@@ -77,7 +77,7 @@ function dbg(...args) {
   initializeCanvasDisplay(cfg, USE_SERVER);
   
   // State
-  const avatars = new Map();
+  const sprites = new Map();
   const skins = createSkinsMap();
   const spawnTimes = new Map();
   const explosionParticles = [];
@@ -101,7 +101,7 @@ function dbg(...args) {
   const resize = () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      const result = resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, avatars);
+      const result = resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites);
       W = result.W;
       H = result.H;
       GROUND_Y = result.GROUND_Y;
@@ -111,125 +111,125 @@ function dbg(...args) {
   window.addEventListener('resize', resize);
   
   // Input handling
-  let draggedAvatar = null;
-  setupInputHandlers(canvas, avatars, 
-    (av) => { draggedAvatar = av; },
-    (av, mx, my) => { /* drag move */ },
-    (av) => { draggedAvatar = null; }
+  let draggedSprite = null;
+  setupInputHandlers(canvas, sprites, 
+    (sprite) => { draggedSprite = sprite; },
+    (sprite, mx, my) => { /* drag move */ },
+    (sprite) => { draggedSprite = null; }
   );
   
-  // Create avatar factory bound to current context
-  function createAvatarWithContext(username) {
-    return createAvatar(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+  // Create sprite factory bound to current context
+  function createSpriteWithContext(username) {
+    return createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
   }
   
-  // Send avatar update to server
-  function sendAvatarUpdateToServer(av) {
+  // Send sprite update to server
+  function sendSpriteUpdateToServer(sprite) {
     if (USE_SERVER && window._SA && window._SA.connection && window._SA.connection.isConnected()) {
       window._SA.connection.send(JSON.stringify({
-        type: 'avatarUpdate',
-        id: av.id,
-        username: av.username,
-        skin: av.skin,
-        state: av.state || 'idle',
+        type: 'spriteUpdate',
+        id: sprite.id,
+        username: sprite.username,
+        skin: sprite.skin,
+        state: sprite.state || 'idle',
         lastActivity: Date.now(),
-        createdAt: av.createdAt,
+        createdAt: sprite.createdAt,
         action: 'spawn'
       }));
     } else if (USE_SERVER) {
-      dbg('WebSocket not connected, skipping avatarUpdate for', av.username);
+      dbg('WebSocket not connected, skipping spriteUpdate for', sprite.username);
     }
   }
   
   // Spawn wrapper
-  function spawnAvatar(username) {
-    const av = spawn(username, avatars, spawnTimes, MAX_AVATARS, SPAWN_THROTTLE_MS, createAvatarWithContext, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
-    sendAvatarUpdateToServer(av);
-    return av;
+  function spawnSprite(username) {
+    const sprite = spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSpriteWithContext, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    sendSpriteUpdateToServer(sprite);
+    return sprite;
   }
   
-  // Sync avatars from server state (server-authoritative)
-  function syncAvatarsFromServer(serverAvatarList) {
-    const serverIds = new Set(serverAvatarList.map(av => av.id));
+  // Sync sprites from server state (server-authoritative)
+  function syncSpritesFromServer(serverSpriteList) {
+    const serverIds = new Set(serverSpriteList.map(s => s.id));
     
-    // Remove avatars that are no longer on the server
-    for (const [id, av] of avatars) {
+    // Remove sprites that are no longer on the server
+    for (const [id, sprite] of sprites) {
       if (!serverIds.has(id)) {
-        avatars.delete(id);
-        dbg('Removed avatar not on server:', id);
+        sprites.delete(id);
+        dbg('Removed sprite not on server:', id);
       }
     }
     
-    // Update existing avatars and add new ones
-    for (const serverAv of serverAvatarList) {
-      const existingAv = avatars.get(serverAv.id);
-      if (existingAv) {
+    // Update existing sprites and add new ones
+    for (const serverSprite of serverSpriteList) {
+      const existingSprite = sprites.get(serverSprite.id);
+      if (existingSprite) {
         // Update skin, state, and activity from server (preserve physics state)
-        if (existingAv.skin !== serverAv.skin) {
-          existingAv.skin = serverAv.skin;
-          dbg('Updated skin for', serverAv.username, 'to', serverAv.skin);
+        if (existingSprite.skin !== serverSprite.skin) {
+          existingSprite.skin = serverSprite.skin;
+          dbg('Updated skin for', serverSprite.username, 'to', serverSprite.skin);
         }
         // Sync state from server - always set heightScale based on state
-        if (serverAv.state !== undefined && existingAv.state !== serverAv.state) {
-          existingAv.state = serverAv.state;
-          dbg('Updated state for', serverAv.username, 'to', serverAv.state);
+        if (serverSprite.state !== undefined && existingSprite.state !== serverSprite.state) {
+          existingSprite.state = serverSprite.state;
+          dbg('Updated state for', serverSprite.username, 'to', serverSprite.state);
         }
         // Always apply heightScale and velocity based on current state
-        if (existingAv.state === 'sit') {
-          existingAv.heightScale = 0.75;
-          existingAv.vx = 0;
-          existingAv.vy = 0;
+        if (existingSprite.state === 'sit') {
+          existingSprite.heightScale = 0.75;
+          existingSprite.vx = 0;
+          existingSprite.vy = 0;
         } else {
-          existingAv.heightScale = 1.0;
+          existingSprite.heightScale = 1.0;
         }
-        existingAv.lastActivity = serverAv.lastActivity;
-        existingAv.createdAt = serverAv.createdAt;
+        existingSprite.lastActivity = serverSprite.lastActivity;
+        existingSprite.createdAt = serverSprite.createdAt;
       } else {
-        // Create new avatar from server state
-        const newAv = createAvatarWithContext(serverAv.username);
-        newAv.skin = serverAv.skin;
-        newAv.state = serverAv.state || 'idle';
+        // Create new sprite from server state
+        const newSprite = createSpriteWithContext(serverSprite.username);
+        newSprite.skin = serverSprite.skin;
+        newSprite.state = serverSprite.state || 'idle';
         // Always set heightScale based on state
-        if (newAv.state === 'sit') {
-          newAv.heightScale = 0.75;
-          newAv.vx = 0;
-          newAv.vy = 0;
+        if (newSprite.state === 'sit') {
+          newSprite.heightScale = 0.75;
+          newSprite.vx = 0;
+          newSprite.vy = 0;
         } else {
-          newAv.heightScale = 1.0;
+          newSprite.heightScale = 1.0;
         }
-        newAv.lastActivity = serverAv.lastActivity;
-        newAv.createdAt = serverAv.createdAt;
-        avatars.set(newAv.id, newAv);
-        dbg('Created new avatar from server:', serverAv.username, 'with state:', newAv.state);
+        newSprite.lastActivity = serverSprite.lastActivity;
+        newSprite.createdAt = serverSprite.createdAt;
+        sprites.set(newSprite.id, newSprite);
+        dbg('Created new sprite from server:', serverSprite.username, 'with state:', newSprite.state);
       }
     }
     
-    dbg('Synced with server: ', serverAvatarList.length, 'avatars, local count:', avatars.size);
+    dbg('Synced with server: ', serverSpriteList.length, 'sprites, local count:', sprites.size);
   }
   
-  // Send full current avatar state to server
+  // Send full current sprite state to server
   function sendFullStateToServer() {
     if (!USE_SERVER || !window._SA || !window._SA.connection || !window._SA.connection.isConnected()) {
       dbg('Cannot send full state: WebSocket not connected');
       return;
     }
     
-    const avatarList = Array.from(avatars.values()).map(av => ({
-      id: av.id,
-      username: av.username,
-      skin: av.skin,
-      state: av.state || 'idle',
-      createdAt: av.createdAt,
+    const spriteList = Array.from(sprites.values()).map(sprite => ({
+      id: sprite.id,
+      username: sprite.username,
+      skin: sprite.skin,
+      state: sprite.state || 'idle',
+      createdAt: sprite.createdAt,
       lastActivity: Date.now()
     }));
     
     window._SA.connection.send(JSON.stringify({
       type: 'fullState',
-      avatars: avatarList,
+      sprites: spriteList,
       timestamp: Date.now()
     }));
     
-    dbg('Sent full state to server:', avatarList.length, 'avatars');
+    dbg('Sent full state to server:', spriteList.length, 'sprites');
   }
   
   // Command handler wrapper
@@ -239,8 +239,8 @@ function dbg(...args) {
       return;
     }
     console.log('[DEBUG] handleUserCommand:', { username, text });
-    const response = handleCommand(username, text, tags, cfg, avatars, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
-                  spawnTimes, MAX_AVATARS, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createAvatarWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendAvatarUpdateToServer, DEBUG);
+    const response = handleCommand(username, text, tags, cfg, sprites, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
+                  spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createSpriteWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdateToServer, DEBUG);
     
     console.log('[DEBUG] Command response:', response);
     
@@ -296,15 +296,15 @@ function dbg(...args) {
     // No additional handling needed - effects are applied through:
     // - onCommand('boom') for explosion
     // - onCommand('jump') for jump velocity
-    // - avatarState sync for sit/unsit state changes
+    // - spriteState sync for sit/unsit state changes
   }
   
   // Physics update wrapper
   function updatePhysicsWrapper(dt) {
-    updatePhysics(dt, avatars, W, H, GROUND_Y, draggedAvatar,
+    updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                   GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
                   BOUNCE_DAMPING, MIN_VELOCITY);
-    manageLifetime(avatars, SPRITE_LIFETIME_MS, FADE_WARNING_MS);
+    manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS);
   }
   
   // Explosion particles update wrapper
@@ -314,9 +314,9 @@ function dbg(...args) {
   
   // Render wrapper
   function renderWrapper() {
-    render(ctx, W, H, GROUND_Y, avatars, skins, explosionParticles);
-    animatedMediaRenderer.update(avatars, skins, W, H, GROUND_Y);
-    updateAvatarCountDisplay(avatars);
+    render(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles);
+    animatedMediaRenderer.update(sprites, skins, W, H, GROUND_Y);
+    updateSpriteCountDisplay(sprites);
   }
   
   // Game loop
@@ -338,7 +338,7 @@ function dbg(...args) {
             // Only spawn locally if server didn't handle it (skipSpawn not set)
             // skipSpawn and isCommand are in tags object
             if (!tags?.skipSpawn) {
-              spawnAvatar(username);
+              spawnSprite(username);
             }
             // If server processed command, handle visual effects (server is authoritative)
             if (tags?.isCommand && tags?.commandResult) {
@@ -352,9 +352,9 @@ function dbg(...args) {
           },
           (cmd) => {
             dbg('Command received:', cmd);
-            if (cmd === 'clearAvatars') {
-              dbg('Clearing all avatars');
-              avatars.clear();
+            if (cmd === 'clearSprites') {
+              dbg('Clearing all sprites');
+              sprites.clear();
               animatedMediaRenderer.clear();
             } else if (cmd === 'boom') {
               dbg('Boom command - applying explosion effect');
@@ -366,10 +366,10 @@ function dbg(...args) {
               // Create explosion visual effect
               createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
               
-              // Apply physics to all avatars
-              for (const av of avatars.values()) {
-                const dx = av.x - epicenterX;
-                const dy = av.y - epicenterY;
+              // Apply physics to all sprites
+              for (const sprite of sprites.values()) {
+                const dx = sprite.x - epicenterX;
+                const dy = sprite.y - epicenterY;
                 const dist = Math.hypot(dx, dy);
                 
                 if (dist < explosionRadius && dist > COLLISION_PERSONAL_SPACE_THRESHOLD) {
@@ -378,43 +378,43 @@ function dbg(...args) {
                   const falloff = Math.pow(1 - dist / explosionRadius, 2);
                   const force = EXPLOSION_FORCE_MULTIPLIER * Math.max(0, falloff);
                   
-                  av.vx += nx * force;
-                  av.vy += ny * force * (1 - EXPLOSION_UPWARD_BIAS) - force * EXPLOSION_UPWARD_BIAS;
+                  sprite.vx += nx * force;
+                  sprite.vy += ny * force * (1 - EXPLOSION_UPWARD_BIAS) - force * EXPLOSION_UPWARD_BIAS;
                   
                   const spinStrength = force * SPIN_STRENGTH_FACTOR;
-                  av.angularVelocity += (Math.random() - 0.5) * spinStrength;
-                  av.lastTiltTime = Date.now();
+                  sprite.angularVelocity += (Math.random() - 0.5) * spinStrength;
+                  sprite.lastTiltTime = Date.now();
                   
-                  av.vx += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
-                  av.vy += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
+                  sprite.vx += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
+                  sprite.vy += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
                 }
               }
             } else if (cmd === 'jump') {
-              dbg('Jump command - applying velocity to avatar');
-              // Apply jump velocity to the user's avatar
+              dbg('Jump command - applying velocity to sprite');
+              // Apply jump velocity to the user's sprite
               if (data && data.username) {
                 const userId = data.username.toLowerCase();
-                const av = avatars.get(userId);
-                if (av) {
-                  av.vy = -12;
-                  av.state = 'idle';
+                const sprite = sprites.get(userId);
+                if (sprite) {
+                  sprite.vy = -12;
+                  sprite.state = 'idle';
                   dbg('Applied jump velocity to', userId);
                 } else {
-                  dbg('Avatar not found for jump:', userId);
+                  dbg('Sprite not found for jump:', userId);
                 }
               }
             }
           },
-          (avatarState) => {
-            dbg('Received avatar state from server:', avatarState.avatars.length, 'avatars');
-            // Sync local avatars with server state
-            syncAvatarsFromServer(avatarState.avatars);
+          (spriteState) => {
+            dbg('Received sprite state from server:', spriteState.sprites.length, 'sprites');
+            // Sync local sprites with server state
+            syncSpritesFromServer(spriteState.sprites);
           }
         );
       },
       () => {
         dbg('WebSocket connected');
-        // Send full avatar state to server to ensure it knows about all current avatars
+        // Send full sprite state to server to ensure it knows about all current sprites
         sendFullStateToServer();
       }
     );
@@ -425,7 +425,7 @@ function dbg(...args) {
     dbg('USE_SERVER=false - setting up TMI fallback');
     setupTmiFallback(cfg, (username, message, tags, type) => {
       dbg('TMI message from:', username, ':', message);
-      spawnAvatar(username);
+      spawnSprite(username);
       if (message && message.trim().startsWith('!')) {
         handleUserCommand(username, message, tags);
       }
@@ -433,8 +433,8 @@ function dbg(...args) {
   }
   
   // Complete window._SA initialization with remaining properties
-  window._SA.spawn = spawnAvatar;
-  window._SA.avatars = avatars;
+  window._SA.spawn = spawnSprite;
+  window._SA.sprites = sprites;
   window._SA.skins = skins;
   window._SA.animatedMediaRenderer = animatedMediaRenderer;
   

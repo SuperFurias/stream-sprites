@@ -25,7 +25,7 @@ export function getConfigConstants(cfg, overlay) {
     minVelocity: 0.15,
     
     // Spawning
-    maxAvatars: 1500,
+    maxSprites: 1500,
     maxSpawnQuantity: 100,
     spawnThrottleMs: 700,
     spriteSizeMin: 30,
@@ -156,7 +156,7 @@ export function getConfigConstants(cfg, overlay) {
     MIN_VELOCITY: overlayConfig.minVelocity,
     
     // Spawning
-    MAX_AVATARS: overlayConfig.maxAvatars,
+    MAX_SPRITES: overlayConfig.maxSprites,
     MAX_SPAWN_QUANTITY: overlayConfig.maxSpawnQuantity,
     SPAWN_THROTTLE_MS: overlayConfig.spawnThrottleMs,
     SPRITE_SIZE_MIN: overlayConfig.spriteSizeMin,

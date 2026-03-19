@@ -638,27 +638,27 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
   }
 });
 
-// Admin: Clear all avatars (both client and server)
-app.post('/api/admin/clearAvatars', requireAdminAuth, (req,res)=>{
-  dbg('POST /api/admin/clearAvatars');
-  // Clear server-side in-memory avatars
-  clearServerAvatars();
+// Admin: Clear all sprites (both client and server)
+app.post('/api/admin/clearSprites', requireAdminAuth, (req,res)=>{
+  dbg('POST /api/admin/clearSprites');
+  // Clear server-side in-memory sprites
+  clearServerSprites();
   // Also broadcast clear command to clients (for immediate visual feedback)
-  broadcast({type:'cmd', cmd:'clearAvatars'});
-  dbg('Clear avatars command broadcasted and server memory cleared');
+  broadcast({type:'cmd', cmd:'clearSprites'});
+  dbg('Clear sprites command broadcasted and server memory cleared');
   res.json({ok:true});
 });
 
-// Admin: Clear all avatars (server-side authoritative) - alias for backward compatibility
-app.post('/api/admin/clearAvatarsServer', requireAdminAuth, (req,res)=>{
-  dbg('POST /api/admin/clearAvatarsServer');
+// Admin: Clear all sprites (server-side authoritative) - alias for backward compatibility
+app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
+  dbg('POST /api/admin/clearSpritesServer');
   try{
-    clearServerAvatars();
-    broadcast({type:'cmd', cmd:'clearAvatars'});
-    dbg('Server avatars cleared and clients notified');
+    clearServerSprites();
+    broadcast({type:'cmd', cmd:'clearSprites'});
+    dbg('Server sprites cleared and clients notified');
     res.json({ok:true});
   }catch(err){
-    dbg('Error clearing server avatars:', err.message);
+    dbg('Error clearing server sprites:', err.message);
     res.status(500).json({error: err.message});
   }
 });
@@ -801,15 +801,15 @@ app.post('/api/admin/refreshAllOverlays', requireAdminAuth, (req,res)=>{
   }
 });
 
-// Admin: Clear all avatars (server-side)
-app.post('/api/admin/clearAvatarsServer', requireAdminAuth, (req,res)=>{
-  dbg('POST /api/admin/clearAvatarsServer');
+// Admin: Clear all sprites (server-side)
+app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
+  dbg('POST /api/admin/clearSpritesServer');
   try{
-    clearServerAvatars();
-    dbg('Server avatars cleared');
+    clearServerSprites();
+    dbg('Server sprites cleared');
     res.json({ok:true});
   }catch(err){
-    dbg('Error clearing server avatars:', err.message);
+    dbg('Error clearing server sprites:', err.message);
     res.status(500).json({error: err.message});
   }
 });
@@ -889,9 +889,9 @@ const server = app.listen(port, () => {
   console.log(`✓ Dashboard: http://localhost:${port}/`);
   console.log(`✓ Overlay: http://localhost:${port}/overlay/overlay.html`);
   
-  // Clear avatars on startup
-  clearServerAvatars();
-  console.log('✓ Cleared all avatars on startup');
+  // Clear sprites on startup
+  clearServerSprites();
+  console.log('✓ Cleared all sprites on startup');
   
   // Auto-open browser to admin panel (if enabled, default true)
   if(cfg.autoOpenBrowser !== false){
@@ -956,8 +956,8 @@ function broadcast(obj){
 // NAME_LENGTH_LIMIT is still a hardcoded constant (not user-configurable)
 const NAME_LENGTH_LIMIT = 20;
 
-// In-memory authoritative avatar state (not persisted to disk)
-const serverAvatars = new Map();
+// In-memory authoritative sprite state (not persisted to disk)
+const serverSprites = new Map();
 const serverSpawnTimes = new Map();
 const serverStartTime = Date.now();
 
@@ -983,7 +983,7 @@ function processServerCommand(username, text, tags) {
   let response = null;
   
   // Constants (from overlay config)
-  const MAX_AVATARS = (cfg.overlay && cfg.overlay.maxAvatars) || 1500;
+  const MAX_SPRITES = (cfg.overlay && cfg.overlay.maxSprites) || 1500;
   const MAX_SPAWN_QUANTITY = (cfg.overlay && cfg.overlay.maxSpawnQuantity) || 100;
   const SPAWN_THROTTLE_MS = (cfg.overlay && cfg.overlay.spawnThrottleMs) || 700;
   const SPRITE_SIZE_MIN = 30;
@@ -996,27 +996,27 @@ function processServerCommand(username, text, tags) {
     const uniqueId = name.toLowerCase();
     
     // Check if already exists
-    if (serverAvatars.has(uniqueId)) {
-      const av = serverAvatars.get(uniqueId);
-      av.lastActivity = now;
-      if (av.skin !== skinId) {
-        av.skin = skinId;
+    if (serverSprites.has(uniqueId)) {
+      const sprite = serverSprites.get(uniqueId);
+      sprite.lastActivity = now;
+      if (sprite.skin !== skinId) {
+        sprite.skin = skinId;
       }
-      return av;
+      return sprite;
     }
     
-    // Check avatar limit
-    if (serverAvatars.size >= MAX_AVATARS) {
+    // Check sprite limit
+    if (serverSprites.size >= MAX_SPRITES) {
       // Remove oldest 5%
-      const arr = Array.from(serverAvatars.values()).sort((a, b) => a.createdAt - b.createdAt);
+      const arr = Array.from(serverSprites.values()).sort((a, b) => a.createdAt - b.createdAt);
       const removeCount = Math.max(1, Math.floor(arr.length * 0.05));
       for (let i = 0; i < removeCount; i++) {
-        serverAvatars.delete(arr[i].id);
+        serverSprites.delete(arr[i].id);
       }
     }
     
-    // Create new avatar
-    const newAv = {
+    // Create new sprite
+    const newSprite = {
       id: uniqueId,
       username: name,
       skin: skinId,
@@ -1024,16 +1024,16 @@ function processServerCommand(username, text, tags) {
       createdAt: now,
       lastActivity: now
     };
-    serverAvatars.set(uniqueId, newAv);
+    serverSprites.set(uniqueId, newSprite);
     stateChanged = true;
-    return newAv;
+    return newSprite;
   }
   
   if (cmd === '!jump') {
-    // Jump command - apply to user's own avatar if it exists
-    if (serverAvatars.has(userId)) {
-      const av = serverAvatars.get(userId);
-      av.lastActivity = now;
+    // Jump command - apply to user's own sprite if it exists
+    if (serverSprites.has(userId)) {
+      const sprite = serverSprites.get(userId);
+      sprite.lastActivity = now;
       // Note: velocity not stored server-side, will be applied client-side
       stateChanged = true;
       broadcast({ type: 'cmd', cmd: 'jump', username: username });
@@ -1042,20 +1042,20 @@ function processServerCommand(username, text, tags) {
       response = 'You need to appear first!';
     }
   } else if (cmd === '!sit') {
-    if (serverAvatars.has(userId)) {
-      const av = serverAvatars.get(userId);
-      av.state = 'sit';
-      av.lastActivity = now;
+    if (serverSprites.has(userId)) {
+      const sprite = serverSprites.get(userId);
+      sprite.state = 'sit';
+      sprite.lastActivity = now;
       stateChanged = true;
       // No chat response for !sit
     } else {
       response = 'You need to appear first!';
     }
   } else if (cmd === '!unsit') {
-    if (serverAvatars.has(userId)) {
-      const av = serverAvatars.get(userId);
-      av.state = 'idle';
-      av.lastActivity = now;
+    if (serverSprites.has(userId)) {
+      const sprite = serverSprites.get(userId);
+      sprite.state = 'idle';
+      sprite.lastActivity = now;
       stateChanged = true;
       // No chat response for !unsit
     } else {
@@ -1074,11 +1074,11 @@ function processServerCommand(username, text, tags) {
         // Update user's assigned skin in database
         try {
           db.prepare('UPDATE users SET assigned_skin = ? WHERE id = ?').run(args[0], userId);
-          // Update existing avatar if present
-          if (serverAvatars.has(userId)) {
-            const av = serverAvatars.get(userId);
-            av.skin = args[0];
-            av.lastActivity = now;
+          // Update existing sprite if present
+          if (serverSprites.has(userId)) {
+            const sprite = serverSprites.get(userId);
+            sprite.skin = args[0];
+            sprite.lastActivity = now;
             stateChanged = true;
           }
           response = `${username}'s skin changed to ${args[0]}`;
@@ -1133,24 +1133,24 @@ function processServerCommand(username, text, tags) {
   return { result: response, stateChanged: stateChanged };
 }
 
-// Update server-side avatar state (called when user sends chat message)
-function updateServerAvatar(username, tags) {
+// Update server-side sprite state (called when user sends chat message)
+function updateServerSprite(username, tags) {
   const userId = username.toLowerCase();
   const skin = getUserSkinFromDB(userId);
   
-  // For backward compatibility, also check for any existing avatars with this username
-  // to maintain the single-avatar-per-user model for regular chat messages
-  // But for spawned avatars, the client sends the full ID which should be preserved
-  // This function is only called from chat messages, not from avatarUpdate
+  // For backward compatibility, also check for any existing sprites with this username
+  // to maintain the single-sprite-per-user model for regular chat messages
+  // But for spawned sprites, the client sends the full ID which should be preserved
+  // This function is only called from chat messages, not from spriteUpdate
   // So we keep the original behavior here.
-  if (serverAvatars.has(userId)) {
-    const av = serverAvatars.get(userId);
-    av.lastActivity = Date.now();
-    if (av.skin !== skin) {
-      av.skin = skin;
+  if (serverSprites.has(userId)) {
+    const sprite = serverSprites.get(userId);
+    sprite.lastActivity = Date.now();
+    if (sprite.skin !== skin) {
+      sprite.skin = skin;
     }
   } else {
-    serverAvatars.set(userId, {
+    serverSprites.set(userId, {
       id: userId,
       username: username,
       skin: skin,
@@ -1159,60 +1159,60 @@ function updateServerAvatar(username, tags) {
     });
   }
   
-  broadcastAvatarState();
+  broadcastSpriteState();
 }
 
-// Broadcast full avatar state to all connected clients
-function broadcastAvatarState() {
-  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
-    id: av.id,
-    username: av.username,
-    skin: av.skin,
-    state: av.state || 'idle',
-    createdAt: av.createdAt,
-    lastActivity: av.lastActivity
+// Broadcast full sprite state to all connected clients
+function broadcastSpriteState() {
+  const spriteArray = Array.from(serverSprites.values()).map(sprite => ({
+    id: sprite.id,
+    username: sprite.username,
+    skin: sprite.skin,
+    state: sprite.state || 'idle',
+    createdAt: sprite.createdAt,
+    lastActivity: sprite.lastActivity
   }));
   
   broadcast({
-    type: 'avatarState',
-    avatars: avatarArray,
+    type: 'spriteState',
+    sprites: spriteArray,
     timestamp: Date.now()
   });
 }
 
-// Send avatar state to a specific client (for initial sync)
-function sendAvatarStateToClient(ws) {
-  const avatarArray = Array.from(serverAvatars.values()).map(av => ({
-    id: av.id,
-    username: av.username,
-    skin: av.skin,
-    state: av.state || 'idle',
-    createdAt: av.createdAt,
-    lastActivity: av.lastActivity
+// Send sprite state to a specific client (for initial sync)
+function sendSpriteStateToClient(ws) {
+  const spriteArray = Array.from(serverSprites.values()).map(sprite => ({
+    id: sprite.id,
+    username: sprite.username,
+    skin: sprite.skin,
+    state: sprite.state || 'idle',
+    createdAt: sprite.createdAt,
+    lastActivity: sprite.lastActivity
   }));
   
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
-      type: 'avatarState',
-      avatars: avatarArray,
+      type: 'spriteState',
+      sprites: spriteArray,
       timestamp: Date.now()
     }));
   }
 }
 
-// Clear all server-side avatars (for admin command)
-function clearServerAvatars() {
-  serverAvatars.clear();
+// Clear all server-side sprites (for admin command)
+function clearServerSprites() {
+  serverSprites.clear();
   serverSpawnTimes.clear();
-  broadcastAvatarState();
+  broadcastSpriteState();
 }
 
 // WebSocket connection handling
 wss.on('connection', (ws) => {
   dbg('WebSocket client connected');
   
-  // Send current avatar state to newly connected client
-  sendAvatarStateToClient(ws);
+  // Send current sprite state to newly connected client
+  sendSpriteStateToClient(ws);
   
   // Send initial config/environment data
   ws.send(JSON.stringify({
@@ -1224,41 +1224,41 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
-      if (msg.type === 'cmd' && msg.cmd === 'clearAvatars') {
-        dbg('clearAvatars command received from client');
-        clearServerAvatars();
-      } else if (msg.type === 'avatarUpdate') {
-        // Client notifies server about avatar spawn/update
-        dbg('avatarUpdate received from client:', msg);
-        const avatarId = msg.id; // Full unique ID (e.g., 'cat_1', 'bunbun_2')
+      if (msg.type === 'cmd' && msg.cmd === 'clearSprites') {
+        dbg('clearSprites command received from client');
+        clearServerSprites();
+      } else if (msg.type === 'spriteUpdate') {
+        // Client notifies server about sprite spawn/update
+        dbg('spriteUpdate received from client:', msg);
+        const spriteId = msg.id; // Full unique ID (e.g., 'cat_1', 'bunbun_2')
         const username = msg.username;
         const skin = msg.skin || 'default';
         const state = msg.state || 'idle';
         const now = Date.now();
         const clientCreatedAt = msg.createdAt || now;
         
-        // Ignore avatars created before server startup (stale from previous server instance)
+        // Ignore sprites created before server startup (stale from previous server instance)
         if (clientCreatedAt < serverStartTime) {
-          dbg('Ignoring stale avatarUpdate from client:', avatarId, 'created:', new Date(clientCreatedAt).toISOString());
+          dbg('Ignoring stale spriteUpdate from client:', spriteId, 'created:', new Date(clientCreatedAt).toISOString());
           // Still broadcast current state to ensure client syncs with server
-          broadcastAvatarState();
+          broadcastSpriteState();
           return;
         }
         
-        if (serverAvatars.has(avatarId)) {
+        if (serverSprites.has(spriteId)) {
           // Update existing
-          const av = serverAvatars.get(avatarId);
-          av.lastActivity = now;
-          if (av.skin !== skin) {
-            av.skin = skin;
+          const sprite = serverSprites.get(spriteId);
+          sprite.lastActivity = now;
+          if (sprite.skin !== skin) {
+            sprite.skin = skin;
           }
-          if (av.state !== state) {
-            av.state = state;
+          if (sprite.state !== state) {
+            sprite.state = state;
           }
         } else {
-          // Create new - use the full ID as the key to preserve multiple avatars
-          serverAvatars.set(avatarId, {
-            id: avatarId,
+          // Create new - use the full ID as the key to preserve multiple sprites
+          serverSprites.set(spriteId, {
+            id: spriteId,
             username: username,
             skin: skin,
             state: state,
@@ -1268,42 +1268,43 @@ wss.on('connection', (ws) => {
         }
         
         // Broadcast updated state to all clients
-        broadcastAvatarState();
+        broadcastSpriteState();
       } else if (msg.type === 'fullState') {
         // Client sends full current state to server (for initial sync after reconnect)
-        dbg('fullState received from client:', msg.avatars.length, 'avatars');
+        const spritesArray = msg.sprites || [];
+        dbg('fullState received from client:', spritesArray.length, 'sprites');
         const now = Date.now();
         let changed = false;
         
-        for (const clientAv of msg.avatars) {
-          const avatarId = clientAv.id; // Use full ID as key
-          const skin = clientAv.skin || 'default';
-          const state = clientAv.state || 'idle';
-          const clientCreatedAt = clientAv.createdAt || now;
+        for (const clientSprite of spritesArray) {
+          const spriteId = clientSprite.id; // Use full ID as key
+          const skin = clientSprite.skin || 'default';
+          const state = clientSprite.state || 'idle';
+          const clientCreatedAt = clientSprite.createdAt || now;
           
-          // Ignore avatars created before server startup (stale from previous server instance)
+          // Ignore sprites created before server startup (stale from previous server instance)
           if (clientCreatedAt < serverStartTime) {
-            dbg('Ignoring stale avatar from client:', avatarId, 'created:', new Date(clientCreatedAt).toISOString());
+            dbg('Ignoring stale sprite from client:', spriteId, 'created:', new Date(clientCreatedAt).toISOString());
             continue;
           }
           
-          if (serverAvatars.has(avatarId)) {
+          if (serverSprites.has(spriteId)) {
             // Update existing
-            const av = serverAvatars.get(avatarId);
-            av.lastActivity = now;
-            if (av.skin !== skin) {
-              av.skin = skin;
+            const sprite = serverSprites.get(spriteId);
+            sprite.lastActivity = now;
+            if (sprite.skin !== skin) {
+              sprite.skin = skin;
               changed = true;
             }
-            if (av.state !== state) {
-              av.state = state;
+            if (sprite.state !== state) {
+              sprite.state = state;
               changed = true;
             }
           } else {
             // Create new - preserve the full ID from client
-            serverAvatars.set(avatarId, {
-              id: avatarId,
-              username: clientAv.username,
+            serverSprites.set(spriteId, {
+              id: spriteId,
+              username: clientSprite.username,
               skin: skin,
               state: state,
               createdAt: clientCreatedAt,
@@ -1314,7 +1315,7 @@ wss.on('connection', (ws) => {
         }
         
         if (changed) {
-          broadcastAvatarState();
+          broadcastSpriteState();
         }
       }
     } catch (e) {
@@ -1323,20 +1324,20 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Periodic cleanup of stale avatars (every minute)
+// Periodic cleanup of stale sprites (every minute)
 setInterval(() => {
   const now = Date.now();
   const lifetime = (cfg.overlay && cfg.overlay.spriteLifetimeMs) || 30 * 60 * 1000;
   let changed = false;
-  for (const [id, av] of serverAvatars) {
-    if (now - av.lastActivity > lifetime) {
-      serverAvatars.delete(id);
+  for (const [id, sprite] of serverSprites) {
+    if (now - sprite.lastActivity > lifetime) {
+      serverSprites.delete(id);
       changed = true;
     }
   }
   if (changed) {
-    dbg('Cleaned up old avatars');
-    broadcastAvatarState();
+    dbg('Cleaned up old sprites');
+    broadcastSpriteState();
   }
 }, 60 * 1000);
 
@@ -1405,8 +1406,8 @@ async function connectTwitchBot(){
       db.prepare("INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,COALESCE((SELECT assigned_skin FROM users WHERE id=?), 'default'))")
         .run(username.toLowerCase(), displayName, username.toLowerCase());
       
-      // Update server-side avatar state for the chatting user
-      updateServerAvatar(username, tags);
+      // Update server-side sprite state for the chatting user
+      updateServerSprite(username, tags);
       
       // Check if message is a command and process it server-side
       const text = message.trim();
@@ -1448,8 +1449,8 @@ async function connectTwitchBot(){
       
       // If state changed (from command or normal chat), broadcast updated state
       if (stateChanged) {
-        broadcastAvatarState();
-        dbg('Avatar state broadcasted');
+        broadcastSpriteState();
+        dbg('Sprite state broadcasted');
       }
     } catch (err) {
       dbg('DB error:', err.message);
@@ -1541,25 +1542,25 @@ function getUserSkinFromDB(userId) {
   }
 }
 
-// Update server-side avatar state (called when user sends chat message)
-function updateServerAvatar(username, tags) {
+// Update server-side sprite state (called when user sends chat message)
+function updateServerSprite(username, tags) {
   const userId = username.toLowerCase();
   const skin = getUserSkinFromDB(userId);
   
-  // Check if avatar already exists
-  if (serverAvatars.has(userId)) {
-    const av = serverAvatars.get(userId);
+  // Check if sprite already exists
+  if (serverSprites.has(userId)) {
+    const sprite = serverSprites.get(userId);
     // Update last activity
-    av.lastActivity = Date.now();
+    sprite.lastActivity = Date.now();
     // Update skin if changed
-    if (av.skin !== skin) {
-      av.skin = skin;
+    if (sprite.skin !== skin) {
+      sprite.skin = skin;
     }
     // State is preserved from previous interactions (e.g., sit command)
   } else {
-    // Create new avatar entry with minimal state
+    // Create new sprite entry with minimal state
     // Position will be randomized on client side
-    serverAvatars.set(userId, {
+    serverSprites.set(userId, {
       id: userId,
       username: username,
       skin: skin,
@@ -1571,8 +1572,8 @@ function updateServerAvatar(username, tags) {
     });
   }
   
-  // Broadcast updated avatar state to all clients
-  broadcastAvatarState();
+  // Broadcast updated sprite state to all clients
+  broadcastSpriteState();
 }
 
 if(cfg.useServer){

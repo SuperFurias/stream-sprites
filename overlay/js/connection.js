@@ -133,14 +133,14 @@ export function setupTmiFallback(cfg, onMessage) {
   document.head.appendChild(script);
 }
 
-export function handleWebSocketMessage(data, onChat, onCommand, onAvatarState) {
+export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState) {
   dbg('handleWebSocketMessage:', data);
   if (data.type === 'chat') {
     onChat(data.username, data.message, data.tags || {});
   } else if (data.type === 'cmd') {
-    if (data.cmd === 'clearAvatars') {
-      dbg('clearAvatars command');
-      onCommand('clearAvatars', data);
+    if (data.cmd === 'clearSprites') {
+      dbg('clearSprites command');
+      onCommand('clearSprites', data);
     } else if (data.cmd === 'refresh') {
       const delay = Math.random() * 1000;
       dbg(`Overlay refresh scheduled in ${delay.toFixed(0)}ms`);
@@ -161,8 +161,8 @@ export function handleWebSocketMessage(data, onChat, onCommand, onAvatarState) {
       dbg('jump command received from server');
       onCommand('jump', data);
     }
-  } else if (data.type === 'avatarState' && onAvatarState) {
-    dbg('avatarState update received');
-    onAvatarState(data);
+  } else if (data.type === 'spriteState' && onSpriteState) {
+    dbg('spriteState update received');
+    onSpriteState(data);
   }
 }

@@ -41,7 +41,7 @@ const defaultOverlay = {
   groundFriction: 0.92,
   bounceDamping: 0.65,
   minVelocity: 0.15,
-  maxAvatars: 1500,
+  maxSprites: 1500,
   maxSpawnQuantity: 100,
   spawnThrottleMs: 700,
   spriteSizeMin: 30,
@@ -149,7 +149,7 @@ const overlayFieldMap = {
   minVelocity: 'minVelocity',
   
   // Spawning
-  maxAvatars: 'maxAvatars',
+  maxSprites: 'maxSprites',
   maxSpawnQuantity: 'maxSpawnQuantity',
   spawnThrottleMs: 'spawnThrottleMs',
   spriteSizeMin: 'spriteSizeMin',

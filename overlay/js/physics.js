@@ -2,37 +2,37 @@
 import { SpatialHash } from './spatialHash.js';
 import { getCollisionProbability } from './utils.js';
 
-export function updatePhysics(dt, avatars, W, H, GROUND_Y, draggedAvatar,
+export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                               GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
                               BOUNCE_DAMPING, MIN_VELOCITY) {
-  const arr = Array.from(avatars.values());
+  const arr = Array.from(sprites.values());
   const grid = new SpatialHash(64, W, H);
   grid.clear();
-  for (const a of arr) grid.insert(a);
+  for (const s of arr) grid.insert(s);
 
   // Calculate zone densities for distribution
   const NUM_ZONES = 5;
   const zoneWidth = W / NUM_ZONES;
   const zoneCounts = new Array(NUM_ZONES).fill(0);
-  for (const a of arr) {
-    const zone = Math.floor(a.x / zoneWidth);
+  for (const s of arr) {
+    const zone = Math.floor(s.x / zoneWidth);
     if (zone >= 0 && zone < NUM_ZONES) {
       zoneCounts[zone]++;
     }
   }
   const avgDensity = arr.length / NUM_ZONES;
 
-  for (const a of arr) {
-    if (a === draggedAvatar) {
-      updateDraggedAvatarPhysics(a, W, H, GROUND_Y);
+  for (const s of arr) {
+    if (s === draggedSprite) {
+      updateDraggedSpritePhysics(s, W, H, GROUND_Y);
     } else {
-      updateAvatarPhysics(a, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
+      updateSpritePhysics(s, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                           GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY,
                           zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
     }
   }
 
-  // Safety nudge: separate avatars that are exactly overlapping
+  // Safety nudge: separate sprites that are exactly overlapping
   for (let i = 0; i < arr.length; i++) {
     for (let j = i + 1; j < arr.length; j++) {
       const a = arr[i], b = arr[j];
@@ -160,116 +160,116 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
   }
 }
 
-function updateDraggedAvatarPhysics(a, W, H, GROUND_Y) {
-  a.vy += 0.5; // Reduced gravity for dragged
+function updateDraggedSpritePhysics(sprite, W, H, GROUND_Y) {
+  sprite.vy += 0.5; // Reduced gravity for dragged
   
-  const leftRightRadius = a.boundaryRadius || Math.max(a.size / 2, (a.textWidth || 0) / 2 + 4);
-  const topBottomRadius = a.collisionRadius || a.size / 2;
+  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + 4);
+  const topBottomRadius = sprite.collisionRadius || sprite.size / 2;
   
-  if (a.x < leftRightRadius) {
-    a.x = leftRightRadius;
-    a.vx = 0;
+  if (sprite.x < leftRightRadius) {
+    sprite.x = leftRightRadius;
+    sprite.vx = 0;
   }
-  if (a.x > W - leftRightRadius) {
-    a.x = W - leftRightRadius;
-    a.vx = 0;
+  if (sprite.x > W - leftRightRadius) {
+    sprite.x = W - leftRightRadius;
+    sprite.vx = 0;
   }
   const floor = GROUND_Y - topBottomRadius;
-  if (a.y > floor) {
-    a.y = floor;
-    if (a.vy > 0) a.vy = 0;
+  if (sprite.y > floor) {
+    sprite.y = floor;
+    if (sprite.vy > 0) sprite.vy = 0;
   }
 }
 
-function updateAvatarPhysics(a, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
+function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                              GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY,
                              zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
-  a.vy += GRAVITY;
+  sprite.vy += GRAVITY;
 
   // Air resistance
-  const speedSq = a.vx * a.vx + a.vy * a.vy;
+  const speedSq = sprite.vx * sprite.vx + sprite.vy * sprite.vy;
   const dragFactor = 1 - (speedSq * 0.0001);
   if (dragFactor > 0.9) {
-    a.vx *= Math.min(1, dragFactor * AIR_RESISTANCE);
-    a.vy *= Math.min(1, dragFactor * AIR_RESISTANCE);
+    sprite.vx *= Math.min(1, dragFactor * AIR_RESISTANCE);
+    sprite.vy *= Math.min(1, dragFactor * AIR_RESISTANCE);
   } else {
-    a.vx *= AIR_RESISTANCE;
-    a.vy *= AIR_RESISTANCE;
+    sprite.vx *= AIR_RESISTANCE;
+    sprite.vy *= AIR_RESISTANCE;
   }
 
-  const leftRightRadius = a.boundaryRadius || Math.max(a.size / 2, (a.textWidth || 0) / 2 + 4);
-  const topBottomRadius = a.collisionRadius || a.size / 2;
+  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + 4);
+  const topBottomRadius = sprite.collisionRadius || sprite.size / 2;
 
   // Update facing direction with threshold to prevent trembling
   const DIRECTION_CHANGE_THRESHOLD = 0.3;
-  if (a.vx > DIRECTION_CHANGE_THRESHOLD) {
-    a.facingRight = true;
-  } else if (a.vx < -DIRECTION_CHANGE_THRESHOLD) {
-    a.facingRight = false;
+  if (sprite.vx > DIRECTION_CHANGE_THRESHOLD) {
+    sprite.facingRight = true;
+  } else if (sprite.vx < -DIRECTION_CHANGE_THRESHOLD) {
+    sprite.facingRight = false;
   }
 
-  a.x += a.vx;
-  a.y += a.vy;
+  sprite.x += sprite.vx;
+  sprite.y += sprite.vy;
 
   // Ground collision
   const floor = GROUND_Y - topBottomRadius;
-  if (a.y > floor) {
-    a.y = floor;
-    if (a.vy > 0) {
-      a.vy = -a.vy * BOUNCE_DAMPING;
-      a.vx *= GROUND_FRICTION;
+  if (sprite.y > floor) {
+    sprite.y = floor;
+    if (sprite.vy > 0) {
+      sprite.vy = -sprite.vy * BOUNCE_DAMPING;
+      sprite.vx *= GROUND_FRICTION;
     }
   }
 
   // Wall boundaries
-  if (a.x < leftRightRadius) {
-    a.x = leftRightRadius;
-    a.vx = -a.vx * BOUNCE_DAMPING;
+  if (sprite.x < leftRightRadius) {
+    sprite.x = leftRightRadius;
+    sprite.vx = -sprite.vx * BOUNCE_DAMPING;
   }
-  if (a.x > W - leftRightRadius) {
-    a.x = W - leftRightRadius;
-    a.vx = -a.vx * BOUNCE_DAMPING;
+  if (sprite.x > W - leftRightRadius) {
+    sprite.x = W - leftRightRadius;
+    sprite.vx = -sprite.vx * BOUNCE_DAMPING;
   }
 
   // Stop very small velocities
-  if (Math.abs(a.vx) < MIN_VELOCITY) a.vx = 0;
-  if (Math.abs(a.vy) < MIN_VELOCITY) a.vy = 0;
+  if (Math.abs(sprite.vx) < MIN_VELOCITY) sprite.vx = 0;
+  if (Math.abs(sprite.vy) < MIN_VELOCITY) sprite.vy = 0;
 
   // Roaming behavior
-  updateRoamingBehavior(a, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,
+  updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,
                         zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
 
   // Dance animation
-  if (a.state === 'dance') {
-    a.vy += Math.sin((Date.now() + a.wiggle) / 200) * -0.2;
-    a.angularVelocity = (Math.random() - 0.5) * 0.1;
+  if (sprite.state === 'dance') {
+    sprite.vy += Math.sin((Date.now() + sprite.wiggle) / 200) * -0.2;
+    sprite.angularVelocity = (Math.random() - 0.5) * 0.1;
   } else {
-    a.angularVelocity *= 0.98;
+    sprite.angularVelocity *= 0.98;
   }
 
   // Auto-return upright
-  if (a.lastTiltTime && a.angle !== 0) {
-    const timeSinceTilt = Date.now() - a.lastTiltTime;
+  if (sprite.lastTiltTime && sprite.angle !== 0) {
+    const timeSinceTilt = Date.now() - sprite.lastTiltTime;
     if (timeSinceTilt > 1000) {
-      a.angle *= 0.95;
-      a.angularVelocity *= 0.9;
-      if (Math.abs(a.angle) < 0.01) {
-        a.angle = 0;
-        a.lastTiltTime = null;
+      sprite.angle *= 0.95;
+      sprite.angularVelocity *= 0.9;
+      if (Math.abs(sprite.angle) < 0.01) {
+        sprite.angle = 0;
+        sprite.lastTiltTime = null;
       }
     }
   }
 
-  a.angle += a.angularVelocity;
+  sprite.angle += sprite.angularVelocity;
 }
 
-function updateRoamingBehavior(a, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,
+function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,
                                zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
-  if (a.state === 'idle' || a.state === 'dance') {
-    if (a.roamTargetX === null || a.roamTargetY === null || a.roamTimer <= 0) {
+  if (sprite.state === 'idle' || sprite.state === 'dance') {
+    if (sprite.roamTargetX === null || sprite.roamTargetY === null || sprite.roamTimer <= 0) {
       // Choose target based on zone density - prefer underpopulated zones
       let targetZone;
-      const currentZone = Math.floor(a.x / zoneWidth);
+      const currentZone = Math.floor(sprite.x / zoneWidth);
       
       // Find the most underpopulated zone
       let minDensity = Infinity;
@@ -300,46 +300,46 @@ function updateRoamingBehavior(a, dt, W, H, GROUND_Y, leftRightRadius, topBottom
       // Set target position within the chosen zone
       const zoneLeft = targetZone * zoneWidth;
       const zoneRight = zoneLeft + zoneWidth;
-      a.roamTargetX = zoneLeft + leftRightRadius + Math.random() * (zoneWidth - leftRightRadius * 2);
-      a.roamTargetY = GROUND_Y - topBottomRadius - Math.random() * 30;
-      a.roamDuration = 3000 + Math.random() * 4000; // Longer duration for more purposeful movement
-      a.roamTimer = a.roamDuration;
+      sprite.roamTargetX = zoneLeft + leftRightRadius + Math.random() * (zoneWidth - leftRightRadius * 2);
+      sprite.roamTargetY = GROUND_Y - topBottomRadius - Math.random() * 30;
+      sprite.roamDuration = 3000 + Math.random() * 4000; // Longer duration for more purposeful movement
+      sprite.roamTimer = sprite.roamDuration;
       
-      const speed = a.roamSpeed;
-      const dx = a.roamTargetX - a.x;
-      const dy = a.roamTargetY - a.y;
+      const speed = sprite.roamSpeed;
+      const dx = sprite.roamTargetX - sprite.x;
+      const dy = sprite.roamTargetY - sprite.y;
       const dist = Math.hypot(dx, dy);
       if (dist > 5) {
         const nx = dx / dist;
         const ny = dy / dist;
         const walkForce = speed * 0.2; // Slightly stronger initial push
-        a.vx += nx * walkForce;
-        a.vy += ny * walkForce * 0.3;
+        sprite.vx += nx * walkForce;
+        sprite.vy += ny * walkForce * 0.3;
       }
     }
     
-    a.roamTimer -= dt * 1000;
+    sprite.roamTimer -= dt * 1000;
     
-    if (a.roamTimer > 0 && a.roamTargetX !== null) {
-      const dx = a.roamTargetX - a.x;
-      const dy = a.roamTargetY - a.y;
+    if (sprite.roamTimer > 0 && sprite.roamTargetX !== null) {
+      const dx = sprite.roamTargetX - sprite.x;
+      const dy = sprite.roamTargetY - sprite.y;
       const dist = Math.hypot(dx, dy);
       if (dist > 10) {
         const nx = dx / dist;
         const ny = dy / dist;
-        const steerForce = a.roamSpeed * 0.1; // Stronger steering toward target
-        a.vx += nx * steerForce;
-        a.vy += ny * steerForce * 0.2;
+        const steerForce = sprite.roamSpeed * 0.1; // Stronger steering toward target
+        sprite.vx += nx * steerForce;
+        sprite.vy += ny * steerForce * 0.2;
       } else if (dist <= 10) {
-        a.roamTimer = 0;
-        a.roamTargetX = null;
-        a.roamTargetY = null;
+        sprite.roamTimer = 0;
+        sprite.roamTargetX = null;
+        sprite.roamTargetY = null;
       }
     }
     
     if (Math.random() < 0.03) {
-      a.vx += (Math.random() - 0.5) * 0.3;
-      a.vy += (Math.random() - 0.5) * 0.1;
+      sprite.vx += (Math.random() - 0.5) * 0.3;
+      sprite.vy += (Math.random() - 0.5) * 0.1;
     }
   }
 }
@@ -386,28 +386,28 @@ function handleCollisions(arr, grid) {
   }
 }
 
-export function manageLifetime(avatars, SPRITE_LIFETIME_MS, FADE_WARNING_MS) {
-  const arr = Array.from(avatars.values());
-  for (const a of arr) {
+export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS) {
+  const arr = Array.from(sprites.values());
+  for (const sprite of arr) {
     const now = Date.now();
-    const age = now - a.lastActivity;
+    const age = now - sprite.lastActivity;
     
     if (age > SPRITE_LIFETIME_MS) {
-      a.opacity = 0;
-      a.markedForRemoval = true;
+      sprite.opacity = 0;
+      sprite.markedForRemoval = true;
     } else if (age > (SPRITE_LIFETIME_MS - FADE_WARNING_MS)) {
       const timeRemaining = SPRITE_LIFETIME_MS - age;
       const fadeProgress = 1 - (timeRemaining / FADE_WARNING_MS);
-      a.opacity = Math.max(0, 1 - fadeProgress);
+      sprite.opacity = Math.max(0, 1 - fadeProgress);
     } else {
-      a.opacity = 1;
+      sprite.opacity = 1;
     }
   }
   
   // Remove expired
-  for (const [id, a] of avatars) {
-    if (a.markedForRemoval && a.opacity <= 0) {
-      avatars.delete(id);
+  for (const [id, sprite] of sprites) {
+    if (sprite.markedForRemoval && sprite.opacity <= 0) {
+      sprites.delete(id);
     }
   }
 }
