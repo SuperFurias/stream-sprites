@@ -32,6 +32,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added security model documentation to `server/server.js` explaining local-only design
 - Clarified that admin endpoints have no authentication because the app is intended for localhost use only
 
+## [1.0.7] - 2026-03-19
+
+### Changed
+- Centralized all magic numbers to `config.js` for improved maintainability
+- Refactored physics engine to use centralized constants (30+ parameters)
+- Refactored sprite creation to use centralized constants for spawn parameters, mass, and inertia
+
+### Fixed
+- Removed duplicate `getUserSkinFromDB` function in `server/server.js`
+- Fixed multi-spawn consistency by ensuring server always broadcasts state after `!spawn` command
+- Removed per-sprite debug logging from hot loop in `syncSpritesFromServer` to improve performance
+
 ## [1.0.5] - 2026-03-19
 
 ### Changed

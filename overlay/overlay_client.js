@@ -156,7 +156,6 @@ function dbg(...args) {
     for (const [id, sprite] of sprites) {
       if (!serverIds.has(id)) {
         sprites.delete(id);
-        dbg('Removed sprite not on server:', id);
       }
     }
     
@@ -167,12 +166,10 @@ function dbg(...args) {
         // Update skin, state, and activity from server (preserve physics state)
         if (existingSprite.skin !== serverSprite.skin) {
           existingSprite.skin = serverSprite.skin;
-          dbg('Updated skin for', serverSprite.username, 'to', serverSprite.skin);
         }
         // Sync state from server - always set heightScale based on state
         if (serverSprite.state !== undefined && existingSprite.state !== serverSprite.state) {
           existingSprite.state = serverSprite.state;
-          dbg('Updated state for', serverSprite.username, 'to', serverSprite.state);
         }
         // Always apply heightScale and velocity based on current state
         if (existingSprite.state === 'sit') {
@@ -200,11 +197,10 @@ function dbg(...args) {
         newSprite.lastActivity = serverSprite.lastActivity;
         newSprite.createdAt = serverSprite.createdAt;
         sprites.set(newSprite.id, newSprite);
-        dbg('Created new sprite from server:', serverSprite.username, 'with state:', newSprite.state);
       }
     }
     
-    dbg('Synced with server: ', serverSpriteList.length, 'sprites, local count:', sprites.size);
+    // Optional: summary log at reduced frequency could be added here
   }
   
   // Send full current sprite state to server

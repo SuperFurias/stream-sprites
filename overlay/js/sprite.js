@@ -1,6 +1,16 @@
 // Sprite creation and spawning module
 import { getUserSkinFromCache } from './userSkinCache.js';
 import { colorFromName } from './utils.js';
+import {
+  SPAWN_MAX_TRIES,
+  SPAWN_SIZE_PADDING,
+  SPAWN_BOUNDS_PADDING,
+  SPAWN_Y_OFFSET,
+  SPAWN_JITTER,
+  TEXT_WIDTH_PADDING,
+  MASS_DIVISOR,
+  MOMENT_OF_INERTIA_FACTOR
+} from './config.js';
 
 export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
   // Random size within configured range
@@ -8,24 +18,23 @@ export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_S
   const skinId = getUserSkinFromCache(userSkinCache, username);
   const textWidth = ctx.measureText(username).width;
   const collisionRadius = size / 2;
-  const boundaryRadius = Math.max(size / 2, textWidth / 2 + 4);
-  const mass = Math.PI * Math.pow(size / 2, 2) / 1000;
-  const momentOfInertia = 0.5 * mass * Math.pow(size / 2, 2);
+  const boundaryRadius = Math.max(size / 2, textWidth / 2 + TEXT_WIDTH_PADDING);
+  const mass = Math.PI * Math.pow(size / 2, 2) / MASS_DIVISOR;
+  const momentOfInertia = MOMENT_OF_INERTIA_FACTOR * mass * Math.pow(size / 2, 2);
 
   // Try to find a non-overlapping spawn position
-  const MAX_TRIES = 8;
   let x, y;
-  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
-    x = Math.random() * (W - 120) + 60;
-    y = GROUND_Y - Math.random() * 40 - size / 2;
+  for (let attempt = 0; attempt < SPAWN_MAX_TRIES; attempt++) {
+    x = Math.random() * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
+    y = GROUND_Y - Math.random() * SPAWN_Y_OFFSET - size / 2;
     // Note: overlap check will be done by caller passing sprites
   }
   if (typeof x === 'undefined') {
-    x = Math.random() * (W - 120) + 60;
-    y = GROUND_Y - Math.random() * 40 - size / 2;
+    x = Math.random() * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
+    y = GROUND_Y - Math.random() * SPAWN_Y_OFFSET - size / 2;
   }
-  x += (Math.random() - 0.5) * 6;
-  y += (Math.random() - 0.5) * 6;
+  x += (Math.random() - 0.5) * SPAWN_JITTER;
+  y += (Math.random() - 0.5) * SPAWN_JITTER;
 
   return {
     id: username.toLowerCase(),

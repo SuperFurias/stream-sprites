@@ -1303,6 +1303,9 @@ function processServerCommand(username, text, tags) {
         spawnSprite(uniqueName, targetSkin);
       }
       
+      // Always broadcast state after spawn command to ensure clients sync even if sprites already existed
+      stateChanged = true;
+      
       response = `Spawned ${quantity} ${targetSkin === 'default' ? 'sprite' : targetSkin + ' sprite'}`;
     } else {
       response = 'Only broadcaster/mods can use !spawn';
@@ -1709,17 +1712,6 @@ async function connectTwitchBot(){
 //   if(reconnectTimeout) clearTimeout(reconnectTimeout);
 //   reconnectTimeout = setTimeout(connectTwitchBot, 5000);
 // }
-
-// Get user's assigned skin from database
-function getUserSkinFromDB(userId) {
-  try {
-    const row = db.prepare('SELECT assigned_skin FROM users WHERE id = ?').get(userId.toLowerCase());
-    return row ? row.assigned_skin : 'default';
-  } catch (e) {
-    dbg('Error fetching user skin:', e.message);
-    return 'default';
-  }
-}
 
 // Update server-side sprite state (called when user sends chat message)
 function updateServerSprite(username, tags) {
