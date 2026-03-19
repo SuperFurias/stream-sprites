@@ -32,21 +32,6 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
     }
   }
 
-  // Safety nudge: separate sprites that are exactly overlapping
-  for (let i = 0; i < arr.length; i++) {
-    for (let j = i + 1; j < arr.length; j++) {
-      const a = arr[i], b = arr[j];
-      if (a.x === b.x && a.y === b.y) {
-        const angle = Math.random() * Math.PI * 2;
-        const n = 0.5;
-        a.x += Math.cos(angle) * n;
-        a.y += Math.sin(angle) * n;
-        b.x -= Math.cos(angle) * n;
-        b.y -= Math.sin(angle) * n;
-      }
-    }
-  }
-
   // Handle collisions (probabilistic)
   handleCollisions(arr, grid);
   

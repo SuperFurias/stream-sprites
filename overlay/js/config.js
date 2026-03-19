@@ -10,8 +10,9 @@ export async function loadConfig() {
 }
 
 export function getConfigConstants(cfg, overlay) {
-  // Default values (used when .env doesn't specify a value)
-  const defaults = {
+  // Default values - used as fallback if server doesn't provide defaultOverlay
+  // The server (DEFAULT_OVERLAY) is the source of truth for these values
+  const fallbackDefaults = {
     // Canvas
     canvasWidth: 1920,
     canvasHeight: 1080,
@@ -132,8 +133,11 @@ export function getConfigConstants(cfg, overlay) {
     resizeDebounceMs: 100
   };
   
-  // Merge .env overlay config with defaults (client-side fallback)
-  const overlayConfig = { ...defaults, ...overlay };
+  // Use server-provided defaults if available, otherwise fallback
+  const serverDefaults = cfg.defaultOverlay || fallbackDefaults;
+  
+  // Merge: server defaults (or fallback) < overlay from .env
+  const overlayConfig = { ...serverDefaults, ...overlay };
   
   return {
     USE_SERVER: !!cfg.useServer,

@@ -1,4 +1,14 @@
 // server.js - Simple Stream Sprites with Skin Assignment
+//
+// SECURITY MODEL:
+// This application is designed for LOCAL-ONLY use on the same machine as the OBS Studio
+// streaming setup. The admin API endpoints have no authentication because:
+// - Server runs on localhost (127.0.0.1) only by default
+// - Dashboard and overlay are intended for the streamer's personal computer
+// - No external network access is expected or required
+//
+// If you need to expose this server to a network, YOU MUST ADD AUTHENTICATION
+// to the admin endpoints before doing so. See requireAdminAuth() function.
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -244,6 +254,129 @@ if (cfg.debug?.logToFile) {
 
 dbg('Config loaded:', { channel: cfg.channel, botUsername: cfg.botUsername, useServer: cfg.useServer, serverPort: cfg.serverPort });
 
+// Default overlay configuration (shared with dashboard and overlay client)
+// These values are used when .env does not specify overlay.* settings
+const DEFAULT_OVERLAY = {
+  // Canvas
+  canvasWidth: 1920,
+  canvasHeight: 1080,
+  groundY: 920,
+  
+  // Physics
+  gravity: 0.6,
+  airResistance: 0.992,
+  groundFriction: 0.92,
+  bounceDamping: 0.65,
+  minVelocity: 0.15,
+  
+  // Spawning
+  maxSprites: 1500,
+  maxSpawnQuantity: 100,
+  spawnThrottleMs: 700,
+  spriteSizeMin: 30,
+  spriteSizeMax: 80,
+  spawnMaxTries: 8,
+  spawnYOffset: 40,
+  spawnJitter: 6,
+  spawnBoundsPadding: 60,
+  spawnSizePadding: 120,
+  initialVelocity: 2,
+  
+  // Lifetime
+  spriteLifetimeMs: 30 * 60 * 1000,
+  fadeWarningMs: 5 * 60 * 1000,
+  
+  // Collision
+  collisionPersonalSpaceThreshold: 0.1,
+  collisionForceMultiplier: 0.02,
+  collisionProbabilityScaling: 1,
+  collisionProbabilityLow: 0.0,
+  collisionProbabilityMedium: 0.5,
+  collisionProbabilityHigh: 1.0,
+  collisionCountThresholdLow: 5,
+  collisionCountThresholdHigh: 15,
+  
+  // Explosion
+  explosionForceMultiplier: 60,
+  explosionRadiusBase: 400,
+  explosionRadiusVar: 300,
+  explosionUpwardBias: 0.7,
+  spinStrengthFactor: 0.05,
+  randomJitterFactor: 0.2,
+  explosionTimingJitter: 0.3,
+  
+  // Roaming
+  roamZoneYOffset: 30,
+  roamDurationBase: 3000,
+  roamDurationVar: 4000,
+  roamDistanceThreshold: 5,
+  roamWalkForceMultiplier: 0.2,
+  roamWalkVerticalFactor: 0.3,
+  roamSteerForceMultiplier: 0.1,
+  roamSteerVerticalFactor: 0.2,
+  roamArrivalThreshold: 10,
+  roamRandomMoveChance: 0.03,
+  roamRandomMoveForce: 0.3,
+  roamRandomMoveVertical: 0.1,
+  
+  // Visual
+  textWidthPadding: 4,
+  wiggleRange: 1000,
+  
+  // Particles
+  particleCountBase: 30,
+  particleCountVar: 20,
+  particleSpeedBase: 2,
+  particleSpeedVar: 4,
+  particleGravity: 0.1,
+  particleDecayBase: 0.01,
+  particleDecayVar: 0.02,
+  particleSizeBase: 3,
+  particleSizeVar: 5,
+  particleHueBase: 10,
+  particleHueRange: 60,
+  
+  // Other
+  nameLengthLimit: 32,
+  velocityBump: 3,
+  draggedGravity: 0.5,
+  danceGravityFactor: -0.2,
+  danceAngularVelocity: 0.1,
+  tiltReturnTime: 1000,
+  danceFrequency: 200,
+  massDivisor: 1000,
+  momentOfInertiaFactor: 0.5,
+  heightScaleSit: 0.75,
+  heightScaleIdle: 1.0,
+  dtCap: 0.05,
+  groundYMultiplier: 0.99,
+  safetyNudgeDistance: 0.5,
+  angularVelocityDecay: 0.98,
+  angleDecay: 0.95,
+  tiltAngularDecay: 0.9,
+  tiltAngleThreshold: 0.01,
+  lifetimeCleanupThreshold: 10,
+  zoneSelectionBias: 0.7,
+  spatialHashCellSize: 64,
+  numZones: 5,
+  avoidanceRadiusMultiplier: 2.0,
+  sizeSimilarityThreshold: 0.85,
+  expandedRadiusMultiplier: 4.0,
+  sizeDiffThresholdLow: 0.7,
+  sizeDiffAttractionMultiplier: 1.5,
+  minAttractionDistance: 20,
+  sizeDiffFactor: 2.0,
+  attractionForceBase: 0.08,
+  largerRepulsionFactor: 0.3,
+  moderateRepulsionRadius: 1.0,
+  moderateRepulsionForce: 0.08,
+  centerPushRadius: 150,
+  centerPushForce: 0.02,
+  groundYCenterOffset: 0.8,
+  directionChangeThreshold: 0.3,
+  resizeDebounceMs: 100
+};
+
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -301,6 +434,30 @@ function deepMerge(target, source){
 }
 function isObject(item){
   return item && typeof item === 'object' && !Array.isArray(item);
+}
+
+// Input validation utilities
+function isValidUsername(username) {
+  if (!username || typeof username !== 'string') return false;
+  if (username.length > 25) return false;
+  // Allow alphanumeric, underscore, and Unicode letters (for international usernames)
+  return /^[\p{L}\p{N}_]+$/u.test(username);
+}
+
+function isValidSkinId(skinId) {
+  if (!skinId || typeof skinId !== 'string') return false;
+  if (skinId.length > 50) return false;
+  // Allow alphanumeric, underscore, hyphen
+  return /^[a-zA-Z0-9_-]+$/.test(skinId);
+}
+
+function validateRequired(body, ...fields) {
+  for (const field of fields) {
+    if (!body[field] || typeof body[field] !== 'string' || body[field].trim() === '') {
+      return { error: `Missing or invalid field: ${field}` };
+    }
+  }
+  return null;
 }
 
 // Reusable function to detect skins from assets folder
@@ -377,8 +534,13 @@ app.get('/env', (req,res) => {
   }
   
   // Return config without skins - skins are fetched separately via /api/skins endpoints
-  // Client (overlay/js/config.js) provides defaults if .env values are missing
-  const mergedCfg = { ...cfg, overlay: cfg.overlay || {} };
+  // Merge overlay config with defaults to provide complete configuration
+  const overlayConfig = { ...DEFAULT_OVERLAY, ...(cfg.overlay || {}) };
+  const mergedCfg = {
+    ...cfg,
+    overlay: overlayConfig,
+    defaultOverlay: DEFAULT_OVERLAY // Also provide defaults explicitly for reference
+  };
   dbg('Returning config (skins excluded, use /api/skins for skin data)');
   res.json(mergedCfg);
 });
@@ -458,10 +620,19 @@ app.post('/api/viewer/updateSkin', (req,res) => {
 app.post('/api/admin/assignSkin', requireAdminAuth, (req,res)=>{
   const {userId, skinId} = req.body;
   dbg('POST /api/admin/assignSkin', { userId, skinId });
-  if(!userId || !skinId) {
-    dbg('Missing userId or skinId');
-    return res.status(400).json({error:'missing userId or skinId'});
+  
+  // Validate userId
+  if (!isValidUsername(userId)) {
+    dbg('Invalid userId:', userId);
+    return res.status(400).json({error: 'Invalid username (max 25 chars, alphanumeric/underscore only)'});
   }
+  
+  // Validate skinId
+  if (!isValidSkinId(skinId)) {
+    dbg('Invalid skinId:', skinId);
+    return res.status(400).json({error: 'Invalid skin ID'});
+  }
+  
   const userLower = userId.toLowerCase();
   try {
     db.prepare('INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,?)')
@@ -667,10 +838,12 @@ app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
 app.post('/api/admin/resetUser', requireAdminAuth, (req,res)=>{
   const {id} = req.body;
   dbg('POST /api/admin/resetUser', { id });
-  if(!id) {
-    dbg('Missing id');
-    return res.status(400).json({error:'missing id'});
+  
+  if (!isValidUsername(id)) {
+    dbg('Invalid id:', id);
+    return res.status(400).json({error: 'Invalid username'});
   }
+  
   try {
     db.prepare('DELETE FROM users WHERE id=?').run(id.toLowerCase());
     dbg('User deleted:', id.toLowerCase());
@@ -711,10 +884,12 @@ app.get('/api/admin/excluded', requireAdminAuth, (req,res)=>{
 app.post('/api/admin/exclude', requireAdminAuth, (req,res)=>{
   const {userId, reason} = req.body;
   dbg('POST /api/admin/exclude', { userId, reason });
-  if(!userId) {
-    dbg('Missing userId');
-    return res.status(400).json({error:'missing userId'});
+  
+  if (!isValidUsername(userId)) {
+    dbg('Invalid userId:', userId);
+    return res.status(400).json({error: 'Invalid username'});
   }
+  
   const userLower = userId.toLowerCase();
   try {
     db.prepare('INSERT OR REPLACE INTO excluded_users (id, reason) VALUES (?,?)')
@@ -731,10 +906,12 @@ app.post('/api/admin/exclude', requireAdminAuth, (req,res)=>{
 app.post('/api/admin/unexclude', requireAdminAuth, (req,res)=>{
   const {userId} = req.body;
   dbg('POST /api/admin/unexclude', { userId });
-  if(!userId) {
-    dbg('Missing userId');
-    return res.status(400).json({error:'missing userId'});
+  
+  if (!isValidUsername(userId)) {
+    dbg('Invalid userId:', userId);
+    return res.status(400).json({error: 'Invalid username'});
   }
+  
   try {
     db.prepare('DELETE FROM excluded_users WHERE id=?').run(userId.toLowerCase());
     dbg('User unexcluded:', userId.toLowerCase());
@@ -749,10 +926,12 @@ app.post('/api/admin/unexclude', requireAdminAuth, (req,res)=>{
 app.post('/api/admin/updateExclusionReason', requireAdminAuth, (req,res)=>{
   const {userId, reason} = req.body;
   dbg('POST /api/admin/updateExclusionReason', { userId, reason });
-  if(!userId) {
-    dbg('Missing userId');
-    return res.status(400).json({error:'missing userId'});
+  
+  if (!isValidUsername(userId)) {
+    dbg('Invalid userId:', userId);
+    return res.status(400).json({error: 'Invalid username'});
   }
+  
   try {
     db.prepare('UPDATE excluded_users SET reason = ? WHERE id = ?')
       .run(reason || '', userId.toLowerCase());
@@ -953,8 +1132,8 @@ function broadcast(obj){
   wss.clients.forEach(c => { if(c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// NAME_LENGTH_LIMIT is still a hardcoded constant (not user-configurable)
-const NAME_LENGTH_LIMIT = 20;
+// Use nameLengthLimit from overlay config (defaults to 32)
+const getNameLengthLimit = () => (cfg.overlay && cfg.overlay.nameLengthLimit) || DEFAULT_OVERLAY.nameLengthLimit || 20;
 
 // In-memory authoritative sprite state (not persisted to disk)
 const serverSprites = new Map();
@@ -1106,7 +1285,7 @@ function processServerCommand(username, text, tags) {
       let nameIndex = 1;
       
       if (args[0] && /^\d+$/.test(args[0])) {
-        quantity = Math.min(MAX_SPAWN_QUANTITY || 10, Math.max(1, parseInt(args[0], 10)));
+        quantity = Math.min(MAX_SPAWN_QUANTITY || 100, Math.max(1, parseInt(args[0], 10)));
         skinIndex = 1;
         nameIndex = 2;
       }
@@ -1116,7 +1295,7 @@ function processServerCommand(username, text, tags) {
       if (!targetName) {
         targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
       } else {
-        targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, NAME_LENGTH_LIMIT || 20);
+        targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, getNameLengthLimit());
       }
       
       for (let i = 0; i < quantity; i++) {

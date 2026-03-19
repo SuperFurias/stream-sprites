@@ -5,11 +5,37 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-03-19
+
+### Added
+- Centralized default overlay configuration on server (`DEFAULT_OVERLAY`) to eliminate duplication
+- Server now provides defaults via `/env` endpoint (`defaultOverlay` field)
+- Improved error handling with consistent user feedback across dashboard
+
+### Changed
+- Refactored configuration management: server is now the single source of truth for overlay defaults
+- Updated dashboard and overlay client to fetch defaults from server instead of hardcoding
+- Improved performance by removing O(n²) safety nudge loop in physics engine
+- Enhanced input validation on all admin endpoints with proper error messages
+- Standardized username validation (max 25 chars, alphanumeric/underscore/Unicode)
+- Standardized skin ID validation (max 50 chars, alphanumeric/underscore/hyphen)
+- Fixed `!spawn` command to use correct max spawn quantity default (100 instead of 10)
+- Made `nameLengthLimit` configurable via overlay settings (previously hardcoded to 20)
+
+### Fixed
+- Fixed configuration drift between server, dashboard, and overlay client
+- Removed performance bottleneck that could cause FPS drops with many sprites
+- Added proper input validation to prevent potential injection attacks
+- Fixed inconsistent default values across codebase
+
+### Documentation
+- Added security model documentation to `server/server.js` explaining local-only design
+- Clarified that admin endpoints have no authentication because the app is intended for localhost use only
+
 ## [1.0.5] - 2026-03-19
 
 ### Changed
 - Completed terminology rename: `avatar`/`avatars` → `sprite`/`sprites` throughout codebase
-- Configuration key `maxAvatars` renamed to `maxSprites` for consistency
 
 ### Fixed
 - Fixed WebSocket `fullState` message parsing to handle undefined sprites array (crash fix)
