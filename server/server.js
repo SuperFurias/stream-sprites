@@ -2,16 +2,18 @@
 //
 // SECURITY MODEL:
 // This application is designed for LOCAL-ONLY use on the same machine as the OBS Studio
-// streaming setup. The admin API endpoints have no authentication because:
+// streaming setup. The admin API endpoints are intentionally left without authentication
+// because:
 // - Server runs on localhost (127.0.0.1) only by default
 // - Dashboard and overlay are intended for the streamer's personal computer
 // - No external network access is expected or required
 //
-// If you need to expose this server to a network, YOU MUST ADD AUTHENTICATION
-// to the admin endpoints before doing so. See requireAdminAuth() function.
+// IMPORTANT: Do NOT expose this server to external networks without adding proper
+// authentication and authorization mechanisms to the admin endpoints.
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const WebSocket = require('ws');
 const tmi = require('tmi.js');
 const Database = require('better-sqlite3');
@@ -408,12 +410,6 @@ db.exec(`CREATE TABLE IF NOT EXISTS excluded_users (
   reason TEXT
 )`);
 
-// Admin auth - no password required (development mode)
-function requireAdminAuth(req,res,next){
-  // All admin endpoints are accessible without authentication
-  next();
-}
-
 // Deep merge utility
 function deepMerge(target, source){
   const output = Object.assign({}, target);
@@ -617,7 +613,7 @@ app.post('/api/viewer/updateSkin', (req,res) => {
 });
 
 // Admin: Assign skin to user
-app.post('/api/admin/assignSkin', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/assignSkin', (req,res)=>{
   const {userId, skinId} = req.body;
   dbg('POST /api/admin/assignSkin', { userId, skinId });
   
@@ -646,7 +642,7 @@ app.post('/api/admin/assignSkin', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: List all users with their assigned skins
-app.get('/api/admin/users', requireAdminAuth, (req,res)=>{
+app.get('/api/admin/users', (req,res)=>{
   dbg('GET /api/admin/users');
   try {
     const rows = db.prepare('SELECT id, display_name, assigned_skin FROM users ORDER BY id LIMIT 100').all();
@@ -659,7 +655,7 @@ app.get('/api/admin/users', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Manually connect to Twitch
-app.post('/api/admin/connectTwitch', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/connectTwitch', (req,res)=>{
   dbg('POST /api/admin/connectTwitch');
   try{
     if(!cfg.twitch.botOAuthToken || cfg.twitch.botOAuthToken === 'oauth:your_bot_oauth_token_here' || cfg.twitch.botOAuthToken.trim() === ''){
@@ -681,7 +677,7 @@ app.post('/api/admin/connectTwitch', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Disconnect Twitch bot
-app.post('/api/admin/disconnectTwitch', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/disconnectTwitch', (req,res)=>{
   dbg('POST /api/admin/disconnectTwitch');
   try{
     if(twitchClient){
@@ -703,7 +699,7 @@ app.post('/api/admin/disconnectTwitch', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Save config
-app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/saveConfig', (req,res)=>{
   try{
     const newCfg = req.body;
     if(!newCfg.twitch?.clientId || !newCfg.twitch?.clientSecret || !newCfg.botUsername || !newCfg.channel){
@@ -746,7 +742,7 @@ app.post('/api/admin/saveConfig', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Apply settings dynamically without restart
-app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/applySettings', (req,res)=>{
   try {
     const settings = req.body;
     // Validate settings structure
@@ -810,7 +806,7 @@ app.post('/api/admin/applySettings', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Clear all sprites (both client and server)
-app.post('/api/admin/clearSprites', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/clearSprites', (req,res)=>{
   dbg('POST /api/admin/clearSprites');
   // Clear server-side in-memory sprites
   clearServerSprites();
@@ -821,7 +817,7 @@ app.post('/api/admin/clearSprites', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Clear all sprites (server-side authoritative) - alias for backward compatibility
-app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/clearSpritesServer', (req,res)=>{
   dbg('POST /api/admin/clearSpritesServer');
   try{
     clearServerSprites();
@@ -835,7 +831,7 @@ app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Delete user skin assignment
-app.post('/api/admin/resetUser', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/resetUser', (req,res)=>{
   const {id} = req.body;
   dbg('POST /api/admin/resetUser', { id });
   
@@ -855,7 +851,7 @@ app.post('/api/admin/resetUser', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Reset all user assignments
-app.post('/api/admin/resetAll', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/resetAll', (req,res)=>{
   dbg('POST /api/admin/resetAll');
   try {
     const result = db.prepare('DELETE FROM users').run();
@@ -868,7 +864,7 @@ app.post('/api/admin/resetAll', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Get excluded users list
-app.get('/api/admin/excluded', requireAdminAuth, (req,res)=>{
+app.get('/api/admin/excluded', (req,res)=>{
   dbg('GET /api/admin/excluded');
   try {
     const rows = db.prepare('SELECT id, reason FROM excluded_users ORDER BY id LIMIT 100').all();
@@ -881,7 +877,7 @@ app.get('/api/admin/excluded', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Add excluded user
-app.post('/api/admin/exclude', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/exclude', (req,res)=>{
   const {userId, reason} = req.body;
   dbg('POST /api/admin/exclude', { userId, reason });
   
@@ -903,7 +899,7 @@ app.post('/api/admin/exclude', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Remove excluded user
-app.post('/api/admin/unexclude', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/unexclude', (req,res)=>{
   const {userId} = req.body;
   dbg('POST /api/admin/unexclude', { userId });
   
@@ -923,7 +919,7 @@ app.post('/api/admin/unexclude', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Update exclusion reason
-app.post('/api/admin/updateExclusionReason', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/updateExclusionReason', (req,res)=>{
   const {userId, reason} = req.body;
   dbg('POST /api/admin/updateExclusionReason', { userId, reason });
   
@@ -944,7 +940,7 @@ app.post('/api/admin/updateExclusionReason', requireAdminAuth, (req,res)=>{
 });
 
 // Stats with custom vs default breakdown
-app.get('/api/stats', requireAdminAuth, (req,res)=>{
+app.get('/api/stats', (req,res)=>{
   dbg('GET /api/stats');
   try {
     const row = db.prepare(`SELECT
@@ -966,7 +962,7 @@ app.get('/api/stats', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Refresh all overlay clients
-app.post('/api/admin/refreshAllOverlays', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/refreshAllOverlays', (req,res)=>{
   dbg('POST /api/admin/refreshAllOverlays');
   try{
     // Broadcast refresh command to all connected WebSocket clients
@@ -981,7 +977,7 @@ app.post('/api/admin/refreshAllOverlays', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Clear all sprites (server-side)
-app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/clearSpritesServer', (req,res)=>{
   dbg('POST /api/admin/clearSpritesServer');
   try{
     clearServerSprites();
@@ -994,7 +990,7 @@ app.post('/api/admin/clearSpritesServer', requireAdminAuth, (req,res)=>{
 });
 
 // Admin: Restart server
-app.post('/api/admin/restartServer', requireAdminAuth, (req,res)=>{
+app.post('/api/admin/restartServer', (req,res)=>{
   try{
     res.json({ok:true, message:'Server restarting...'});
     // Exit immediately - the parent PowerShell script will restart us
@@ -1313,35 +1309,6 @@ function processServerCommand(username, text, tags) {
   }
   
   return { result: response, stateChanged: stateChanged };
-}
-
-// Update server-side sprite state (called when user sends chat message)
-function updateServerSprite(username, tags) {
-  const userId = username.toLowerCase();
-  const skin = getUserSkinFromDB(userId);
-  
-  // For backward compatibility, also check for any existing sprites with this username
-  // to maintain the single-sprite-per-user model for regular chat messages
-  // But for spawned sprites, the client sends the full ID which should be preserved
-  // This function is only called from chat messages, not from spriteUpdate
-  // So we keep the original behavior here.
-  if (serverSprites.has(userId)) {
-    const sprite = serverSprites.get(userId);
-    sprite.lastActivity = Date.now();
-    if (sprite.skin !== skin) {
-      sprite.skin = skin;
-    }
-  } else {
-    serverSprites.set(userId, {
-      id: userId,
-      username: username,
-      skin: skin,
-      createdAt: Date.now(),
-      lastActivity: Date.now()
-    });
-  }
-  
-  broadcastSpriteState();
 }
 
 // Broadcast full sprite state to all connected clients
@@ -1795,10 +1762,27 @@ async function shutdown(signal) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
+// OAuth state management for CSRF protection
+const pendingOAuthStates = new Map();
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Clean up expired OAuth states every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [state, timestamp] of pendingOAuthStates.entries()) {
+    if (now - timestamp > OAUTH_STATE_TTL_MS) {
+      pendingOAuthStates.delete(state);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // OAuth for bot token generation
 app.get('/auth/twitch', (req,res)=>{
   dbg('GET /auth/twitch - redirecting to Twitch OAuth');
-  const state = req.query.state || 'random';
+  // Generate cryptographically secure random state for CSRF protection
+  const state = crypto.randomBytes(16).toString('hex');
+  // Store state temporarily with timestamp
+  pendingOAuthStates.set(state, Date.now());
   // Build OAuth Redirect URL (must match the one configured in Twitch Dev Console)
   const oauthRedirectUrl = `http://localhost:${cfg.serverPort || 8080}/auth/callback`;
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twitch.clientId}&redirect_uri=${encodeURIComponent(oauthRedirectUrl)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
@@ -1812,6 +1796,13 @@ app.get('/auth/callback', async (req,res)=>{
     dbg('Missing code in callback');
     return res.status(400).send('Missing code');
   }
+  // Validate state parameter for CSRF protection
+  if (!state || !pendingOAuthStates.has(state)) {
+    dbg('Invalid or missing state in OAuth callback');
+    return res.status(400).send('Invalid or expired state parameter. Please try again.');
+  }
+  // Remove used state to prevent replay attacks
+  pendingOAuthStates.delete(state);
   try{
     dbg('Exchanging code for token');
     // Build OAuth Redirect URL (must match what Twitch expects)

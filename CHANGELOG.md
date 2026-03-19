@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-03-19
+
+### Changed
+- Removed admin authentication entirely from all admin endpoints (localhost-only design)
+- Updated security model documentation to reflect intentional lack of authentication
+
+### Fixed
+- Fixed OAuth CSRF vulnerability by implementing secure state validation with 10-minute TTL
+- Removed duplicate `updateServerSprite` function definition in server.js
+- Added SRI protection note for external TMI.js script loading
+
 ## [1.0.6] - 2026-03-19
 
 ### Added
