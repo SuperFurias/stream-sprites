@@ -104,9 +104,11 @@ export function setupTmiFallback(cfg, onMessage) {
   const script = document.createElement('script');
   script.src = 'https://cdn.jsdelivr.net/npm/tmi.js@1.8.5/dist/tmi.min.js';
   // SECURITY: Subresource Integrity (SRI) prevents CDN compromise attacks.
-  // Generate hash: openssl dgst -sha384 -binary tmi.min.js | openssl base64 -A
-  // Add the resulting hash below. For now, this is a placeholder.
-  // script.integrity = 'sha384-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // Replace with actual hash
+  // Generate the hash by downloading tmi.min.js and running:
+  //   openssl dgst -sha384 -binary tmi.min.js | openssl base64 -A
+  // Then replace the placeholder below with the actual hash.
+  // IMPORTANT: Do not leave the placeholder in production!
+  script.integrity = 'sha384-PLACEHOLDER_REPLACE_WITH_ACTUAL_HASH'; // TODO: Replace with actual SRI hash
   script.crossOrigin = 'anonymous';
   script.onload = () => {
     dbg('TMI script loaded, connecting...');

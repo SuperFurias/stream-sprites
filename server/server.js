@@ -22,6 +22,39 @@ const cors = require('cors');
 const axios = require('axios');
 const { spawn, exec } = require('child_process');
 
+// Log sanitization utility to prevent sensitive data exposure
+function sanitizeLogMessage(message) {
+  if (typeof message !== 'string') return message;
+  
+  // Mask OAuth tokens (format: oauth:xxxxxxxxx)
+  let sanitized = message.replace(/oauth:[a-zA-Z0-9_]+/g, 'oauth:***REDACTED***');
+  
+  // Mask potential access tokens (long alphanumeric strings)
+  // Common token patterns: 64+ character hex strings
+  sanitized = sanitized.replace(/\b[a-f0-9]{64,}\b/gi, '***TOKEN***');
+  
+  // Mask client secrets if they appear in logs (shouldn't happen but be safe)
+  sanitized = sanitized.replace(/(client_secret|clientSecret|password|token)=([^&\s]+)/gi, '$1=***REDACTED***');
+  
+  return sanitized;
+}
+
+function sanitizeLogArgs(args) {
+  return args.map(arg => {
+    if (typeof arg === 'object' && arg !== null) {
+      const sanitized = { ...arg };
+      // Redact known sensitive fields
+      if (sanitized.botOAuthToken) sanitized.botOAuthToken = '***REDACTED***';
+      if (sanitized.access_token) sanitized.access_token = '***REDACTED***';
+      if (sanitized.refresh_token) sanitized.refresh_token = '***REDACTED***';
+      if (sanitized.clientSecret) sanitized.clientSecret = '***REDACTED***';
+      if (sanitized.password) sanitized.password = '***REDACTED***';
+      return sanitized;
+    }
+    return sanitizeLogMessage(String(arg));
+  });
+}
+
 // File logger setup
 let logStream = null;
 function initFileLogger() {
@@ -106,11 +139,13 @@ class FilteredLogger {
 // Debug utility - respects serverDebug setting and file logging
 function dbg(...args) {
   const timestamp = new Date().toISOString();
-  const message = `[${timestamp}] [SERVER DEBUG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`;
+  // Sanitize arguments before logging to prevent sensitive data exposure
+  const sanitizedArgs = sanitizeLogArgs(args);
+  const message = `[${timestamp}] [SERVER DEBUG] ${sanitizedArgs.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}\n`;
   
   // Always log to console if serverDebug is enabled
   if (cfg.debug?.serverDebug) {
-    console.log('[SERVER DEBUG]', ...args);
+    console.log('[SERVER DEBUG]', ...sanitizedArgs);
   }
   
   // Log to file if enabled
@@ -380,7 +415,10 @@ const DEFAULT_OVERLAY = {
 };
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost', 'http://127.0.0.1'],
+  credentials: true
+}));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '..')));
 app.use('/overlay', express.static(path.join(__dirname, '..', 'overlay')));
@@ -1022,13 +1060,13 @@ app.get('/api/dashboard/isOpen', (req,res)=>{
 // Chat: Bot respond to a user (used by overlay for commands like !skins)
 app.post('/api/chat/respond', (req,res) => {
   const { username, message } = req.body;
-  console.log('[SERVER DEBUG] /api/chat/respond called:', { username, message, twitchState: twitchClient ? twitchClient.readyState() : 'null' });
+  dbg('/api/chat/respond called:', { username, message: message ? message.substring(0, 100) : '' , twitchState: twitchClient ? (twitchClient.readyState ? twitchClient.readyState() : 'null') : 'null' });
   
   // Input validation
-  if(!username || !message || 
+  if(!username || !message ||
      typeof username !== 'string' || typeof message !== 'string' ||
      username.length > 25 || message.length > 500) {
-    console.log('[SERVER DEBUG] Invalid input:', { username, message });
+    dbg('Invalid input:', { username, message: message ? message.substring(0, 100) : '' });
     return res.status(400).json({error: 'Invalid username or message'});
   }
   
@@ -1037,31 +1075,52 @@ app.post('/api/chat/respond', (req,res) => {
   
   try {
     const state = twitchClient && twitchClient.readyState ? twitchClient.readyState() : null;
-    console.log('[SERVER DEBUG] Twitch state:', state);
+    dbg('Twitch state:', state);
     if(twitchClient && state && (state === 1 || state === 'OPEN')) {
       const fullMessage = `@${sanitizedUsername}, ${message}`;
-      console.log('[SERVER DEBUG] Sending to Twitch:', fullMessage);
+      dbg('Sending to Twitch (message preview):', `@${sanitizedUsername}, [message content]`);
       twitchClient.say(cfg.channel, fullMessage).then(() => {
-        console.log('[SERVER DEBUG] Message sent successfully');
+        dbg('Message sent successfully');
         res.json({ok:true});
       }).catch(err => {
-        console.error('[SERVER DEBUG] Failed to send message:', err.message);
+        dbg('Failed to send message:', err.message);
         res.status(500).json({error: err.message});
       });
     } else {
-      console.log('[SERVER DEBUG] Twitch not connected. State:', state);
+      dbg('Twitch not connected. State:', state);
       res.status(400).json({error: 'Twitch not connected'});
     }
   } catch(err) {
-    console.error('[SERVER DEBUG] Exception:', err.message);
+    dbg('Exception in chat respond:', err.message);
     res.status(500).json({error: err.message});
   }
 });
 
-// Error handling
+// Centralized error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  if(!res.headersSent) res.status(500).json({error: 'Internal error'});
+  // Don't leak stack traces in production, but log them for debugging
+  const isDevelopment = cfg.debug?.serverDebug === true;
+  const errorId = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+  
+  console.error(`[Error ${errorId}]`, {
+    message: err.message,
+    stack: isDevelopment ? err.stack : undefined,
+    url: req.url,
+    method: req.method,
+    ip: req.ip || req.connection.remoteAddress
+  });
+  
+  if (!res.headersSent) {
+    const response = {
+      error: 'Internal server error',
+      errorId: errorId
+    };
+    if (isDevelopment) {
+      response.message = err.message;
+      response.stack = err.stack;
+    }
+    res.status(500).json(response);
+  }
 });
 
 // Start server
@@ -1148,6 +1207,9 @@ const serverSpawnTimes = new Map();
 const serverStartTime = Date.now();
 let cleanupIntervalId = null;
 
+// Hard limit safeguard to prevent memory exhaustion
+const MAX_SERVER_SPRITES_HARD_LIMIT = 2000; // Should match or exceed overlay maxSprites config
+
 // Get user's assigned skin from database
 function getUserSkinFromDB(userId) {
   try {
@@ -1200,6 +1262,12 @@ function processServerCommand(username, text, tags) {
       for (let i = 0; i < removeCount; i++) {
         serverSprites.delete(arr[i].id);
       }
+    }
+    
+    // Hard limit safeguard - emergency stop if somehow limit is exceeded
+    if (serverSprites.size >= MAX_SERVER_SPRITES_HARD_LIMIT) {
+      dbg('Hard limit reached, cannot spawn more sprites');
+      return null;
     }
     
     // Create new sprite
@@ -1564,8 +1632,11 @@ async function connectTwitchBot(){
       
       // Track user in database (create if doesn't exist)
       // Use INSERT OR REPLACE with COALESCE to preserve existing skin
-      db.prepare("INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,COALESCE((SELECT assigned_skin FROM users WHERE id=?), 'default'))")
-        .run(username.toLowerCase(), displayName, username.toLowerCase());
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO users (id, display_name, assigned_skin)
+        VALUES (?, ?, COALESCE((SELECT assigned_skin FROM users WHERE id = ?), 'default'))
+      `);
+      stmt.run(username.toLowerCase(), displayName, username.toLowerCase());
       
       // Update server-side sprite state for the chatting user
       updateServerSprite(username, tags);

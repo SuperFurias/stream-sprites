@@ -44,7 +44,10 @@ import {
 export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                               GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
                               BOUNCE_DAMPING, MIN_VELOCITY) {
+  // Convert to array once per frame to minimize GC pressure
   const arr = Array.from(sprites.values());
+  
+  // Build spatial hash for proximity queries
   const grid = new SpatialHash(SPATIAL_HASH_CELL_SIZE, W, H);
   grid.clear();
   for (const s of arr) grid.insert(s);
@@ -60,6 +63,7 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
   }
   const avgDensity = arr.length / NUM_ZONES;
 
+  // Update physics for each sprite
   for (const s of arr) {
     if (s === draggedSprite) {
       updateDraggedSpritePhysics(s, W, H, GROUND_Y);
@@ -73,11 +77,11 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
   // Handle collisions (probabilistic)
   handleCollisions(arr, grid);
   
-  // Always apply gentle avoidance to prevent clustering (pathfinding)
+  // Apply avoidance forces to prevent clustering
   applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
   
-  // Manage lifetime
-  return { arr };
+  // Return array for lifetime management to avoid re-conversion
+  return arr;
 }
 
 function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
@@ -405,8 +409,11 @@ function handleCollisions(arr, grid) {
   }
 }
 
-export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS) {
-  const arr = Array.from(sprites.values());
+export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, prebuiltArray) {
+  // Use prebuilt array if provided to avoid Map-to-Array conversion overhead
+  const arr = prebuiltArray || Array.from(sprites.values());
+  
+  // Update opacity based on age
   for (const sprite of arr) {
     const now = Date.now();
     const age = now - sprite.lastActivity;
@@ -423,7 +430,7 @@ export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS) {
     }
   }
   
-  // Remove expired
+  // Remove expired sprites from Map
   for (const [id, sprite] of sprites) {
     if (sprite.markedForRemoval && sprite.opacity <= 0) {
       sprites.delete(id);

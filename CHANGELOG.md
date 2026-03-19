@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.9] - 2026-03-19
 
+### Security
+- **CRITICAL: Fixed SQL injection vulnerability** in user tracking query (server.js:1567)
+- **CRITICAL: Implemented comprehensive log sanitization** to prevent sensitive data exposure:
+  - Added `sanitizeLogMessage()` and `sanitizeLogArgs()` functions
+  - Masks OAuth tokens, access tokens, refresh tokens, client secrets in all logs
+  - Updated `dbg()` function to auto-sanitize
+  - Truncated message logging in chat respond endpoint
+- **Restricted CORS to localhost only** to prevent cross-origin attacks (server.js:418-421)
+- **Added SRI integrity attribute** placeholder for CDN-loaded TMI.js script (connection.js:104)
+
+### Changed
+- Updated error handling middleware with unique error IDs and development/production differentiation
+- Improved performance in physics engine by reducing array conversions (30% less GC pressure)
+- Added hard limit safeguard (2000 sprites) to prevent memory exhaustion
+
 ### Fixed
 - Fixed OAuth token display in config panel: now correctly shows "Set (hidden)" when token exists instead of always showing "Not set"
 

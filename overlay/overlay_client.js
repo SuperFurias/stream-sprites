@@ -300,12 +300,16 @@ function dbg(...args) {
     // - spriteState sync for sit/unsit state changes
   }
   
-  // Physics update wrapper
+  // Physics update wrapper - reuses array from physics to minimize GC
+  let spriteArrayCache = null;
+  
   function updatePhysicsWrapper(dt) {
-    updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
-                  GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
-                  BOUNCE_DAMPING, MIN_VELOCITY);
-    manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS);
+    // Get array from physics update (already created there)
+    spriteArrayCache = updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
+                      GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
+                      BOUNCE_DAMPING, MIN_VELOCITY);
+    // Pass cached array to lifetime management to avoid re-converting Map to Array
+    manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, spriteArrayCache);
   }
   
   // Explosion particles update wrapper
