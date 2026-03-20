@@ -5,6 +5,20 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2026-03-20
+
+### Added
+- **!fight command**: Users can trigger seal-style fights between two sprites. Both sprites walk towards each other and collide, with the loser flipping upside down for 10 seconds and the winner getting a small bump back.
+- **Size-based layering**: Smaller sprites now always appear in the foreground (on top of larger sprites) for better visual hierarchy.
+
+### Changed
+- Fight animations use the existing roaming AI system for more natural movement instead of jumping.
+- Collision detection is now frame-perfect using the physics spatial hash (no fixed timeouts).
+
+### Fixed
+- Fixed sprite z-index ordering so smaller sprites render on top of larger ones.
+- Fixed syntax error in commands.js.
+
 ## [1.0.9] - 2026-03-19
 
 ### Security
