@@ -76,11 +76,18 @@ export function createAnimatedMediaRenderer() {
             element.dataset.skinFile = skin.file;
             element.alt = `${sprite.username}'s GIF`;
           }
+          // Calculate z-index based on sprite size for proper layering
+          // Smaller sprites should have higher z-index (foreground)
+          // Using baseline 5000 (canvas z-index) with scaling: z = 5000 + (50 - size) * 50
+          // This gives: size 30 -> 6000, size 80 -> 3500
+          const zIndex = Math.round(5000 + (50 - sprite.size) * 50);
+          
           element.style.cssText = `
             position: absolute;
             transform-origin: center center;
             pointer-events: none;
             will-change: transform, opacity;
+            z-index: ${zIndex};
           `;
           container.appendChild(element);
           mediaElements.set(sprite.id, element);
@@ -113,11 +120,14 @@ export function createAnimatedMediaRenderer() {
               element.dataset.skinFile = skin.file;
               element.alt = `${sprite.username}'s GIF`;
             }
+            // Calculate z-index based on sprite size for proper layering
+            const zIndex = Math.round(5000 + (50 - sprite.size) * 50);
             element.style.cssText = `
               position: absolute;
               transform-origin: center center;
               pointer-events: none;
               will-change: transform, opacity;
+              z-index: ${zIndex};
             `;
             container.appendChild(element);
             mediaElements.set(sprite.id, element);

@@ -1,7 +1,9 @@
 // Renderer module
 export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
   ctx.clearRect(0, 0, W, H);
-  const arr = Array.from(sprites.values()).sort((a, b) => a.y - b.y);
+  // Sort by size descending (larger first = background, smaller later = foreground)
+  // Then by Y as secondary factor for consistent ordering among same-sized sprites
+  const arr = Array.from(sprites.values()).sort((a, b) => b.size - a.size || a.y - b.y);
   
   for (const sprite of arr) {
     drawSprite(ctx, sprite, skins, GROUND_Y);

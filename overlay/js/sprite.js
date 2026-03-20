@@ -65,7 +65,8 @@ export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_S
     roamSpeed: 1.0,
     roamTimer: 0,
     roamDuration: 0,
-    facingRight: true
+    facingRight: true,
+    flipUntil: null
   };
 }
 

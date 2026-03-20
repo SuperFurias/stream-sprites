@@ -1,8 +1,8 @@
 
 html,body{height:100%;margin:0;background:transparent;overflow:hidden;font-family:Inter, system-ui, Arial;}
 body.browser-mode{background:#000;}
-canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh;max-width:100%;max-height:100%;}
-#animated-media-container{position:fixed;inset:0;pointer-events:none;z-index:1;overflow:hidden;}
+canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh;max-width:100%;max-height:100%;z-index:5000;}
+#animated-media-container{position:fixed;inset:0;pointer-events:none;overflow:hidden;}
 #animated-media-container img,
 #animated-media-container video{position:absolute;transform-origin:center center;pointer-events:none;will-change:transform,opacity;image-rendering:pixelated;}
 #ui{position:fixed;left:12px;top:12px;z-index:9999;color:#fff;}

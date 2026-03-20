@@ -270,8 +270,28 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
     sprite.angularVelocity *= ANGULAR_VELOCITY_DECAY;
   }
 
-  // Auto-return upright
-  if (sprite.lastTiltTime && sprite.angle !== 0) {
+  // Handle flip effect - animated flip that ends upside-down
+  const now = Date.now();
+  if (sprite.flipUntil) {
+    if (now < sprite.flipUntil) {
+      // During flip duration, we want to eventually settle upside down
+      const timeRemaining = sprite.flipUntil - now;
+      // If we're close to upside-down or time is running out, snap to upside-down and stop spinning
+      const angleDiff = Math.abs(Math.PI - Math.abs(sprite.angle));
+      if (angleDiff < 0.1 || timeRemaining < 200) {
+        sprite.angle = Math.PI;
+        sprite.angularVelocity = 0;
+      }
+      // Otherwise, let the spin continue (already set by command)
+    } else {
+      // Flip duration ended, start returning to upright
+      sprite.flipUntil = null;
+      sprite.lastTiltTime = now - TILT_RETURN_TIME; // Trigger immediate decay
+    }
+  }
+
+  // Auto-return upright (only if not currently flipped)
+  if (!sprite.flipUntil && sprite.lastTiltTime && sprite.angle !== 0) {
     const timeSinceTilt = Date.now() - sprite.lastTiltTime;
     if (timeSinceTilt > TILT_RETURN_TIME) {
       sprite.angle *= ANGLE_DECAY;

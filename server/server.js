@@ -411,7 +411,9 @@ const DEFAULT_OVERLAY = {
   centerPushForce: 0.02,
   groundYCenterOffset: 0.8,
   directionChangeThreshold: 0.3,
-  resizeDebounceMs: 100
+  resizeDebounceMs: 100,
+  flipDurationMs: 5000,
+  fightDurationMs: 10000
 };
 
 const app = express();
@@ -1385,6 +1387,58 @@ function processServerCommand(username, text, tags) {
       response = `Spawned ${quantity} ${targetSkin === 'default' ? 'sprite' : targetSkin + ' sprite'}`;
     } else {
       response = 'Only broadcaster/mods can use !spawn';
+    }
+  } else if (cmd === '!flip') {
+    // !flip [username] - flip a sprite upside down for 5 seconds
+    // If no username provided, flip your own sprite (everyone can do this)
+    // If username provided, requires broadcaster/mod/bot permissions
+    const targetUser = args[0] ? args[0].toLowerCase() : userId;
+    const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
+    const isBot = username === cfg.botUsername;
+    const isMod = tags?.mod === '1' || tags?.badges?.moderator;
+    const canFlipOthers = isBroadcaster || isBot || isMod;
+    
+    if (targetUser !== userId && !canFlipOthers) {
+      response = 'Only broadcaster/mods can flip other users.';
+    } else {
+      // Check if target sprite exists (or will exist)
+      // We'll broadcast the flip command; clients will apply it if they have the sprite
+      const flipDuration = (cfg.overlay && cfg.overlay.flipDurationMs) || 5000;
+      dbg('Flip command:', { username, targetUser, flipDuration });
+      broadcast({ type: 'cmd', cmd: 'flip', username: targetUser, duration: flipDuration });
+      // No chat response for flip (silent command)
+      stateChanged = true; // Flip causes visual change
+    }
+  } else if (cmd === '!fight') {
+    // !fight <username> - two sprites fight, loser flips for 10 seconds
+    // Both participants must have sprites
+    if (!args[0]) {
+      response = 'Usage: !fight <username>';
+    } else {
+      const targetUser = args[0].toLowerCase();
+      if (targetUser === userId) {
+        response = 'You cannot fight yourself.';
+      } else {
+        // Check both sprites exist on server
+        if (!serverSprites.has(userId)) {
+          response = 'You need a sprite to fight. Use !spawn to create one.';
+        } else if (!serverSprites.has(targetUser)) {
+          response = `User '${targetUser}' does not have a sprite.`;
+        } else {
+          // Randomly determine winner and loser (50% chance each)
+          const commandUserWins = Math.random() < 0.5;
+          const winner = commandUserWins ? userId : targetUser;
+          const loser = commandUserWins ? targetUser : userId;
+          const fightDuration = (cfg.overlay && cfg.overlay.fightDurationMs) || 10000;
+          
+          dbg('Fight command:', { challenger: username, target: targetUser, winner, loser, fightDuration });
+          
+          // Apply flip to loser (clients will handle it)
+          broadcast({ type: 'cmd', cmd: 'fight', winner, loser, duration: fightDuration });
+          // No chat response for fight (silent command)
+          stateChanged = true;
+        }
+      }
     }
   }
   

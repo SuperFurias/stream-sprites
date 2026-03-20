@@ -130,7 +130,9 @@ export function getConfigConstants(cfg, overlay) {
     centerPushForce: 0.02,
     groundYCenterOffset: 0.8,
     directionChangeThreshold: 0.3,
-    resizeDebounceMs: 100
+    resizeDebounceMs: 100,
+    flipDurationMs: 5000,
+    fightDurationMs: 10000
   };
   
   // Use server-provided defaults if available, otherwise fallback
@@ -264,7 +266,9 @@ export function getConfigConstants(cfg, overlay) {
     CENTER_PUSH_FORCE: overlayConfig.centerPushForce,
     GROUND_Y_CENTER_OFFSET: overlayConfig.groundYCenterOffset,
     DIRECTION_CHANGE_THRESHOLD: overlayConfig.directionChangeThreshold,
-    RESIZE_DEBOUNCE_MS: overlayConfig.resizeDebounceMs
+    RESIZE_DEBOUNCE_MS: overlayConfig.resizeDebounceMs,
+    FLIP_DURATION_MS: overlayConfig.flipDurationMs,
+    FIGHT_DURATION_MS: overlayConfig.fightDurationMs
   };
 }
 
@@ -305,6 +309,8 @@ export const MAX_SPAWN_QUANTITY = 100;
 export const VELOCITY_BUMP = 3;
 export const NAME_LENGTH_LIMIT = 32;
 export const RESIZE_DEBOUNCE_MS = 100;
+export const FLIP_DURATION_MS = 5000;
+export const FIGHT_DURATION_MS = 10000;
 export const DRAGGED_GRAVITY = 0.5;
 export const EXPLOSION_FORCE_MULTIPLIER = 60;
 export const EXPLOSION_RADIUS_BASE = 400;

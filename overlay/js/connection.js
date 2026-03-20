@@ -167,6 +167,12 @@ export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState) {
     } else if (data.cmd === 'jump') {
       dbg('jump command received from server');
       onCommand('jump', data);
+    } else if (data.cmd === 'flip') {
+      dbg('flip command received from server');
+      onCommand('flip', data);
+    } else if (data.cmd === 'fight') {
+      dbg('fight command received from server');
+      onCommand('fight', data);
     }
   } else if (data.type === 'spriteState' && onSpriteState) {
     dbg('spriteState update received');

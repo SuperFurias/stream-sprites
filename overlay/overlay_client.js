@@ -83,6 +83,8 @@ function dbg(...args) {
   const explosionParticles = [];
   const userSkinCache = createUserSkinCache();
   const animatedMediaRenderer = createAnimatedMediaRenderer();
+  // Track active fights: Set of fight IDs (winnerId_loserId)
+  const activeFights = new Set();
   
   // Initialize window._SA early so connection can be added
   window._SA = {};
@@ -310,6 +312,50 @@ function dbg(...args) {
                       BOUNCE_DAMPING, MIN_VELOCITY);
     // Pass cached array to lifetime management to avoid re-converting Map to Array
     manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, spriteArrayCache);
+    
+    // Check active fights for collision
+    for (const fightId of activeFights) {
+      const [winnerId, loserId] = fightId.split('_');
+      const winnerSprite = sprites.get(winnerId);
+      const loserSprite = sprites.get(loserId);
+      
+      if (!winnerSprite || !loserSprite) {
+        // One of the sprites is gone, end the fight
+        activeFights.delete(fightId);
+        continue;
+      }
+      
+      // Check if they've collided (within combined collision radius)
+      const dx = winnerSprite.x - loserSprite.x;
+      const dy = winnerSprite.y - loserSprite.y;
+      const dist = Math.hypot(dx, dy);
+      const collisionDist = (winnerSprite.collisionRadius || winnerSprite.size/2) + (loserSprite.collisionRadius || loserSprite.size/2);
+      
+      if (dist < collisionDist) {
+        // Collision detected! Trigger fight effects.
+        const midX = (winnerSprite.x + loserSprite.x) / 2;
+        const duration = 10000; // 10 seconds
+        
+        // Explosion effect
+        const collisionRadius = 200 + Math.random() * 100;
+        createExplosionEffect(midX, GROUND_Y, collisionRadius, explosionParticles);
+        
+        // Flip loser
+        loserSprite.flipUntil = Date.now() + duration;
+        loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+        loserSprite.lastTiltTime = null;
+        
+        // Bump winner back
+        const bumpForce = 8;
+        winnerSprite.vx += (Math.random() - 0.5) * bumpForce;
+        winnerSprite.vy -= bumpForce * 0.5;
+        
+        dbg('Fight collision resolved:', { winnerId, loserId });
+        
+        // Remove this fight from active tracking
+        activeFights.delete(fightId);
+      }
+    }
   }
   
   // Explosion particles update wrapper
@@ -406,6 +452,56 @@ function dbg(...args) {
                   dbg('Applied jump velocity to', userId);
                 } else {
                   dbg('Sprite not found for jump:', userId);
+                }
+              }
+            } else if (cmd === 'flip') {
+              dbg('Flip command - flipping sprite upside down');
+              if (data && data.username) {
+                const userId = data.username.toLowerCase();
+                const sprite = sprites.get(userId);
+                if (sprite) {
+                  const duration = data.duration || 5000;
+                  sprite.flipUntil = Date.now() + duration;
+                  // Start with a strong spin for animated flip effect
+                  sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+                  sprite.lastTiltTime = null;
+                  dbg('Applied flip to', userId, 'for', duration, 'ms');
+                } else {
+                  dbg('Sprite not found for flip:', userId);
+                }
+              } else {
+                dbg('Fight command missing required data:', data);
+              }
+            } else if (cmd === 'fight') {
+              dbg('Fight command - animating fight between sprites');
+              if (data && data.loser && data.winner) {
+                const winnerId = data.winner.toLowerCase();
+                const loserId = data.loser.toLowerCase();
+                const winnerSprite = sprites.get(winnerId);
+                const loserSprite = sprites.get(loserId);
+                
+                if (winnerSprite && loserSprite) {
+                  // Set both sprites to walk towards each other using the roaming system
+                  // This creates natural walking behavior with acceleration/deceleration
+                  winnerSprite.roamTargetX = loserSprite.x;
+                  winnerSprite.roamTargetY = GROUND_Y - 50;
+                  winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+                  winnerSprite.roamTimer = 10000; // Long enough to reach target
+                  winnerSprite.state = 'idle';
+                  
+                  loserSprite.roamTargetX = winnerSprite.x;
+                  loserSprite.roamTargetY = GROUND_Y - 50;
+                  loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+                  loserSprite.roamTimer = 10000;
+                  loserSprite.state = 'idle';
+                  
+                  // Track this fight for collision detection
+                  const fightId = `${winnerId}_${loserId}`;
+                  activeFights.add(fightId);
+                  
+                  dbg('Fight started - sprites walking towards each other:', { winnerId, loserId });
+                } else {
+                  dbg('Sprites not found for fight - cannot start fight:', { winnerId, loserId });
                 }
               }
             }
