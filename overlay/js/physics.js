@@ -90,9 +90,14 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
   const centerY = GROUND_Y * GROUND_Y_CENTER_OFFSET; // Slightly above ground
   
   for (const a of arr) {
+    // Skip avoidance forces for fighting sprites
+    if (a.isFighting) continue;
+    
     const near = grid.query(a);
     for (const b of near) {
       if (b === a) continue;
+      // Skip avoidance if either sprite is fighting
+      if (b.isFighting) continue;
       
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -394,6 +399,9 @@ function handleCollisions(arr, grid) {
     for (const b of near) {
       if (b === a) continue;
       if (a.id >= b.id) continue;
+      
+      // Skip collisions if either sprite is in a fight (fighting sprites ignore regular collisions)
+      if (a.isFighting || b.isFighting) continue;
       
       if (Math.random() > collisionProbability) continue;
       

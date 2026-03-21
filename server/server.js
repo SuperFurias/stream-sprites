@@ -413,7 +413,8 @@ const DEFAULT_OVERLAY = {
   directionChangeThreshold: 0.3,
   resizeDebounceMs: 100,
   flipDurationMs: 5000,
-  fightDurationMs: 10000
+  fightDurationMs: 10000,
+  commandCooldownMs: 5000 // 5 seconds cooldown for all commands (exemptions apply)
 };
 
 const app = express();
@@ -1209,6 +1210,9 @@ const serverSpawnTimes = new Map();
 const serverStartTime = Date.now();
 let cleanupIntervalId = null;
 
+// Command cooldown tracking (per user per command)
+const commandCooldowns = new Map();
+
 // Hard limit safeguard to prevent memory exhaustion
 const MAX_SERVER_SPRITES_HARD_LIMIT = 2000; // Should match or exceed overlay maxSprites config
 
@@ -1232,6 +1236,46 @@ function processServerCommand(username, text, tags) {
   const now = Date.now();
   let stateChanged = false;
   let response = null;
+  
+  // Command cooldown check (exemptions: broadcaster, mods, vips, subs, bot)
+  const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
+  if (cooldownMs > 0) {
+    const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
+    const isBot = username === cfg.botUsername;
+    const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
+    const isVip = tags?.badges?.vip;
+    const isSub = tags?.badges?.subscriber;
+    const exempt = isBroadcaster || isBot || isMod || isVip || isSub;
+    
+    if (!exempt) {
+      const cooldownKey = userId + ':' + cmd;
+      const lastUsed = commandCooldowns.get(cooldownKey) || 0;
+      if (now - lastUsed < cooldownMs) {
+        const remaining = Math.ceil((cooldownMs - (now - lastUsed)) / 1000);
+        response = `Please wait ${remaining} seconds before using ${cmd} again.`;
+        return { result: response, stateChanged: false };
+      }
+      // Set cooldown timestamp (will be updated after command execution)
+      commandCooldowns.set(cooldownKey, now);
+    }
+  }
+  
+  // Helper to resolve a username (from command) to the actual sprite ID
+  // Tries direct match first, then matches against stored loginUsername (Twitch login name)
+  function resolveSpriteId(targetUser) {
+    if (serverSprites.has(targetUser)) {
+      console.log('[RESOLVE] Direct match for', targetUser);
+      return targetUser;
+    }
+    for (const sprite of serverSprites.values()) {
+      if (sprite.loginUsername === targetUser) {
+        console.log('[RESOLVE] Found via login:', targetUser, '->', sprite.id);
+        return sprite.id;
+      }
+    }
+    console.log('[RESOLVE] No match for', targetUser);
+    return null;
+  }
   
   // Constants (from overlay config)
   const MAX_SPRITES = (cfg.overlay && cfg.overlay.maxSprites) || 1500;
@@ -1355,7 +1399,7 @@ function processServerCommand(username, text, tags) {
     // Only allow broadcaster, mods, or bot to spawn
     const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
     const isBot = username === cfg.botUsername;
-    const isMod = tags?.mod === '1' || tags?.badges?.moderator;
+    const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
     
     if (isBroadcaster || isBot || isMod) {
       let quantity = 1;
@@ -1369,7 +1413,7 @@ function processServerCommand(username, text, tags) {
       }
       
       const targetSkin = (args[skinIndex] && detectSkinsFromAssets().some(s => s.id === args[skinIndex])) ? args[skinIndex] : 'default';
-      let targetName = args[nameIndex] ? args[nameIndex].trim() : '';
+      let targetName = args[nameIndex] ? args[nameIndex].trim().replace(/^@/, '') : '';
       if (!targetName) {
         targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
       } else {
@@ -1390,54 +1434,59 @@ function processServerCommand(username, text, tags) {
     }
   } else if (cmd === '!flip') {
     // !flip [username] - flip a sprite upside down for 5 seconds
-    // If no username provided, flip your own sprite (everyone can do this)
-    // If username provided, requires broadcaster/mod/bot permissions
-    const targetUser = args[0] ? args[0].toLowerCase() : userId;
-    const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
-    const isBot = username === cfg.botUsername;
-    const isMod = tags?.mod === '1' || tags?.badges?.moderator;
-    const canFlipOthers = isBroadcaster || isBot || isMod;
-    
-    if (targetUser !== userId && !canFlipOthers) {
-      response = 'Only broadcaster/mods can flip other users.';
-    } else {
-      // Check if target sprite exists (or will exist)
-      // We'll broadcast the flip command; clients will apply it if they have the sprite
-      const flipDuration = (cfg.overlay && cfg.overlay.flipDurationMs) || 5000;
-      dbg('Flip command:', { username, targetUser, flipDuration });
-      broadcast({ type: 'cmd', cmd: 'flip', username: targetUser, duration: flipDuration });
-      // No chat response for flip (silent command)
-      stateChanged = true; // Flip causes visual change
+    // If no username provided, flip your own sprite
+    // Any user can flip any other user (no permission restrictions)
+    let targetUser = args[0] ? args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_') : userId;
+    // Resolve alias (e.g., login name vs display name) if not self
+    if (targetUser !== userId) {
+      const resolvedId = resolveSpriteId(targetUser);
+      if (resolvedId) {
+        targetUser = resolvedId;
+      }
+      // If not found, will broadcast with non-existent ID (no effect)
     }
+    const flipDuration = (cfg.overlay && cfg.overlay.flipDurationMs) || 5000;
+    dbg('Flip command:', { username, targetUser, flipDuration });
+    broadcast({ type: 'cmd', cmd: 'flip', username: targetUser, duration: flipDuration });
+    // No chat response for flip (silent command)
+    stateChanged = true; // Flip causes visual change
   } else if (cmd === '!fight') {
     // !fight <username> - two sprites fight, loser flips for 10 seconds
     // Both participants must have sprites
     if (!args[0]) {
       response = 'Usage: !fight <username>';
     } else {
-      const targetUser = args[0].toLowerCase();
-      if (targetUser === userId) {
+      const targetUserArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
+      console.log('[FIGHT] Target arg:', targetUserArg, 'by', username);
+      // Resolve to actual sprite ID (handles login vs display name differences)
+      const targetId = resolveSpriteId(targetUserArg);
+      console.log('[FIGHT] Resolved targetId:', targetId);
+      if (!targetId) {
+        response = `User '${targetUserArg}' does not have a sprite.`;
+      } else if (targetId === userId) {
         response = 'You cannot fight yourself.';
+      } else if (!serverSprites.has(userId)) {
+        response = 'You need a sprite to fight. Use !spawn to create one.';
       } else {
-        // Check both sprites exist on server
-        if (!serverSprites.has(userId)) {
-          response = 'You need a sprite to fight. Use !spawn to create one.';
-        } else if (!serverSprites.has(targetUser)) {
-          response = `User '${targetUser}' does not have a sprite.`;
-        } else {
-          // Randomly determine winner and loser (50% chance each)
-          const commandUserWins = Math.random() < 0.5;
-          const winner = commandUserWins ? userId : targetUser;
-          const loser = commandUserWins ? targetUser : userId;
-          const fightDuration = (cfg.overlay && cfg.overlay.fightDurationMs) || 10000;
-          
-          dbg('Fight command:', { challenger: username, target: targetUser, winner, loser, fightDuration });
-          
-          // Apply flip to loser (clients will handle it)
-          broadcast({ type: 'cmd', cmd: 'fight', winner, loser, duration: fightDuration });
-          // No chat response for fight (silent command)
-          stateChanged = true;
-        }
+        // Randomly determine winner and loser (50% chance each)
+        const commandUserWins = Math.random() < 0.5;
+        const winner = commandUserWins ? userId : targetId;
+        const loser = commandUserWins ? targetId : userId;
+        const fightDuration = (cfg.overlay && cfg.overlay.fightDurationMs) || 10000;
+        
+        dbg('Fight command:', { challenger: username, target: targetUserArg, resolvedTarget: targetId, winner, loser, fightDuration });
+        console.log('[FIGHT] Broadcasting fight:', { winner, loser, duration: fightDuration });
+        
+        // Update server-side sprite state to 'idle' to ensure clients don't override with stale state
+        const winnerSprite = serverSprites.get(winner);
+        const loserSprite = serverSprites.get(loser);
+        if (winnerSprite) winnerSprite.state = 'idle';
+        if (loserSprite) loserSprite.state = 'idle';
+        
+        // Apply flip to loser (clients will handle it)
+        broadcast({ type: 'cmd', cmd: 'fight', winner, loser, duration: fightDuration });
+        // No chat response for fight (silent command)
+        stateChanged = true;
       }
     }
   }
@@ -1655,7 +1704,7 @@ async function connectTwitchBot(){
   const messagesLogLevel = cfg.debug?.verboseMessages ? 'debug' : 'warn';
   
   const opts = {
-    options:{debug: twitchDebug, messagesLogLevel: messagesLogLevel},
+    options:{debug: twitchDebug, messagesLogLevel: messagesLogLevel, tags: true},
     connection:{secure:true, reconnect:false},
     channels: [cfg.channel],
     identity: { username: cfg.botUsername, password: cfg.twitch.botOAuthToken }
@@ -1831,6 +1880,7 @@ async function connectTwitchBot(){
 function updateServerSprite(username, tags) {
   const userId = username.toLowerCase();
   const skin = getUserSkinFromDB(userId);
+  const loginUsername = tags && tags['username'] ? tags['username'].toLowerCase() : null;
   
   // Check if sprite already exists
   if (serverSprites.has(userId)) {
@@ -1840,6 +1890,11 @@ function updateServerSprite(username, tags) {
     // Update skin if changed
     if (sprite.skin !== skin) {
       sprite.skin = skin;
+    }
+    // Update loginUsername if available
+    if (loginUsername !== null) {
+      sprite.loginUsername = loginUsername;
+      console.log('[UPDATE] Set loginUsername for', userId, ':', loginUsername);
     }
     // State is preserved from previous interactions (e.g., sit command)
   } else {
@@ -1851,10 +1906,14 @@ function updateServerSprite(username, tags) {
       skin: skin,
       state: 'idle',
       createdAt: Date.now(),
-      lastActivity: Date.now()
+      lastActivity: Date.now(),
+      loginUsername: loginUsername
       // Note: x, y, vx, vy, etc. are managed by client physics
       // Server only tracks existence and skin assignment
     });
+    if (loginUsername !== null) {
+      console.log('[UPDATE] Created sprite with loginUsername:', userId, ':', loginUsername);
+    }
   }
   
   // Broadcast updated sprite state to all clients

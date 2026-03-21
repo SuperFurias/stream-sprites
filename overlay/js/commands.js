@@ -120,7 +120,7 @@ function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSpr
   
   const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
   const isBot = username === cfg.botUsername;
-  const isMod = tags?.mod === '1' || tags?.badges?.moderator;
+  const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
   
   if (DEBUG) console.log('Permission check:', { isBroadcaster, isBot, isMod, badges: tags?.badges, mod: tags?.mod });
   
@@ -136,7 +136,7 @@ function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSpr
     }
     
     const targetSkin = (args[skinIndex] && skins.has(args[skinIndex])) ? args[skinIndex] : 'default';
-    let targetName = args[nameIndex] ? args[nameIndex].trim() : '';
+    let targetName = args[nameIndex] ? args[nameIndex].trim().replace(/^@/, '') : '';
     if (!targetName) {
       targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
     } else {
@@ -175,22 +175,14 @@ function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSpr
 }
 
 function handleFlipCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
-  const targetUsername = args[0] ? args[0].toLowerCase() : username.toLowerCase();
-  const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg?.channel || '').toLowerCase();
-  const isBot = username === cfg?.botUsername;
-  const isMod = tags?.mod === '1' || tags?.badges?.moderator;
-  const canFlipOthers = isBroadcaster || isBot || isMod;
+  const targetUsername = args[0] ? args[0].toLowerCase().replace(/^@/, '') : username.toLowerCase();
   
   let targetSprite;
   if (targetUsername === username.toLowerCase()) {
     // Flipping yourself - always allowed
     targetSprite = sprites.get(username.toLowerCase()) || spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSprite, W, GROUND_Y, ctx, userSkinCache);
   } else {
-    // Flipping someone else - requires permissions
-    if (!canFlipOthers) {
-      dbg('Flip denied: insufficient permissions for user', username);
-      return `Only broadcaster/mods can flip other users.`;
-    }
+    // Flipping someone else - allowed for everyone (no permission restrictions)
     targetSprite = sprites.get(targetUsername);
     if (!targetSprite) {
       dbg('Flip failed: target sprite not found for', targetUsername);
@@ -209,7 +201,7 @@ function handleFlipCommand(username, args, tags, cfg, sprites, spawn, createSpri
 }
 
 function handleFightCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
-  const targetUsername = args[0] ? args[0].toLowerCase() : null;
+  const targetUsername = args[0] ? args[0].toLowerCase().replace(/^@/, '') : null;
   if (!targetUsername) {
     return 'Usage: !fight <username>';
   }

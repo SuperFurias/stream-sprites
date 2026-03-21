@@ -113,7 +113,7 @@ export function setupTmiFallback(cfg, onMessage) {
   script.onload = () => {
     dbg('TMI script loaded, connecting...');
     const opts = {
-      options: { debug: false },
+      options: { debug: false, tags: true },
       connection: { reconnect: true, secure: true },
       channels: [cfg.channel]
     };

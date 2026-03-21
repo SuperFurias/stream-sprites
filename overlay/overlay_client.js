@@ -85,6 +85,9 @@ function dbg(...args) {
   const animatedMediaRenderer = createAnimatedMediaRenderer();
   // Track active fights: Set of fight IDs (winnerId_loserId)
   const activeFights = new Set();
+  // Command cooldown tracking (per user per command) for local mode
+  const commandCooldowns = new Map();
+  
   
   // Initialize window._SA early so connection can be added
   window._SA = {};
@@ -242,6 +245,47 @@ function dbg(...args) {
       return;
     }
     console.log('[DEBUG] handleUserCommand:', { username, text });
+    
+    // Cooldown check for local mode (exemptions: broadcaster, mods, vips, subs)
+    const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
+    if (cooldownMs > 0) {
+      const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
+      const isBot = username === cfg.botUsername;
+      const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
+      const isVip = tags?.badges?.vip;
+      const isSub = tags?.badges?.subscriber;
+      const exempt = isBroadcaster || isBot || isMod || isVip || isSub;
+      
+      if (!exempt) {
+        const userId = username.toLowerCase();
+        const cmd = text.trim().split(' ')[0].toLowerCase();
+        const cooldownKey = userId + ':' + cmd;
+        const now = Date.now();
+        const lastUsed = commandCooldowns.get(cooldownKey) || 0;
+        if (now - lastUsed < cooldownMs) {
+          const remaining = Math.ceil((cooldownMs - (now - lastUsed)) / 1000);
+          const response = `Please wait ${remaining} seconds before using ${cmd} again.`;
+          // Send cooldown response
+          try {
+            const res = await fetch('/api/chat/respond', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, message: response })
+            });
+            if (!res.ok) {
+              const err = await res.text();
+              console.error('[DEBUG] Failed to send cooldown response:', res.status, err);
+            }
+          } catch (err) {
+            console.error('[DEBUG] Failed to send cooldown response:', err);
+          }
+          return; // Skip command execution
+        }
+        // Set cooldown timestamp before executing command
+        commandCooldowns.set(cooldownKey, now);
+      }
+    }
+    
     const response = handleCommand(username, text, tags, cfg, sprites, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
                   spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createSpriteWithContext, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdateToServer, DEBUG);
     
@@ -315,12 +359,15 @@ function dbg(...args) {
     
     // Check active fights for collision
     for (const fightId of activeFights) {
-      const [winnerId, loserId] = fightId.split('_');
+      const [winnerId, loserId] = fightId.split('|');
       const winnerSprite = sprites.get(winnerId);
       const loserSprite = sprites.get(loserId);
       
       if (!winnerSprite || !loserSprite) {
         // One of the sprites is gone, end the fight
+        // Clear isFighting flag on any remaining sprite
+        if (winnerSprite) winnerSprite.isFighting = false;
+        if (loserSprite) loserSprite.isFighting = false;
         activeFights.delete(fightId);
         continue;
       }
@@ -349,6 +396,10 @@ function dbg(...args) {
         const bumpForce = 8;
         winnerSprite.vx += (Math.random() - 0.5) * bumpForce;
         winnerSprite.vy -= bumpForce * 0.5;
+        
+        // Clear fighting flags - fight is over
+        winnerSprite.isFighting = false;
+        loserSprite.isFighting = false;
         
         dbg('Fight collision resolved:', { winnerId, loserId });
         
@@ -402,6 +453,7 @@ function dbg(...args) {
             }
           },
           (cmd) => {
+            console.log('[OVERLAY] Command received from server:', cmd);
             dbg('Command received:', cmd);
             if (cmd === 'clearSprites') {
               dbg('Clearing all sprites');
@@ -473,36 +525,41 @@ function dbg(...args) {
                 dbg('Fight command missing required data:', data);
               }
             } else if (cmd === 'fight') {
+              console.log('[FIGHT] Raw data received:', data);
               dbg('Fight command - animating fight between sprites');
               if (data && data.loser && data.winner) {
                 const winnerId = data.winner.toLowerCase();
                 const loserId = data.loser.toLowerCase();
+                // Only log fight-specific info to avoid spam
+                console.log('[FIGHT] Received:', { winnerId, loserId, spriteCount: sprites.size, spriteIds: Array.from(sprites.keys()) });
                 const winnerSprite = sprites.get(winnerId);
                 const loserSprite = sprites.get(loserId);
                 
                 if (winnerSprite && loserSprite) {
                   // Set both sprites to walk towards each other using the roaming system
-                  // This creates natural walking behavior with acceleration/deceleration
                   winnerSprite.roamTargetX = loserSprite.x;
                   winnerSprite.roamTargetY = GROUND_Y - 50;
                   winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
-                  winnerSprite.roamTimer = 10000; // Long enough to reach target
+                  winnerSprite.roamTimer = 10000;
                   winnerSprite.state = 'idle';
+                  winnerSprite.isFighting = true;
                   
                   loserSprite.roamTargetX = winnerSprite.x;
                   loserSprite.roamTargetY = GROUND_Y - 50;
                   loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
                   loserSprite.roamTimer = 10000;
                   loserSprite.state = 'idle';
+                  loserSprite.isFighting = true;
                   
-                  // Track this fight for collision detection
-                  const fightId = `${winnerId}_${loserId}`;
+                  const fightId = `${winnerId}|${loserId}`;
                   activeFights.add(fightId);
                   
-                  dbg('Fight started - sprites walking towards each other:', { winnerId, loserId });
+                  console.log('[FIGHT] Started fight:', { winnerId, loserId });
                 } else {
-                  dbg('Sprites not found for fight - cannot start fight:', { winnerId, loserId });
+                  console.log('[FIGHT] Sprites not found:', { winnerId, loserId, winnerFound: !!winnerSprite, loserFound: !!loserSprite });
                 }
+              } else {
+                console.log('[FIGHT] Invalid or missing data:', data);
               }
             }
           },

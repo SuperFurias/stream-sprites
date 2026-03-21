@@ -1,0 +1,11 @@
+{
+  "!jump": "Make your sprite jump",
+  "!sit": "Make your sprite sit down",
+  "!unsit": "Make your sprite stand up",
+  "!boom": "Create an explosion",
+  "!skin": "Change your sprite skin (!skin [skinname])",
+  "!skins": "List available skins",
+  "!spawn": "Spawn a new sprite (mods/broadcaster only)",
+  "!flip": "Flip your sprite or someone else sprite upside down (!flip [username])",
+  "!fight": "Fight another sprite - loser gets flipped for 10 seconds (!fight [username])"
+}

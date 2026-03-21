@@ -5,6 +5,22 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] - 2026-03-21
+
+### Added
+- Command cooldown system (5 seconds default, exemptions for broadcaster, moderators, VIPs, subscribers, and bot).
+- Dynamic command loading in dashboard help tab (commands loaded from commands.json).
+
+### Changed
+- **!flip command**: Now any user can flip any other user's sprite (no permission restrictions). Added proper username resolution to handle login vs display name differences.
+- **!fight command**: Improved target resolution with `resolveSpriteId` to handle login vs display name differences. Added better error messages. Server now updates sprite state before broadcasting.
+- Mod detection now includes `global_mod` and `admin` badges for more comprehensive permission handling.
+- Enhanced debug logging for fight and flip commands to aid troubleshooting.
+
+### Fixed
+- Fixed !fight command failing when usernames contain underscores by changing fight ID delimiter from underscore to pipe character (`|`).
+- Fixed potential issues with fight ID parsing and collision detection.
+
 ## [1.0.10] - 2026-03-20
 
 ### Added
