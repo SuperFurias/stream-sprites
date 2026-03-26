@@ -184,13 +184,15 @@ Enable in Settings tab:
 | `!boom` | Triggers explosion affecting all sprites | All viewers |
 | `!skin <id>` | Changes your sprite's skin (must be available) | All viewers |
 | `!skins` | Lists all available skin IDs | All viewers |
-| `!spawn [qty] [skin] [user]` | Spawns sprites (additive) | Broadcaster/Mods |
+| `!spawn [qty] [skin] [user]` | Spawns sprites (additive). Arguments can be in any order. | Broadcaster/Mods |
 
 **Examples:**
-- `!spawn` – Spawns 1 of your default skin
-- `!spawn 5` – Spawns 5 of your default skin
+- `!spawn` – Spawns 1 random sprite
+- `!spawn Yae_Kibo` – Spawns 1 default skin sprite named Yae_Kibo
+- `!spawn 5` – Spawns 5 default skin sprites
 - `!spawn 3 custom_skin` – Spawns 3 with specified skin
-- `!spawn 2 custom_skin username` – Spawns 2 as another user (mod only)
+- `!spawn 2 custom_skin username` – Spawns 2 as another user
+- `!spawn custom_skin 5 username` – Arguments in any order work
 
 ### Skin Management
 

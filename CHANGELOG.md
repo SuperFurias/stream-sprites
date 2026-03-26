@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.12] - 2026-03-26
+
+### Added
+- **!spawn flexible argument parsing**: Arguments can now be in any order. Auto-detects quantity (number), skin (known skin ID), and username (first unrecognized arg). Examples: `!spawn Yae_Kibo`, `!spawn default Yae_Kibo`, `!spawn Yae_Kibo 3`, `!spawn default 1`.
+
+### Changed
+- **!fight loser exhaustion**: Fight loser now stops moving entirely while flipped (exhausted). Velocity is zeroed on fight resolution and physics freezes the sprite until the flip duration expires, then normal movement resumes. Normal `!flip` commands are unaffected.
+
+### Fixed
+- Fixed flip animation not rendering for fight losers due to angle accumulation being skipped by the exhausted early return in physics engine.
+
 ## [1.0.11] - 2026-03-21
 
 ### Added

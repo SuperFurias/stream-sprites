@@ -215,6 +215,49 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
                              zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
   sprite.vy += GRAVITY;
 
+  const now = Date.now();
+
+  // Handle flip effect - always runs so angle updates even for exhausted sprites
+  if (sprite.flipUntil) {
+    if (now < sprite.flipUntil) {
+      const timeRemaining = sprite.flipUntil - now;
+      const angleDiff = Math.abs(Math.PI - Math.abs(sprite.angle));
+      if (angleDiff < 0.1 || timeRemaining < 200) {
+        sprite.angle = Math.PI;
+        sprite.angularVelocity = 0;
+      }
+    } else {
+      sprite.flipUntil = null;
+      sprite.isExhausted = false;
+      sprite.lastTiltTime = now - TILT_RETURN_TIME;
+    }
+  }
+
+  // Apply angular velocity so flip spin works even for exhausted sprites
+  if (sprite.state === 'dance') {
+    sprite.angularVelocity = (Math.random() - 0.5) * DANCE_ANGULAR_VELOCITY;
+  } else {
+    sprite.angularVelocity *= ANGULAR_VELOCITY_DECAY;
+  }
+  sprite.angle += sprite.angularVelocity;
+
+  // Exhausted sprite (lost a fight) - freeze movement, skip all other physics
+  if (sprite.isExhausted && sprite.flipUntil && now < sprite.flipUntil) {
+    sprite.vx = 0;
+    if (sprite.y >= GROUND_Y - (sprite.collisionRadius || sprite.size / 2) - 1) {
+      sprite.vy = 0;
+      sprite.y = GROUND_Y - (sprite.collisionRadius || sprite.size / 2);
+    }
+    const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + 4);
+    if (sprite.x < leftRightRadius) sprite.x = leftRightRadius;
+    if (sprite.x > W - leftRightRadius) sprite.x = W - leftRightRadius;
+    if (sprite.y < (sprite.collisionRadius || sprite.size / 2)) {
+      sprite.y = (sprite.collisionRadius || sprite.size / 2);
+      if (sprite.vy < 0) sprite.vy = 0;
+    }
+    return;
+  }
+
   // Air resistance
   const speedSq = sprite.vx * sprite.vx + sprite.vy * sprite.vy;
   const dragFactor = 1 - (speedSq * 0.0001);
@@ -267,32 +310,9 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
   updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,
                         zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
 
-  // Dance animation
+  // Dance animation (vy only; angular velocity already handled above)
   if (sprite.state === 'dance') {
     sprite.vy += Math.sin((Date.now() + sprite.wiggle) / DANCE_FREQUENCY) * DANCE_GRAVITY_FACTOR;
-    sprite.angularVelocity = (Math.random() - 0.5) * DANCE_ANGULAR_VELOCITY;
-  } else {
-    sprite.angularVelocity *= ANGULAR_VELOCITY_DECAY;
-  }
-
-  // Handle flip effect - animated flip that ends upside-down
-  const now = Date.now();
-  if (sprite.flipUntil) {
-    if (now < sprite.flipUntil) {
-      // During flip duration, we want to eventually settle upside down
-      const timeRemaining = sprite.flipUntil - now;
-      // If we're close to upside-down or time is running out, snap to upside-down and stop spinning
-      const angleDiff = Math.abs(Math.PI - Math.abs(sprite.angle));
-      if (angleDiff < 0.1 || timeRemaining < 200) {
-        sprite.angle = Math.PI;
-        sprite.angularVelocity = 0;
-      }
-      // Otherwise, let the spin continue (already set by command)
-    } else {
-      // Flip duration ended, start returning to upright
-      sprite.flipUntil = null;
-      sprite.lastTiltTime = now - TILT_RETURN_TIME; // Trigger immediate decay
-    }
   }
 
   // Auto-return upright (only if not currently flipped)
@@ -307,8 +327,6 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
       }
     }
   }
-
-  sprite.angle += sprite.angularVelocity;
 }
 
 function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,

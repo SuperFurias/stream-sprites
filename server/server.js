@@ -1403,17 +1403,20 @@ function processServerCommand(username, text, tags) {
     
     if (isBroadcaster || isBot || isMod) {
       let quantity = 1;
-      let skinIndex = 0;
-      let nameIndex = 1;
-      
-      if (args[0] && /^\d+$/.test(args[0])) {
-        quantity = Math.min(MAX_SPAWN_QUANTITY || 100, Math.max(1, parseInt(args[0], 10)));
-        skinIndex = 1;
-        nameIndex = 2;
+      let targetSkin = 'default';
+      let targetName = '';
+
+      const allSkinIds = detectSkinsFromAssets().map(s => s.id);
+      for (const arg of args) {
+        if (/^\d+$/.test(arg)) {
+          quantity = Math.min(MAX_SPAWN_QUANTITY || 100, Math.max(1, parseInt(arg, 10)));
+        } else if (allSkinIds.includes(arg)) {
+          targetSkin = arg;
+        } else if (!targetName) {
+          targetName = arg.trim().replace(/^@/, '');
+        }
       }
-      
-      const targetSkin = (args[skinIndex] && detectSkinsFromAssets().some(s => s.id === args[skinIndex])) ? args[skinIndex] : 'default';
-      let targetName = args[nameIndex] ? args[nameIndex].trim().replace(/^@/, '') : '';
+
       if (!targetName) {
         targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
       } else {

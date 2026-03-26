@@ -5,7 +5,7 @@
   "!boom": "Create an explosion",
   "!skin": "Change your sprite skin (!skin [skinname])",
   "!skins": "List available skins",
-  "!spawn": "Spawn a new sprite (mods/broadcaster only)",
+  "!spawn": "Spawn sprites - flexible args: [qty] [skin] [user] in any order (mods/broadcaster only)",
   "!flip": "Flip your sprite or someone else sprite upside down (!flip [username])",
   "!fight": "Fight another sprite - loser gets flipped for 10 seconds (!fight [username])"
 }

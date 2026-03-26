@@ -391,6 +391,10 @@ function dbg(...args) {
         loserSprite.flipUntil = Date.now() + duration;
         loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
         loserSprite.lastTiltTime = null;
+        // Stop the loser's movement (exhausted from fight)
+        loserSprite.vx = 0;
+        loserSprite.vy = 0;
+        loserSprite.isExhausted = true;
         
         // Bump winner back
         const bumpForce = 8;

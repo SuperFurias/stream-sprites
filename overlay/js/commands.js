@@ -75,7 +75,7 @@ const commandDescriptions = {
   '!boom': 'Create an explosion',
   '!skin': 'Change your sprite skin (!skin <skinname>)',
   '!skins': 'List available skins',
-  '!spawn': 'Spawn a new sprite (mods/broadcaster only)',
+  '!spawn': 'Spawn sprites - [qty] [skin] [user] in any order (mods/broadcaster only)',
   '!flip': 'Flip your sprite upside down (!flip [username] for others)',
   '!fight': 'Fight another sprite - loser flips for 10 seconds (!fight <username>)'
 };
@@ -126,17 +126,19 @@ function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSpr
   
   if (isBroadcaster || isBot || isMod) {
     let quantity = 1;
-    let skinIndex = 0;
-    let nameIndex = 1;
-    
-    if (args[0] && /^\d+$/.test(args[0])) {
-      quantity = Math.min(MAX_SPAWN_QUANTITY, Math.max(1, parseInt(args[0], 10)));
-      skinIndex = 1;
-      nameIndex = 2;
+    let targetSkin = 'default';
+    let targetName = '';
+
+    for (const arg of args) {
+      if (/^\d+$/.test(arg)) {
+        quantity = Math.min(MAX_SPAWN_QUANTITY, Math.max(1, parseInt(arg, 10)));
+      } else if (skins.has(arg)) {
+        targetSkin = arg;
+      } else if (!targetName) {
+        targetName = arg.trim().replace(/^@/, '');
+      }
     }
-    
-    const targetSkin = (args[skinIndex] && skins.has(args[skinIndex])) ? args[skinIndex] : 'default';
-    let targetName = args[nameIndex] ? args[nameIndex].trim().replace(/^@/, '') : '';
+
     if (!targetName) {
       targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
     } else {
@@ -229,6 +231,10 @@ function handleFightCommand(username, args, tags, cfg, sprites, spawn, createSpr
   loserSprite.flipUntil = now + duration;
   loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
   loserSprite.lastTiltTime = null;
+  // Stop the loser's movement (exhausted from fight)
+  loserSprite.vx = 0;
+  loserSprite.vy = 0;
+  loserSprite.isExhausted = true;
   dbg('Fight result:', { winner: commandUserWins ? commandUserId : targetUsername, loser, duration });
   // No chat response (silent command)
 }
