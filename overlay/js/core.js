@@ -28,6 +28,7 @@ export class SpatialHash {
     this.cols = Math.ceil(width / cellSize);
     this.rows = Math.ceil(height / cellSize);
     this.buckets = new Map();
+    this._querySet = new Set(); // Reusable set to avoid allocation per query
   }
 
   _key(cx, cy) { return cx + ',' + cy; }
@@ -47,8 +48,9 @@ export class SpatialHash {
     }
   }
 
-  query(obj) {
-    const results = new Set();
+  query(obj, excludeSelf) {
+    const results = this._querySet;
+    results.clear();
     const radius = obj.collisionRadius || obj.size / 2;
     const minx = Math.floor((obj.x - radius) / this.cellSize);
     const maxx = Math.floor((obj.x + radius) / this.cellSize);
@@ -58,10 +60,15 @@ export class SpatialHash {
       for (let j = miny; j <= maxy; j++) {
         const k = this._key(i, j);
         const arr = this.buckets.get(k);
-        if (arr) arr.forEach(o => results.add(o));
+        if (arr) {
+          for (let n = 0; n < arr.length; n++) {
+            const o = arr[n];
+            if (o !== excludeSelf) results.add(o);
+          }
+        }
       }
     }
-    return Array.from(results);
+    return results;
   }
 
   clear() { this.buckets.clear(); }

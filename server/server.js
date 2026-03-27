@@ -522,6 +522,28 @@ app.use(cors({
   credentials: true
 }));
 app.use(bodyParser.json());
+
+// Lightweight rate limiter for API protection (no external dependency)
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 1000; // 1 second window
+const RATE_LIMIT_MAX_REQUESTS = 100; // max requests per window per IP
+function rateLimiter(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  let entry = rateLimitMap.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry = { windowStart: now, count: 1 };
+    rateLimitMap.set(ip, entry);
+  } else {
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX_REQUESTS) {
+      return res.status(429).json({ error: 'Too many requests. Please slow down.' });
+    }
+  }
+  next();
+}
+app.use('/api/', rateLimiter);
+
 app.use(express.static(path.join(__dirname, '..')));
 app.use('/overlay', express.static(path.join(__dirname, '..', 'overlay')));
 
@@ -537,6 +559,7 @@ const dbDir = path.join(__dirname, 'db');
 if(!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 const dbFile = path.join(dbDir, 'sa.db');
 const db = new Database(dbFile);
+db.pragma('journal_mode = WAL'); // Enable WAL mode for better concurrent read/write performance
 console.log('✓ Database connected');
 
 // Initialize tables
@@ -675,7 +698,7 @@ app.get('/api/skins/auto', (req,res) => {
 
 let envCache = null;
 let envCacheTime = 0;
-const ENV_CACHE_TTL_MS = 2000; // Cache for 2 seconds
+const ENV_CACHE_TTL_MS = 10000; // Cache for 10 seconds
 
 app.get('/env', (req,res) => {
   dbg('GET /env');
@@ -707,15 +730,14 @@ app.get('/env', (req,res) => {
     defaultOverlay: DEFAULT_OVERLAY // Also provide defaults explicitly for reference
   };
   
-  // Filter only the OAuth token (most sensitive)
-  // clientSecret is needed for OAuth flow and is kept (app is local-only)
+  // Filter sensitive tokens from client response
   const safeCfg = JSON.parse(JSON.stringify(mergedCfg)); // Deep clone
   if (safeCfg.twitch) {
     // Store whether token exists without exposing the actual token
     safeCfg.hasOAuthToken = !!(cfg.twitch?.botOAuthToken && cfg.twitch.botOAuthToken.trim() !== '');
     safeCfg.twitch.botOAuthToken = undefined; // Never expose OAuth token to client
     safeCfg.twitch.refreshToken = undefined; // Never expose refresh token to client
-    // Note: clientSecret is included as it's needed for OAuth and app is local-only
+    safeCfg.twitch.clientSecret = undefined; // Never expose client secret to client (server handles OAuth)
   }
   
   dbg('Returning config (skins excluded, OAuth token filtered, use /api/skins for skin data)');
@@ -1315,6 +1337,10 @@ const serverSpawnTimes = new Map();
 const serverStartTime = Date.now();
 let cleanupIntervalId = null;
 
+// Delta tracking for efficient sprite state broadcasts
+let spriteSnapshot = new Map(); // id -> serialized sprite snapshot
+let spriteDirty = true; // Set true when any sprite changes
+
 // Command cooldown tracking (per user per command)
 const commandCooldowns = new Map();
 
@@ -1332,311 +1358,329 @@ function getUserSkinFromDB(userId) {
   }
 }
 
+// Helper to resolve a username (from command) to the actual sprite ID
+// Tries direct match first, then matches against stored loginUsername (Twitch login name)
+function resolveSpriteId(targetUser) {
+  if (serverSprites.has(targetUser)) return targetUser;
+  for (const sprite of serverSprites.values()) {
+    if (sprite.loginUsername === targetUser) return sprite.id;
+  }
+  return null;
+}
+
+// Get overlay config values with defaults
+function getOverlayConfig() {
+  const ov = cfg.overlay || {};
+  return {
+    MAX_SPRITES: ov.maxSprites || 1500,
+    MAX_SPAWN_QUANTITY: ov.maxSpawnQuantity || 100,
+    SPAWN_THROTTLE_MS: ov.spawnThrottleMs || 700,
+    GROUND_Y: ov.groundY || 920,
+    W: ov.canvasWidth || 1920,
+    flipDurationMs: ov.flipDurationMs || 5000,
+    fightDurationMs: ov.fightDurationMs || 10000
+  };
+}
+
+// Spawn helper for server commands
+function spawnServerSprite(name, skinId, now, stateChangedRef) {
+  const uniqueId = name.toLowerCase();
+  const ov = getOverlayConfig();
+
+  if (serverSprites.has(uniqueId)) {
+    const sprite = serverSprites.get(uniqueId);
+    sprite.lastActivity = now;
+    if (sprite.skin !== skinId) sprite.skin = skinId;
+    return sprite;
+  }
+
+  // Evict oldest 5% if at limit (avoid full sort — find oldest via single pass)
+  if (serverSprites.size >= ov.MAX_SPRITES) {
+    let oldestId = null;
+    let oldestTime = Infinity;
+    for (const [id, s] of serverSprites) {
+      if (s.createdAt < oldestTime) {
+        oldestTime = s.createdAt;
+        oldestId = id;
+      }
+    }
+    if (oldestId) serverSprites.delete(oldestId);
+  }
+
+  if (serverSprites.size >= MAX_SERVER_SPRITES_HARD_LIMIT) {
+    dbg('Hard limit reached, cannot spawn more sprites');
+    return null;
+  }
+
+  const newSprite = {
+    id: uniqueId,
+    username: name,
+    skin: skinId,
+    state: 'idle',
+    createdAt: now,
+    lastActivity: now
+  };
+  serverSprites.set(uniqueId, newSprite);
+  stateChangedRef.value = true;
+  return newSprite;
+}
+
+// Individual command handlers
+function handleJump(username, userId, args, tags, now, ctx) {
+  if (serverSprites.has(userId)) {
+    const sprite = serverSprites.get(userId);
+    sprite.lastActivity = now;
+    ctx.stateChanged = true;
+    broadcast({ type: 'cmd', cmd: 'jump', username });
+    return null;
+  }
+  return 'You need to appear first!';
+}
+
+function handleSit(username, userId, args, tags, now, ctx) {
+  if (serverSprites.has(userId)) {
+    const sprite = serverSprites.get(userId);
+    sprite.state = 'sit';
+    sprite.lastActivity = now;
+    ctx.stateChanged = true;
+    return null;
+  }
+  return 'You need to appear first!';
+}
+
+function handleUnsit(username, userId, args, tags, now, ctx) {
+  if (serverSprites.has(userId)) {
+    const sprite = serverSprites.get(userId);
+    sprite.state = 'idle';
+    sprite.lastActivity = now;
+    ctx.stateChanged = true;
+    return null;
+  }
+  return 'You need to appear first!';
+}
+
+function handleBoom() {
+  dbg('Boom command - broadcasting explosion effect');
+  broadcast({ type: 'cmd', cmd: 'boom' });
+  return null;
+}
+
+function handleSkin(username, userId, args, tags, now, ctx) {
+  if (!args[0]) return 'Usage: !skin <skinname>';
+  const allSkins = detectSkinsFromAssets();
+  const validSkin = allSkins.find(s => s.id === args[0]);
+  if (!validSkin) return `Invalid skin: ${args[0]}`;
+  try {
+    db.prepare('UPDATE users SET assigned_skin = ? WHERE id = ?').run(args[0], userId);
+    if (serverSprites.has(userId)) {
+      const sprite = serverSprites.get(userId);
+      sprite.skin = args[0];
+      sprite.lastActivity = now;
+      ctx.stateChanged = true;
+    }
+    return `${username}'s skin changed to ${args[0]}`;
+  } catch (e) {
+    return 'Failed to change skin.';
+  }
+}
+
+function handleSkins() {
+  const skinList = detectSkinsFromAssets().map(s => s.id).sort();
+  return `Available skins: ${skinList.join(', ')}`;
+}
+
+function handleSpawn(username, userId, args, tags, now, ctx) {
+  if (!hasModPermission(tags, username)) return 'Only broadcaster/mods can use !spawn';
+  const ov = getOverlayConfig();
+  let quantity = 1;
+  let targetSkin = 'default';
+  let targetName = '';
+  const allSkinIds = detectSkinsFromAssets().map(s => s.id);
+
+  for (const arg of args) {
+    if (/^\d+$/.test(arg)) {
+      quantity = Math.min(ov.MAX_SPAWN_QUANTITY || 100, Math.max(1, parseInt(arg, 10)));
+    } else if (allSkinIds.includes(arg)) {
+      targetSkin = arg;
+    } else if (!targetName) {
+      targetName = arg.trim().replace(/^@/, '');
+    }
+  }
+
+  if (!targetName) {
+    targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
+  } else {
+    targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, getNameLengthLimit());
+  }
+
+  for (let i = 0; i < quantity; i++) {
+    const uniqueName = quantity > 1 ? targetName + '_' + (i + 1) : targetName;
+    spawnServerSprite(uniqueName, targetSkin, now, ctx);
+  }
+
+  ctx.stateChanged = true;
+  return `Spawned ${quantity} ${targetSkin === 'default' ? 'sprite' : targetSkin + ' sprite'}`;
+}
+
+function handleFlip(username, userId, args, tags, now, ctx) {
+  let targetUser = args[0] ? args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_') : userId;
+  if (targetUser !== userId) {
+    const resolvedId = resolveSpriteId(targetUser);
+    if (resolvedId) targetUser = resolvedId;
+  }
+  const ov = getOverlayConfig();
+  broadcast({ type: 'cmd', cmd: 'flip', username: targetUser, duration: ov.flipDurationMs });
+  ctx.stateChanged = true;
+  return null;
+}
+
+function handleFight(username, userId, args, tags, now, ctx) {
+  if (!args[0]) return 'Usage: !fight <username>';
+  const targetUserArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
+  const targetId = resolveSpriteId(targetUserArg);
+  if (!targetId) return `User '${targetUserArg}' does not have a sprite.`;
+  if (targetId === userId) return 'You cannot fight yourself.';
+  if (!serverSprites.has(userId)) return 'You need a sprite to fight. Use !spawn to create one.';
+
+  const commandUserWins = Math.random() < 0.5;
+  const winner = commandUserWins ? userId : targetId;
+  const loser = commandUserWins ? targetId : userId;
+  const ov = getOverlayConfig();
+
+  const winnerSprite = serverSprites.get(winner);
+  const loserSprite = serverSprites.get(loser);
+  if (winnerSprite) winnerSprite.state = 'idle';
+  if (loserSprite) loserSprite.state = 'idle';
+
+  broadcast({ type: 'cmd', cmd: 'fight', winner, loser, duration: ov.fightDurationMs });
+  ctx.stateChanged = true;
+  return null;
+}
+
+// Command registry — maps command strings to handler functions
+const commandRegistry = {
+  '!jump': handleJump,
+  '!sit': handleSit,
+  '!unsit': handleUnsit,
+  '!boom': handleBoom,
+  '!skin': handleSkin,
+  '!skins': handleSkins,
+  '!spawn': handleSpawn,
+  '!flip': handleFlip,
+  '!fight': handleFight
+};
+
 // Server-side command processing (authoritative spawning)
 function processServerCommand(username, text, tags) {
   const cmd = text.trim().split(' ')[0].toLowerCase();
   const args = text.trim().split(' ').slice(1);
   const userId = username.toLowerCase();
-  const skin = getUserSkinFromDB(userId);
   const now = Date.now();
-  let stateChanged = false;
-  let response = null;
-  
+
   // Command cooldown check (exemptions: broadcaster, mods, vips, subs, bot)
   const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
   if (cooldownMs > 0) {
     const isVip = tags?.badges?.vip;
     const isSub = tags?.badges?.subscriber;
     const exempt = hasModPermission(tags, username) || isVip || isSub;
-    
+
     if (!exempt) {
       const cooldownKey = userId + ':' + cmd;
       const lastUsed = commandCooldowns.get(cooldownKey) || 0;
       if (now - lastUsed < cooldownMs) {
         const remaining = Math.ceil((cooldownMs - (now - lastUsed)) / 1000);
-        response = `Please wait ${remaining} seconds before using ${cmd} again.`;
-        return { result: response, stateChanged: false };
+        return { result: `Please wait ${remaining} seconds before using ${cmd} again.`, stateChanged: false };
       }
-      // Set cooldown timestamp (will be updated after command execution)
       commandCooldowns.set(cooldownKey, now);
     }
   }
-  
-  // Helper to resolve a username (from command) to the actual sprite ID
-  // Tries direct match first, then matches against stored loginUsername (Twitch login name)
-  function resolveSpriteId(targetUser) {
-    if (serverSprites.has(targetUser)) {
-      console.log('[RESOLVE] Direct match for', targetUser);
-      return targetUser;
-    }
-    for (const sprite of serverSprites.values()) {
-      if (sprite.loginUsername === targetUser) {
-        console.log('[RESOLVE] Found via login:', targetUser, '->', sprite.id);
-        return sprite.id;
-      }
-    }
-    console.log('[RESOLVE] No match for', targetUser);
-    return null;
-  }
-  
-  // Constants (from overlay config)
-  const MAX_SPRITES = (cfg.overlay && cfg.overlay.maxSprites) || 1500;
-  const MAX_SPAWN_QUANTITY = (cfg.overlay && cfg.overlay.maxSpawnQuantity) || 100;
-  const SPAWN_THROTTLE_MS = (cfg.overlay && cfg.overlay.spawnThrottleMs) || 700;
-  const SPRITE_SIZE_MIN = 30;
-  const SPRITE_SIZE_MAX = 80;
-  const GROUND_Y = (cfg.overlay && cfg.overlay.groundY) || 920;
-  const W = (cfg.overlay && cfg.overlay.canvasWidth) || 1920;
-  
-  // Spawn helper function
-  function spawnSprite(name, skinId) {
-    const uniqueId = name.toLowerCase();
-    
-    // Check if already exists
-    if (serverSprites.has(uniqueId)) {
-      const sprite = serverSprites.get(uniqueId);
-      sprite.lastActivity = now;
-      if (sprite.skin !== skinId) {
-        sprite.skin = skinId;
-      }
-      return sprite;
-    }
-    
-    // Check sprite limit
-    if (serverSprites.size >= MAX_SPRITES) {
-      // Remove oldest 5%
-      const arr = Array.from(serverSprites.values()).sort((a, b) => a.createdAt - b.createdAt);
-      const removeCount = Math.max(1, Math.floor(arr.length * 0.05));
-      for (let i = 0; i < removeCount; i++) {
-        serverSprites.delete(arr[i].id);
-      }
-    }
-    
-    // Hard limit safeguard - emergency stop if somehow limit is exceeded
-    if (serverSprites.size >= MAX_SERVER_SPRITES_HARD_LIMIT) {
-      dbg('Hard limit reached, cannot spawn more sprites');
-      return null;
-    }
-    
-    // Create new sprite
-    const newSprite = {
-      id: uniqueId,
-      username: name,
-      skin: skinId,
-      state: 'idle',
-      createdAt: now,
-      lastActivity: now
-    };
-    serverSprites.set(uniqueId, newSprite);
-    stateChanged = true;
-    return newSprite;
-  }
-  
-  if (cmd === '!jump') {
-    // Jump command - apply to user's own sprite if it exists
-    if (serverSprites.has(userId)) {
-      const sprite = serverSprites.get(userId);
-      sprite.lastActivity = now;
-      // Note: velocity not stored server-side, will be applied client-side
-      stateChanged = true;
-      broadcast({ type: 'cmd', cmd: 'jump', username: username });
-      // No chat response for !jump
-    } else {
-      response = 'You need to appear first!';
-    }
-  } else if (cmd === '!sit') {
-    if (serverSprites.has(userId)) {
-      const sprite = serverSprites.get(userId);
-      sprite.state = 'sit';
-      sprite.lastActivity = now;
-      stateChanged = true;
-      // No chat response for !sit
-    } else {
-      response = 'You need to appear first!';
-    }
-  } else if (cmd === '!unsit') {
-    if (serverSprites.has(userId)) {
-      const sprite = serverSprites.get(userId);
-      sprite.state = 'idle';
-      sprite.lastActivity = now;
-      stateChanged = true;
-      // No chat response for !unsit
-    } else {
-      response = 'You need to appear first!';
-    }
-  } else if (cmd === '!boom') {
-    // Boom - broadcast explosion effect to all clients
-    dbg('Boom command - broadcasting explosion effect');
-    broadcast({ type: 'cmd', cmd: 'boom' });
-    // No chat response for !boom
-  } else if (cmd === '!skin') {
-    if (args[0]) {
-      const allSkins = detectSkinsFromAssets();
-      const validSkin = allSkins.find(s => s.id === args[0]);
-      if (validSkin) {
-        // Update user's assigned skin in database
-        try {
-          db.prepare('UPDATE users SET assigned_skin = ? WHERE id = ?').run(args[0], userId);
-          // Update existing sprite if present
-          if (serverSprites.has(userId)) {
-            const sprite = serverSprites.get(userId);
-            sprite.skin = args[0];
-            sprite.lastActivity = now;
-            stateChanged = true;
-          }
-          response = `${username}'s skin changed to ${args[0]}`;
-        } catch (e) {
-          response = 'Failed to change skin.';
-        }
-      } else {
-        response = `Invalid skin: ${args[0]}`;
-      }
-    } else {
-      response = 'Usage: !skin <skinname>';
-    }
-  } else if (cmd === '!skins') {
-    const skinList = detectSkinsFromAssets().map(s => s.id).sort();
-    response = `Available skins: ${skinList.join(', ')}`;
-  } else if (cmd === '!spawn') {
-    // Only allow broadcaster, mods, or bot to spawn
-    if (hasModPermission(tags, username)) {
-      let quantity = 1;
-      let targetSkin = 'default';
-      let targetName = '';
 
-      const allSkinIds = detectSkinsFromAssets().map(s => s.id);
-      for (const arg of args) {
-        if (/^\d+$/.test(arg)) {
-          quantity = Math.min(MAX_SPAWN_QUANTITY || 100, Math.max(1, parseInt(arg, 10)));
-        } else if (allSkinIds.includes(arg)) {
-          targetSkin = arg;
-        } else if (!targetName) {
-          targetName = arg.trim().replace(/^@/, '');
-        }
-      }
+  const handler = commandRegistry[cmd];
+  if (!handler) return { result: null, stateChanged: false };
 
-      if (!targetName) {
-        targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
-      } else {
-        targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, getNameLengthLimit());
-      }
-      
-      for (let i = 0; i < quantity; i++) {
-        const uniqueName = quantity > 1 ? targetName + '_' + (i + 1) : targetName;
-        spawnSprite(uniqueName, targetSkin);
-      }
-      
-      // Always broadcast state after spawn command to ensure clients sync even if sprites already existed
-      stateChanged = true;
-      
-      response = `Spawned ${quantity} ${targetSkin === 'default' ? 'sprite' : targetSkin + ' sprite'}`;
-    } else {
-      response = 'Only broadcaster/mods can use !spawn';
-    }
-  } else if (cmd === '!flip') {
-    // !flip [username] - flip a sprite upside down for 5 seconds
-    // If no username provided, flip your own sprite
-    // Any user can flip any other user (no permission restrictions)
-    let targetUser = args[0] ? args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_') : userId;
-    // Resolve alias (e.g., login name vs display name) if not self
-    if (targetUser !== userId) {
-      const resolvedId = resolveSpriteId(targetUser);
-      if (resolvedId) {
-        targetUser = resolvedId;
-      }
-      // If not found, will broadcast with non-existent ID (no effect)
-    }
-    const flipDuration = (cfg.overlay && cfg.overlay.flipDurationMs) || 5000;
-    dbg('Flip command:', { username, targetUser, flipDuration });
-    broadcast({ type: 'cmd', cmd: 'flip', username: targetUser, duration: flipDuration });
-    // No chat response for flip (silent command)
-    stateChanged = true; // Flip causes visual change
-  } else if (cmd === '!fight') {
-    // !fight <username> - two sprites fight, loser flips for 10 seconds
-    // Both participants must have sprites
-    if (!args[0]) {
-      response = 'Usage: !fight <username>';
-    } else {
-      const targetUserArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
-      console.log('[FIGHT] Target arg:', targetUserArg, 'by', username);
-      // Resolve to actual sprite ID (handles login vs display name differences)
-      const targetId = resolveSpriteId(targetUserArg);
-      console.log('[FIGHT] Resolved targetId:', targetId);
-      if (!targetId) {
-        response = `User '${targetUserArg}' does not have a sprite.`;
-      } else if (targetId === userId) {
-        response = 'You cannot fight yourself.';
-      } else if (!serverSprites.has(userId)) {
-        response = 'You need a sprite to fight. Use !spawn to create one.';
-      } else {
-        // Randomly determine winner and loser (50% chance each)
-        const commandUserWins = Math.random() < 0.5;
-        const winner = commandUserWins ? userId : targetId;
-        const loser = commandUserWins ? targetId : userId;
-        const fightDuration = (cfg.overlay && cfg.overlay.fightDurationMs) || 10000;
-        
-        dbg('Fight command:', { challenger: username, target: targetUserArg, resolvedTarget: targetId, winner, loser, fightDuration });
-        console.log('[FIGHT] Broadcasting fight:', { winner, loser, duration: fightDuration });
-        
-        // Update server-side sprite state to 'idle' to ensure clients don't override with stale state
-        const winnerSprite = serverSprites.get(winner);
-        const loserSprite = serverSprites.get(loser);
-        if (winnerSprite) winnerSprite.state = 'idle';
-        if (loserSprite) loserSprite.state = 'idle';
-        
-        // Apply flip to loser (clients will handle it)
-        broadcast({ type: 'cmd', cmd: 'fight', winner, loser, duration: fightDuration });
-        // No chat response for fight (silent command)
-        stateChanged = true;
-      }
-    }
-  }
-  
-  return { result: response, stateChanged: stateChanged };
+  const ctx = { stateChanged: false };
+  const response = handler(username, userId, args, tags, now, ctx);
+  return { result: response, stateChanged: ctx.stateChanged };
 }
 
-// Broadcast full sprite state to all connected clients
-function broadcastSpriteState() {
-  const spriteArray = Array.from(serverSprites.values()).map(sprite => ({
+// Serialize a sprite for comparison/transmission
+function serializeSprite(sprite) {
+  return {
     id: sprite.id,
     username: sprite.username,
     skin: sprite.skin,
     state: sprite.state || 'idle',
     createdAt: sprite.createdAt,
     lastActivity: sprite.lastActivity
-  }));
-  
-  broadcast({
-    type: 'spriteState',
-    sprites: spriteArray,
+  };
+}
+
+// Broadcast delta sprite state (only changes) to all connected clients
+function broadcastSpriteState() {
+  if (!spriteDirty) return;
+  spriteDirty = false;
+
+  const currentIds = new Set();
+  const added = [];
+  const updated = [];
+
+  for (const [id, sprite] of serverSprites) {
+    currentIds.add(id);
+    const serialized = serializeSprite(sprite);
+    const prev = spriteSnapshot.get(id);
+    if (!prev) {
+      added.push(serialized);
+    } else if (prev.skin !== serialized.skin || prev.state !== serialized.state || prev.lastActivity !== serialized.lastActivity) {
+      updated.push(serialized);
+    }
+  }
+
+  const removed = [];
+  for (const id of spriteSnapshot.keys()) {
+    if (!currentIds.has(id)) removed.push(id);
+  }
+
+  // Update snapshot
+  spriteSnapshot.clear();
+  for (const [id, sprite] of serverSprites) {
+    spriteSnapshot.set(id, serializeSprite(sprite));
+  }
+
+  // Only broadcast if there are actual changes
+  if (added.length === 0 && updated.length === 0 && removed.length === 0) return;
+
+  const msg = JSON.stringify({
+    type: 'spriteDelta',
+    added,
+    updated,
+    removed,
     timestamp: Date.now()
+  });
+
+  wss.clients.forEach(c => {
+    if (c.readyState === WebSocket.OPEN) c.send(msg);
   });
 }
 
-// Send sprite state to a specific client (for initial sync)
+// Send full sprite state to a specific client (for initial sync)
 function sendSpriteStateToClient(ws) {
-  const spriteArray = Array.from(serverSprites.values()).map(sprite => ({
-    id: sprite.id,
-    username: sprite.username,
-    skin: sprite.skin,
-    state: sprite.state || 'idle',
-    createdAt: sprite.createdAt,
-    lastActivity: sprite.lastActivity
+  if (ws.readyState !== WebSocket.OPEN) return;
+
+  const spriteArray = Array.from(serverSprites.values()).map(serializeSprite);
+
+  ws.send(JSON.stringify({
+    type: 'spriteState',
+    sprites: spriteArray,
+    timestamp: Date.now()
   }));
-  
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'spriteState',
-      sprites: spriteArray,
-      timestamp: Date.now()
-    }));
-  }
 }
 
 // Clear all server-side sprites (for local control command)
 function clearServerSprites() {
   serverSprites.clear();
   serverSpawnTimes.clear();
+  spriteSnapshot.clear();
+  spriteDirty = true;
   broadcastSpriteState();
 }
 
@@ -1701,6 +1745,7 @@ wss.on('connection', (ws) => {
         }
         
         // Broadcast updated state to all clients
+        spriteDirty = true;
         broadcastSpriteState();
       } else if (msg.type === 'fullState') {
         // Client sends full current state to server (for initial sync after reconnect)
@@ -1748,6 +1793,7 @@ wss.on('connection', (ws) => {
         }
         
         if (changed) {
+          spriteDirty = true;
           broadcastSpriteState();
         }
       }
@@ -1770,6 +1816,7 @@ cleanupIntervalId = setInterval(() => {
   }
   if (changed) {
     dbg('Cleaned up old sprites');
+    spriteDirty = true;
     broadcastSpriteState();
   }
 
@@ -1786,6 +1833,13 @@ cleanupIntervalId = setInterval(() => {
   for (const [key, timestamp] of serverSpawnTimes) {
     if (now - timestamp > lifetime) {
       serverSpawnTimes.delete(key);
+    }
+  }
+
+  // Prune stale rate limit entries
+  for (const [ip, entry] of rateLimitMap) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
+      rateLimitMap.delete(ip);
     }
   }
 }, 60 * 1000);
@@ -1901,6 +1955,7 @@ async function connectTwitchBot(){
       
       // If state changed (from command or normal chat), broadcast updated state
       if (stateChanged) {
+        spriteDirty = true;
         broadcastSpriteState();
         dbg('Sprite state broadcasted');
       }
@@ -2033,6 +2088,7 @@ function updateServerSprite(username, tags) {
   }
   
   // Broadcast updated sprite state to all clients
+  spriteDirty = true;
   broadcastSpriteState();
 }
 

@@ -5,6 +5,37 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.17] - 2026-03-28
+
+### Performance
+- SpatialHash query now reuses a persistent Set instead of allocating a new Array per call (reduces GC pressure in collision/avoidance loops)
+- Removed redundant `grid.clear()` after SpatialHash construction
+- Delta-based sprite state broadcast: server now sends only added/updated/removed sprites instead of full array every update (~90% bandwidth reduction)
+- Sprite eviction uses single-pass O(n) min-finder instead of O(n log n) full sort
+- SQLite WAL mode enabled for better concurrent read/write performance
+- DOM element pooling for animated media renderer (img/video elements reused instead of created/destroyed)
+- Reduced canvas shadow blur from 4 to 2 with offset for faster text rendering
+- Text measurement cache for repeated usernames (avoids redundant Canvas API calls)
+- Separate animated sprite ID Set for O(1) tracking instead of per-frame iteration
+- Cached `getBoundingClientRect` on resize instead of per mouse event
+- `/env` cache TTL increased from 2s to 10s
+- Lightweight in-memory rate limiter for `/api/` endpoints (100 req/s per IP)
+- Dirty renderer flag now triggers on sprite state/heightScale changes, not just count changes
+
+### Security
+- `clientSecret` no longer exposed to client via `/env` endpoint (server handles OAuth flow)
+
+### Fixed
+- **Drag throw velocity unit mismatch**: Physics uses px/frame convention but throw velocity was calculated as px/sec, causing sprites to launch off-screen at 60x intended speed
+- **Drag sprite shooting upward when still**: `updateDraggedSpritePhysics` applied gravity every frame while dragging, accumulating velocity silently. Position is now set directly by mouse with zero velocity during drag
+- **Can't throw sprites sideways**: Velocity tracking used same-frame mouse position, giving zero horizontal displacement. Now tracks previous frame's position so throw velocity reflects actual mouse movement
+- **Sprite position out of bounds on drag release**: Added canvas bounds clamping on mouseup
+
+### Changed
+- Refactored `processServerCommand` into command registry pattern (9 individual handler functions)
+- Extracted `resolveSpriteId` and `spawnServerSprite` to module-level functions
+- Drag input handler now computes throw velocity from per-frame mouse displacement (matching physics convention)
+
 ## [1.0.16] - 2026-03-27
 
 ### Performance

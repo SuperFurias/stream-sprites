@@ -55,7 +55,6 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
   
   // Build spatial hash for proximity queries
   const grid = new SpatialHash(SPATIAL_HASH_CELL_SIZE, W, H);
-  grid.clear();
   for (const s of arr) grid.insert(s);
 
   // Calculate zone densities for distribution
@@ -99,9 +98,8 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
     // Skip avoidance forces for fighting sprites
     if (a.isFighting) continue;
     
-    const near = grid.query(a);
+    const near = grid.query(a, a);
     for (const b of near) {
-      if (b === a) continue;
       // Skip avoidance if either sprite is fighting
       if (b.isFighting) continue;
       
@@ -196,24 +194,19 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
 }
 
 function updateDraggedSpritePhysics(sprite, W, H, GROUND_Y) {
-  sprite.vy += DRAGGED_GRAVITY; // Reduced gravity for dragged
-  
+  // Position is set directly by mouse — only clamp to boundaries
+  // Do NOT apply gravity or modify vx/vy here; velocity is tracked by input handler
+  sprite.vx = 0;
+  sprite.vy = 0;
+
   const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + TEXT_WIDTH_PADDING);
   const topBottomRadius = sprite.collisionRadius || sprite.size / 2;
-  
-  if (sprite.x < leftRightRadius) {
-    sprite.x = leftRightRadius;
-    sprite.vx = 0;
-  }
-  if (sprite.x > W - leftRightRadius) {
-    sprite.x = W - leftRightRadius;
-    sprite.vx = 0;
-  }
+
+  if (sprite.x < leftRightRadius) sprite.x = leftRightRadius;
+  if (sprite.x > W - leftRightRadius) sprite.x = W - leftRightRadius;
+  if (sprite.y < topBottomRadius) sprite.y = topBottomRadius;
   const floor = GROUND_Y - topBottomRadius;
-  if (sprite.y > floor) {
-    sprite.y = floor;
-    if (sprite.vy > 0) sprite.vy = 0;
-  }
+  if (sprite.y > floor) sprite.y = floor;
 }
 
 function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
@@ -428,9 +421,8 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
 function handleCollisions(arr, grid, now) {
   const collisionProbability = getCollisionProbability(arr.length);
   for (const a of arr) {
-    const near = grid.query(a);
+    const near = grid.query(a, a);
     for (const b of near) {
-      if (b === a) continue;
       if (a.id >= b.id) continue;
       
       // Skip collisions if either sprite is in a fight (fighting sprites ignore regular collisions)

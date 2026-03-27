@@ -134,7 +134,7 @@ export function setupTmiFallback(cfg, onMessage) {
   document.head.appendChild(script);
 }
 
-export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState) {
+export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState, onSpriteDelta) {
   dbg('handleWebSocketMessage:', data);
   if (data.type === 'chat') {
     onChat(data.username, data.message, data.tags || {});
@@ -171,5 +171,8 @@ export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState) {
   } else if (data.type === 'spriteState' && onSpriteState) {
     dbg('spriteState update received');
     onSpriteState(data);
+  } else if (data.type === 'spriteDelta' && onSpriteDelta) {
+    dbg('spriteDelta update received');
+    onSpriteDelta(data);
   }
 }

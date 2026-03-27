@@ -1,39 +1,12 @@
 // Animated Media Renderer - manages DOM-based rendering for GIF and WebM animations
+// Optimized with element pooling and separate animated sprite tracking
 
-// Shared helper to create a media element (video or image) for a given skin
-function createMediaElement(skin, username, spriteSize) {
-  const zIndex = Math.round(5000 + (50 - spriteSize) * 50);
-  let element;
+const CSS_BASE = 'position:absolute;transform-origin:center center;pointer-events:none;will-change:transform,opacity;';
 
-  if (skin.isWebm) {
-    element = document.createElement('video');
-    element.src = skin.file;
-    element.alt = `${username}'s WebM`;
-    element.loop = true;
-    element.muted = true;
-    element.playsInline = true;
-    element.autoplay = true;
-    element.style.objectFit = 'fill';
-    element.onerror = () => {
-      console.warn('Failed to load WebM video:', skin.file);
-    };
-    element.play().catch(() => {});
-  } else {
-    element = document.createElement('img');
-    element.src = skin.file;
-    element.alt = `${username}'s GIF`;
-  }
-
-  element.dataset.skinFile = skin.file;
-  element.style.cssText = `
-    position: absolute;
-    transform-origin: center center;
-    pointer-events: none;
-    will-change: transform, opacity;
-    z-index: ${zIndex};
-  `;
-
-  return element;
+function createPooledElement(type) {
+  const el = document.createElement(type);
+  el.style.cssText = CSS_BASE;
+  return el;
 }
 
 export function createAnimatedMediaRenderer() {
@@ -42,95 +15,112 @@ export function createAnimatedMediaRenderer() {
   container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;';
   document.body.appendChild(container);
 
-  const mediaElements = new Map(); // spriteId -> img/video element
+  const mediaElements = new Map(); // spriteId -> { el, skinFile, type }
+  const animatedSpriteIds = new Set(); // Tracks which sprite IDs currently have animated skins
+
+  // Element pools for reuse
+  const imgPool = [];
+  const videoPool = [];
+
+  function acquireElement(type) {
+    const pool = type === 'video' ? videoPool : imgPool;
+    if (pool.length > 0) {
+      return pool.pop();
+    }
+    return createPooledElement(type);
+  }
+
+  function releaseElement(el, type) {
+    el.style.display = 'none';
+    el.src = '';
+    const pool = type === 'video' ? videoPool : imgPool;
+    pool.push(el);
+  }
 
   return {
     container,
     mediaElements,
+    animatedSpriteIds,
 
     update(sprites, skins, W, H, GROUND_Y) {
-      // Collect IDs of sprites that should have animated media elements (GIF or WebM)
-      const spritesWithAnimatedMedia = new Set();
+      // Rebuild animated sprite set
+      animatedSpriteIds.clear();
       for (const sprite of sprites.values()) {
         const skin = skins.get(sprite.skin);
         if (skin && (skin.isGif || skin.isWebm)) {
-          spritesWithAnimatedMedia.add(sprite.id);
+          animatedSpriteIds.add(sprite.id);
         }
       }
 
-      // Remove animated media elements for sprites that no longer exist OR no longer have animated skins
-      const toRemove = [];
-      for (const [id, element] of mediaElements) {
-        if (!spritesWithAnimatedMedia.has(id)) {
-          toRemove.push([id, element]);
+      // Remove entries for sprites that no longer have animated media
+      for (const [id, entry] of mediaElements) {
+        if (!animatedSpriteIds.has(id)) {
+          releaseElement(entry.el, entry.type);
+          mediaElements.delete(id);
         }
       }
-      for (const [id, element] of toRemove) {
-        element.remove();
-        mediaElements.delete(id);
-      }
 
-      // Update or create animated media elements for sprites with GIF or WebM skins
+      // Update or create elements for animated sprites
       for (const sprite of sprites.values()) {
         const skin = skins.get(sprite.skin);
-        if (!skin || (!skin.isGif && !skin.isWebm)) {
-          continue;
+        if (!skin || (!skin.isGif && !skin.isWebm)) continue;
+
+        const isVideo = skin.isWebm;
+        const entryType = isVideo ? 'video' : 'img';
+        const entry = mediaElements.get(sprite.id);
+
+        if (entry) {
+          // Check if skin changed
+          if (entry.skinFile !== skin.file) {
+            releaseElement(entry.el, entry.type);
+            const newEl = acquireElement(entryType);
+            setupElement(newEl, skin, sprite.username);
+            container.appendChild(newEl);
+            mediaElements.set(sprite.id, { el: newEl, skinFile: skin.file, type: entryType });
+          }
+        } else {
+          // Create new element from pool
+          const el = acquireElement(entryType);
+          setupElement(el, skin, sprite.username);
+          container.appendChild(el);
+          mediaElements.set(sprite.id, { el, skinFile: skin.file, type: entryType });
         }
 
+        // Update transform
+        const currentEntry = mediaElements.get(sprite.id);
+        const el = currentEntry.el;
         const heightScale = sprite.heightScale || 1.0;
         const scaledHeight = sprite.size * heightScale;
         const yOffset = (sprite.size - scaledHeight) / 2;
 
-        let element = mediaElements.get(sprite.id);
-
-        if (!element) {
-          element = createMediaElement(skin, sprite.username, sprite.size);
-          container.appendChild(element);
-          mediaElements.set(sprite.id, element);
-        } else {
-          // Check if skin changed to a different file or type
-          const currentSkinFile = element.dataset.skinFile || '';
-          if (currentSkinFile !== skin.file) {
-            // Skin changed - create new element to ensure animation restarts
-            element.remove();
-            element = createMediaElement(skin, sprite.username, sprite.size);
-            container.appendChild(element);
-            mediaElements.set(sprite.id, element);
-          }
-        }
-
-        // Calculate position (canvas coordinates to screen coordinates)
         const screenX = (sprite.x / W) * window.innerWidth;
         const screenY = (sprite.y + yOffset) / H * window.innerHeight;
-
-        // Calculate size
         const screenWidth = (sprite.size / W) * window.innerWidth;
         const screenHeight = scaledHeight / H * window.innerHeight;
-
-        // Apply transform
         const rotate = (sprite.angle || 0) * (180 / Math.PI);
         const scaleX = sprite.facingRight ? 1 : -1;
 
-        element.style.transform = `translate(${screenX}px, ${screenY}px) translate(-50%, -50%) rotate(${rotate}deg) scale(${scaleX}, 1)`;
-        element.style.width = `${screenWidth}px`;
-        element.style.height = `${screenHeight}px`;
-        element.style.opacity = sprite.opacity !== undefined ? sprite.opacity : 1;
+        el.style.transform = `translate(${screenX}px,${screenY}px) translate(-50%,-50%) rotate(${rotate}deg) scale(${scaleX},1)`;
+        el.style.width = `${screenWidth}px`;
+        el.style.height = `${screenHeight}px`;
+        el.style.opacity = sprite.opacity !== undefined ? sprite.opacity : 1;
+        el.style.display = '';
 
-        // For video elements, ensure dimensions are strictly enforced
-        if (skin.isWebm) {
-          element.width = Math.round(screenWidth);
-          element.height = Math.round(screenHeight);
-          element.style.aspectRatio = 'auto';
-          element.style.objectFit = 'fill';
+        if (isVideo) {
+          el.width = Math.round(screenWidth);
+          el.height = Math.round(screenHeight);
+          el.style.aspectRatio = 'auto';
+          el.style.objectFit = 'fill';
         }
       }
     },
 
     clear() {
-      for (const element of mediaElements.values()) {
-        element.remove();
+      for (const [id, entry] of mediaElements) {
+        releaseElement(entry.el, entry.type);
       }
       mediaElements.clear();
+      animatedSpriteIds.clear();
     },
 
     destroy() {
@@ -138,4 +128,23 @@ export function createAnimatedMediaRenderer() {
       container.remove();
     }
   };
+}
+
+function setupElement(el, skin, username) {
+  const zIndex = Math.round(5000 + (50 - 50) * 50);
+  el.dataset.skinFile = skin.file;
+  el.style.zIndex = zIndex;
+  el.alt = `${username}'s ${skin.isWebm ? 'WebM' : 'GIF'}`;
+
+  if (skin.isWebm) {
+    el.src = skin.file;
+    el.loop = true;
+    el.muted = true;
+    el.playsInline = true;
+    el.autoplay = true;
+    el.style.objectFit = 'fill';
+    el.play().catch(() => {});
+  } else {
+    el.src = skin.file;
+  }
 }

@@ -203,8 +203,10 @@ function dbg(...args) {
         // Sync state from server - always set heightScale based on state
         if (serverSprite.state !== undefined && existingSprite.state !== serverSprite.state) {
           existingSprite.state = serverSprite.state;
+          changed = true; // State change affects rendering order (heightScale)
         }
         // Always apply heightScale and velocity based on current state
+        const prevHeightScale = existingSprite.heightScale;
         if (existingSprite.state === 'sit') {
           existingSprite.heightScale = HEIGHT_SCALE_SIT;
           existingSprite.vx = 0;
@@ -212,6 +214,7 @@ function dbg(...args) {
         } else {
           existingSprite.heightScale = HEIGHT_SCALE_IDLE;
         }
+        if (prevHeightScale !== existingSprite.heightScale) changed = true;
         existingSprite.lastActivity = serverSprite.lastActivity;
         existingSprite.createdAt = serverSprite.createdAt;
       } else {
@@ -231,6 +234,72 @@ function dbg(...args) {
         newSprite.createdAt = serverSprite.createdAt;
         sprites.set(newSprite.id, newSprite);
         changed = true;
+      }
+    }
+
+    if (changed) markSpritesDirty();
+  }
+
+  // Apply delta updates from server (more efficient than full sync)
+  function syncSpritesDelta(delta) {
+    let changed = false;
+
+    // Remove deleted sprites
+    if (delta.removed && delta.removed.length > 0) {
+      for (const id of delta.removed) {
+        if (sprites.has(id)) {
+          sprites.delete(id);
+          changed = true;
+        }
+      }
+    }
+
+    // Add new sprites
+    if (delta.added && delta.added.length > 0) {
+      for (const serverSprite of delta.added) {
+        if (!sprites.has(serverSprite.id)) {
+          const newSprite = createSpriteWithContext(serverSprite.username);
+          newSprite.skin = serverSprite.skin;
+          newSprite.state = serverSprite.state || 'idle';
+          if (newSprite.state === 'sit') {
+            newSprite.heightScale = HEIGHT_SCALE_SIT;
+            newSprite.vx = 0;
+            newSprite.vy = 0;
+          } else {
+            newSprite.heightScale = HEIGHT_SCALE_IDLE;
+          }
+          newSprite.lastActivity = serverSprite.lastActivity;
+          newSprite.createdAt = serverSprite.createdAt;
+          sprites.set(newSprite.id, newSprite);
+          changed = true;
+        }
+      }
+    }
+
+    // Update existing sprites
+    if (delta.updated && delta.updated.length > 0) {
+      for (const serverSprite of delta.updated) {
+        const existing = sprites.get(serverSprite.id);
+        if (existing) {
+          if (existing.skin !== serverSprite.skin) {
+            existing.skin = serverSprite.skin;
+          }
+          if (serverSprite.state !== undefined && existing.state !== serverSprite.state) {
+            existing.state = serverSprite.state;
+            changed = true;
+          }
+          const prevHeightScale = existing.heightScale;
+          if (existing.state === 'sit') {
+            existing.heightScale = HEIGHT_SCALE_SIT;
+            existing.vx = 0;
+            existing.vy = 0;
+          } else {
+            existing.heightScale = HEIGHT_SCALE_IDLE;
+          }
+          if (prevHeightScale !== existing.heightScale) changed = true;
+          existing.lastActivity = serverSprite.lastActivity;
+          existing.createdAt = serverSprite.createdAt;
+        }
       }
     }
 
@@ -574,6 +643,11 @@ function dbg(...args) {
             dbg('Received sprite state from server:', spriteState.sprites.length, 'sprites');
             // Sync local sprites with server state
             syncSpritesFromServer(spriteState.sprites);
+          },
+          (spriteDelta) => {
+            dbg('Received sprite delta from server:', spriteDelta);
+            // Apply incremental updates (more efficient than full sync)
+            syncSpritesDelta(spriteDelta);
           }
         );
       },

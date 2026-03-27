@@ -1,4 +1,4 @@
-// Sprite creation and spawning module
+// Sprite creation and spawning module — optimized with text measurement cache
 import { getUserSkinFromCache } from './core.js';
 import { colorFromName } from './utils.js';
 import {
@@ -14,11 +14,22 @@ import {
   WIGGLE_RANGE
 } from './config.js';
 
+// Text measurement cache to avoid repeated Canvas API calls
+const textWidthCache = new Map();
+
+function getCachedTextWidth(ctx, username) {
+  const cached = textWidthCache.get(username);
+  if (cached !== undefined) return cached;
+  const width = ctx.measureText(username).width;
+  textWidthCache.set(username, width);
+  return width;
+}
+
 export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
   // Random size within configured range
   const size = SPRITE_SIZE_MIN + Math.random() * (SPRITE_SIZE_MAX - SPRITE_SIZE_MIN);
   const skinId = getUserSkinFromCache(userSkinCache, username);
-  const textWidth = ctx.measureText(username).width;
+  const textWidth = getCachedTextWidth(ctx, username);
   const collisionRadius = size / 2;
   const boundaryRadius = Math.max(size / 2, textWidth / 2 + TEXT_WIDTH_PADDING);
   const mass = Math.PI * Math.pow(size / 2, 2) / MASS_DIVISOR;
@@ -82,11 +93,16 @@ export function spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE
     return sprite;
   }
   if (sprites.size >= MAX_SPRITES) {
-    const arr = Array.from(sprites.values()).sort((a, b) => a.createdAt - b.createdAt);
-    const removeCount = Math.max(1, Math.floor(arr.length * 0.05));
-    for (let i = 0; i < removeCount; i++) {
-      sprites.delete(arr[i].id);
+    // Find and remove the oldest sprite via single pass (O(n) instead of O(n log n) sort)
+    let oldestId = null;
+    let oldestTime = Infinity;
+    for (const [id, s] of sprites) {
+      if (s.createdAt < oldestTime) {
+        oldestTime = s.createdAt;
+        oldestId = id;
+      }
     }
+    if (oldestId) sprites.delete(oldestId);
   }
   const sprite = createSpriteFn(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
   sprites.set(sprite.id, sprite);
