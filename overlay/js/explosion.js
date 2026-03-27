@@ -26,7 +26,9 @@ export function updateExplosionParticles(dt, explosionParticles) {
     p.vy += PARTICLE_GRAVITY;
     p.life -= p.decay;
     if (p.life <= 0) {
-      explosionParticles.splice(i, 1);
+      // Swap with last element and pop — O(1) removal instead of O(n) splice
+      explosionParticles[i] = explosionParticles[explosionParticles.length - 1];
+      explosionParticles.pop();
     }
   }
 }

@@ -51,6 +51,7 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                               BOUNCE_DAMPING, MIN_VELOCITY) {
   // Convert to array once per frame to minimize GC pressure
   const arr = Array.from(sprites.values());
+  const now = Date.now();
   
   // Build spatial hash for proximity queries
   const grid = new SpatialHash(SPATIAL_HASH_CELL_SIZE, W, H);
@@ -73,14 +74,14 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
     if (s === draggedSprite) {
       updateDraggedSpritePhysics(s, W, H, GROUND_Y);
     } else {
-      updateSpritePhysics(s, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
+      updateSpritePhysics(s, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                           GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY,
                           zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
     }
   }
 
   // Handle collisions (probabilistic)
-  handleCollisions(arr, grid);
+  handleCollisions(arr, grid, now);
   
   // Apply avoidance forces to prevent clustering
   applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
@@ -215,12 +216,10 @@ function updateDraggedSpritePhysics(sprite, W, H, GROUND_Y) {
   }
 }
 
-function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
+function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                              GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY,
                              zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
   sprite.vy += GRAVITY;
-
-  const now = Date.now();
 
   // Handle flip effect - always runs so angle updates even for exhausted sprites
   if (sprite.flipUntil) {
@@ -317,19 +316,30 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
 
   // Dance animation (vy only; angular velocity already handled above)
   if (sprite.state === 'dance') {
-    sprite.vy += Math.sin((Date.now() + sprite.wiggle) / DANCE_FREQUENCY) * DANCE_GRAVITY_FACTOR;
+    sprite.vy += Math.sin((now + sprite.wiggle) / DANCE_FREQUENCY) * DANCE_GRAVITY_FACTOR;
   }
 
-  // Auto-return upright (only if not currently flipped)
+  // Auto-return upright (only if not currently flipped and on the ground)
   if (!sprite.flipUntil && sprite.lastTiltTime && sprite.angle !== 0) {
-    const timeSinceTilt = Date.now() - sprite.lastTiltTime;
-    if (timeSinceTilt > TILT_RETURN_TIME) {
-      sprite.angle *= ANGLE_DECAY;
-      sprite.angularVelocity *= TILT_ANGULAR_DECAY;
-      if (Math.abs(sprite.angle) < TILT_ANGLE_THRESHOLD) {
-        sprite.angle = 0;
-        sprite.lastTiltTime = null;
+    // Always decay angular velocity so it doesn't accumulate forever
+    sprite.angularVelocity *= TILT_ANGULAR_DECAY;
+
+    // Check if sprite is resting on the ground
+    const topRadius = sprite.collisionRadius || sprite.size / 2;
+    const onGround = sprite.y >= GROUND_Y - topRadius - 1;
+
+    if (onGround) {
+      const timeSinceTilt = now - sprite.lastTiltTime;
+      if (timeSinceTilt > TILT_RETURN_TIME) {
+        sprite.angle *= ANGLE_DECAY;
+        if (Math.abs(sprite.angle) < TILT_ANGLE_THRESHOLD) {
+          sprite.angle = 0;
+          sprite.lastTiltTime = null;
+        }
       }
+    } else {
+      // Reset the timer while airborne — return only starts after landing
+      sprite.lastTiltTime = now;
     }
   }
 }
@@ -415,7 +425,7 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
   }
 }
 
-function handleCollisions(arr, grid) {
+function handleCollisions(arr, grid, now) {
   const collisionProbability = getCollisionProbability(arr.length);
   for (const a of arr) {
     const near = grid.query(a);
@@ -452,9 +462,9 @@ function handleCollisions(arr, grid) {
         a.angularVelocity += tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
         b.angularVelocity -= tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
         
-        const now = Date.now();
-        a.lastTiltTime = now;
-        b.lastTiltTime = now;
+        // Only set lastTiltTime if not already tilting (don't restart the return timer)
+        if (!a.lastTiltTime) a.lastTiltTime = now;
+        if (!b.lastTiltTime) b.lastTiltTime = now;
       }
     }
   }
@@ -463,10 +473,10 @@ function handleCollisions(arr, grid) {
 export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, prebuiltArray) {
   // Use prebuilt array if provided to avoid Map-to-Array conversion overhead
   const arr = prebuiltArray || Array.from(sprites.values());
+  const now = Date.now();
   
   // Update opacity based on age
   for (const sprite of arr) {
-    const now = Date.now();
     const age = now - sprite.lastActivity;
     
     if (age > SPRITE_LIFETIME_MS) {

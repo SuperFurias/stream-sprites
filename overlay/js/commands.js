@@ -1,5 +1,6 @@
 // Command handling module
 import { spawn } from './sprite.js';
+import { applyExplosionPhysics, hasModPermission } from './utils.js';
 import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD, JUMP_VELOCITY as DEFAULT_JUMP_VELOCITY, HEIGHT_SCALE_SIT as DEFAULT_HEIGHT_SCALE_SIT, HEIGHT_SCALE_IDLE as DEFAULT_HEIGHT_SCALE_IDLE, FLIP_DURATION_MS as DEFAULT_FLIP_DURATION_MS, FIGHT_DURATION_MS as DEFAULT_FIGHT_DURATION_MS, FLIP_ANGULAR_VELOCITY as DEFAULT_FLIP_ANGULAR_VELOCITY, FIGHT_COIN_FLIP_PROBABILITY as DEFAULT_FIGHT_COIN_FLIP_PROBABILITY } from './config.js';
 
 // Debug utility
@@ -92,49 +93,25 @@ const commandDescriptions = {
 
 function handleBoomCommand(sprites, W, GROUND_Y, explosionParticles, createExplosionEffect) {
   if (sprites.size === 0) return;
-  
+
   const epicenterX = Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
   const epicenterY = GROUND_Y;
   const explosionRadius = EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
-  const maxForce = EXPLOSION_FORCE_MULTIPLIER + Math.random() * (EXPLOSION_FORCE_MULTIPLIER * 0.5);
-  const upwardBias = EXPLOSION_UPWARD_BIAS;
-  
-  createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
-  
-  for (const sprite of sprites.values()) {
-    const dx = sprite.x - epicenterX;
-    const dy = sprite.y - epicenterY;
-    const dist = Math.hypot(dx, dy);
-    
-    if (dist < explosionRadius && dist > COLLISION_PERSONAL_SPACE_THRESHOLD) {
-      const nx = dx / dist;
-      const ny = dy / dist;
-      const falloff = Math.pow(1 - dist / explosionRadius, 2);
-      const force = maxForce * Math.max(0, falloff);
-      
-      sprite.vx += nx * force;
-      sprite.vy += ny * force * (1 - upwardBias) - force * upwardBias;
-      
-      const spinStrength = force * SPIN_STRENGTH_FACTOR;
-      sprite.angularVelocity += (Math.random() - 0.5) * spinStrength;
-      sprite.lastTiltTime = Date.now();
 
-      sprite.vx += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
-      sprite.vy += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
-    }
-  }
+  createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
+
+  applyExplosionPhysics(sprites, epicenterX, epicenterY, explosionRadius,
+    EXPLOSION_FORCE_MULTIPLIER + Math.random() * (EXPLOSION_FORCE_MULTIPLIER * 0.5),
+    EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR,
+    COLLISION_PERSONAL_SPACE_THRESHOLD);
 }
 
 function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdate, DEBUG = false) {
   if (DEBUG) console.log('!spawn command received:', { username, args, tags, channel: cfg.channel, botUsername: cfg.botUsername });
-  
-  const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
-  const isBot = username === cfg.botUsername;
-  const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
-  
-  if (DEBUG) console.log('Permission check:', { isBroadcaster, isBot, isMod, badges: tags?.badges, mod: tags?.mod });
-  
-  if (isBroadcaster || isBot || isMod) {
+
+  if (DEBUG) console.log('Permission check:', { hasMod: hasModPermission(tags, username, cfg), badges: tags?.badges, mod: tags?.mod });
+
+  if (hasModPermission(tags, username, cfg)) {
     let quantity = 1;
     let targetSkin = 'default';
     let targetName = '';

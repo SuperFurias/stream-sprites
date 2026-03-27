@@ -596,8 +596,30 @@ function validateRequired(body, ...fields) {
   return null;
 }
 
+// Shared permission check for Twitch chat commands
+function hasModPermission(tags, username) {
+  const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
+  const isBot = username === cfg.botUsername;
+  const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
+  return isBroadcaster || isBot || isMod;
+}
+
 // Reusable function to detect skins from assets folder
+let skinsCache = null;
+let skinsCacheTime = 0;
+const SKINS_CACHE_TTL_MS = 5000; // Cache for 5 seconds
+
+function invalidateSkinsCache() {
+  skinsCache = null;
+  skinsCacheTime = 0;
+}
+
 function detectSkinsFromAssets() {
+  const now = Date.now();
+  if (skinsCache && (now - skinsCacheTime) < SKINS_CACHE_TTL_MS) {
+    return skinsCache;
+  }
+
   const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
   const detected = [];
   try{
@@ -629,6 +651,9 @@ function detectSkinsFromAssets() {
   }catch(e){
     console.error('Error detecting skins:', e.message);
   }
+
+  skinsCache = detected;
+  skinsCacheTime = now;
   return detected;
 }
 
@@ -648,8 +673,18 @@ app.get('/api/skins/auto', (req,res) => {
   res.json(skins);
 });
 
+let envCache = null;
+let envCacheTime = 0;
+const ENV_CACHE_TTL_MS = 2000; // Cache for 2 seconds
+
 app.get('/env', (req,res) => {
   dbg('GET /env');
+  
+  const now = Date.now();
+  if (envCache && (now - envCacheTime) < ENV_CACHE_TTL_MS) {
+    dbg('Returning cached /env response');
+    return res.json(envCache);
+  }
   
   // Reload config from disk to reflect any manual changes
   let fileCfg;
@@ -684,6 +719,8 @@ app.get('/env', (req,res) => {
   }
   
   dbg('Returning config (skins excluded, OAuth token filtered, use /api/skins for skin data)');
+  envCache = safeCfg;
+  envCacheTime = now;
   res.json(safeCfg);
 });
 
@@ -1308,12 +1345,9 @@ function processServerCommand(username, text, tags) {
   // Command cooldown check (exemptions: broadcaster, mods, vips, subs, bot)
   const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
   if (cooldownMs > 0) {
-    const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
-    const isBot = username === cfg.botUsername;
-    const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
     const isVip = tags?.badges?.vip;
     const isSub = tags?.badges?.subscriber;
-    const exempt = isBroadcaster || isBot || isMod || isVip || isSub;
+    const exempt = hasModPermission(tags, username) || isVip || isSub;
     
     if (!exempt) {
       const cooldownKey = userId + ':' + cmd;
@@ -1465,11 +1499,7 @@ function processServerCommand(username, text, tags) {
     response = `Available skins: ${skinList.join(', ')}`;
   } else if (cmd === '!spawn') {
     // Only allow broadcaster, mods, or bot to spawn
-    const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
-    const isBot = username === cfg.botUsername;
-    const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
-    
-    if (isBroadcaster || isBot || isMod) {
+    if (hasModPermission(tags, username)) {
       let quantity = 1;
       let targetSkin = 'default';
       let targetName = '';
@@ -1741,6 +1771,22 @@ cleanupIntervalId = setInterval(() => {
   if (changed) {
     dbg('Cleaned up old sprites');
     broadcastSpriteState();
+  }
+
+  // Prune expired command cooldowns (older than 2x cooldown window)
+  const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
+  const cooldownExpiry = cooldownMs * 2;
+  for (const [key, timestamp] of commandCooldowns) {
+    if (now - timestamp > cooldownExpiry) {
+      commandCooldowns.delete(key);
+    }
+  }
+
+  // Prune stale spawn times
+  for (const [key, timestamp] of serverSpawnTimes) {
+    if (now - timestamp > lifetime) {
+      serverSpawnTimes.delete(key);
+    }
   }
 }, 60 * 1000);
 

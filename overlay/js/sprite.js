@@ -24,17 +24,9 @@ export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_S
   const mass = Math.PI * Math.pow(size / 2, 2) / MASS_DIVISOR;
   const momentOfInertia = MOMENT_OF_INERTIA_FACTOR * mass * Math.pow(size / 2, 2);
 
-  // Try to find a non-overlapping spawn position
-  let x, y;
-  for (let attempt = 0; attempt < SPAWN_MAX_TRIES; attempt++) {
-    x = Math.random() * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
-    y = GROUND_Y - Math.random() * SPAWN_Y_OFFSET - size / 2;
-    // Note: overlap check will be done by caller passing sprites
-  }
-  if (typeof x === 'undefined') {
-    x = Math.random() * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
-    y = GROUND_Y - Math.random() * SPAWN_Y_OFFSET - size / 2;
-  }
+  // Generate spawn position (overlap check done by caller if needed)
+  let x = Math.random() * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
+  let y = GROUND_Y - Math.random() * SPAWN_Y_OFFSET - size / 2;
   x += (Math.random() - 0.5) * SPAWN_JITTER;
   y += (Math.random() - 0.5) * SPAWN_JITTER;
 

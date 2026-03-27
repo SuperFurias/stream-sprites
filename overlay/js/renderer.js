@@ -1,14 +1,32 @@
 // Renderer module
+
+// Reusable sorted array cache to avoid allocating + sorting every frame
+let sortedSpriteCache = [];
+let spriteCountSnapshot = -1;
+
+export function markSpritesDirty() {
+  spriteCountSnapshot = -1;
+}
+
 export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
   ctx.clearRect(0, 0, W, H);
-  // Sort by size descending (larger first = background, smaller later = foreground)
-  // Then by Y as secondary factor for consistent ordering among same-sized sprites
-  const arr = Array.from(sprites.values()).sort((a, b) => b.size - a.size || a.y - b.y);
-  
-  for (const sprite of arr) {
+
+  // Rebuild sorted array when sprite count changes (additions/removals)
+  if (spriteCountSnapshot !== sprites.size) {
+    sortedSpriteCache.length = 0;
+    for (const s of sprites.values()) {
+      sortedSpriteCache.push(s);
+    }
+    // Sort by size descending (larger first = background, smaller later = foreground)
+    sortedSpriteCache.sort((a, b) => b.size - a.size);
+    spriteCountSnapshot = sprites.size;
+  }
+
+  ctx.font = 'bold 12px system-ui, Arial';
+  for (const sprite of sortedSpriteCache) {
     drawSprite(ctx, sprite, skins, GROUND_Y);
   }
-  
+
   // Draw explosion particles
   for (const p of explosionParticles) {
     ctx.globalAlpha = p.life;
@@ -58,7 +76,6 @@ function drawSprite(ctx, sprite, skins, GROUND_Y) {
   ctx.restore();
   
   // Draw username
-  ctx.font = 'bold 12px system-ui, Arial';
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.8)';

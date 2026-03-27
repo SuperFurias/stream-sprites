@@ -8,10 +8,11 @@ import { createSprite, spawn } from './js/sprite.js';
 import { handleCommand } from './js/commands.js';
 import { updatePhysics, manageLifetime } from './js/physics.js';
 import { createExplosionEffect, updateExplosionParticles } from './js/explosion.js';
-import { draw as render, updateSpriteCountDisplay } from './js/renderer.js';
+import { draw as render, updateSpriteCountDisplay, markSpritesDirty } from './js/renderer.js';
 import { createGameLoop } from './js/loop.js';
 import { setupWebSocket, setupTmiFallback, handleWebSocketMessage } from './js/connection.js';
 import { createAnimatedMediaRenderer } from './js/animatedMediaRenderer.js';
+import { applyExplosionPhysics, hasModPermission } from './js/utils.js';
 import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD, JUMP_VELOCITY, HEIGHT_SCALE_SIT, HEIGHT_SCALE_IDLE, FIGHT_DURATION_MS, RESIZE_DEBOUNCE_MS, FLIP_DURATION_MS, GROUND_Y_MULTIPLIER, FLIP_ANGULAR_VELOCITY } from './js/config.js';
 
 // Debug utility
@@ -96,6 +97,18 @@ function dbg(...args) {
   // Command cooldown tracking (per user per command) for local mode
   const commandCooldowns = new Map();
   
+  // Prune expired cooldown entries periodically (every 30s)
+  setInterval(() => {
+    const now = Date.now();
+    const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
+    const expiry = cooldownMs * 2;
+    for (const [key, timestamp] of commandCooldowns) {
+      if (now - timestamp > expiry) {
+        commandCooldowns.delete(key);
+      }
+    }
+  }, 30000);
+  
   
   // Initialize window._SA early so connection can be added
   window._SA = {};
@@ -162,6 +175,7 @@ function dbg(...args) {
   // Spawn wrapper
   function spawnSprite(username) {
     const sprite = spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSpriteWithContext, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    markSpritesDirty();
     sendSpriteUpdateToServer(sprite);
     return sprite;
   }
@@ -169,11 +183,13 @@ function dbg(...args) {
   // Sync sprites from server state (server-authoritative)
   function syncSpritesFromServer(serverSpriteList) {
     const serverIds = new Set(serverSpriteList.map(s => s.id));
-    
+    let changed = false;
+
     // Remove sprites that are no longer on the server
     for (const [id, sprite] of sprites) {
       if (!serverIds.has(id)) {
         sprites.delete(id);
+        changed = true;
       }
     }
     
@@ -215,10 +231,11 @@ function dbg(...args) {
         newSprite.lastActivity = serverSprite.lastActivity;
         newSprite.createdAt = serverSprite.createdAt;
         sprites.set(newSprite.id, newSprite);
+        changed = true;
       }
     }
-    
-    // Optional: summary log at reduced frequency could be added here
+
+    if (changed) markSpritesDirty();
   }
   
   // Send full current sprite state to server
@@ -257,12 +274,9 @@ function dbg(...args) {
     // Cooldown check for local mode (exemptions: broadcaster, mods, vips, subs)
     const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
     if (cooldownMs > 0) {
-      const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
-      const isBot = username === cfg.botUsername;
-      const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
       const isVip = tags?.badges?.vip;
       const isSub = tags?.badges?.subscriber;
-      const exempt = isBroadcaster || isBot || isMod || isVip || isSub;
+      const exempt = hasModPermission(tags, username, cfg) || isVip || isSub;
       
       if (!exempt) {
         const userId = username.toLowerCase();
@@ -470,6 +484,7 @@ function dbg(...args) {
             if (cmd === 'clearSprites') {
               dbg('Clearing all sprites');
               sprites.clear();
+              markSpritesDirty();
               animatedMediaRenderer.clear();
             } else if (cmd === 'boom') {
               dbg('Boom command - applying explosion effect');
@@ -481,29 +496,10 @@ function dbg(...args) {
               // Create explosion visual effect
               createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
               
-              // Apply physics to all sprites
-              for (const sprite of sprites.values()) {
-                const dx = sprite.x - epicenterX;
-                const dy = sprite.y - epicenterY;
-                const dist = Math.hypot(dx, dy);
-                
-                if (dist < explosionRadius && dist > COLLISION_PERSONAL_SPACE_THRESHOLD) {
-                  const nx = dx / dist;
-                  const ny = dy / dist;
-                  const falloff = Math.pow(1 - dist / explosionRadius, 2);
-                  const force = EXPLOSION_FORCE_MULTIPLIER * Math.max(0, falloff);
-                  
-                  sprite.vx += nx * force;
-                  sprite.vy += ny * force * (1 - EXPLOSION_UPWARD_BIAS) - force * EXPLOSION_UPWARD_BIAS;
-                  
-                  const spinStrength = force * SPIN_STRENGTH_FACTOR;
-                  sprite.angularVelocity += (Math.random() - 0.5) * spinStrength;
-                  sprite.lastTiltTime = Date.now();
-                  
-                  sprite.vx += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
-                  sprite.vy += (Math.random() - 0.5) * force * RANDOM_JITTER_FACTOR;
-                }
-              }
+              // Apply physics to all sprites using shared function
+              applyExplosionPhysics(sprites, epicenterX, epicenterY, explosionRadius,
+                EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR,
+                RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD);
             } else if (cmd === 'jump') {
               dbg('Jump command - applying velocity to sprite');
               // Apply jump velocity to the user's sprite
