@@ -120,3 +120,6 @@ obs-browser-source-cache/
 # Streaming specific
 stream-records/
 captures/
+
+# Developer notes
+RELEASE.md
