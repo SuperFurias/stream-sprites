@@ -1996,50 +1996,61 @@ async function handleStartupTwitchConnection() {
     console.log('⚠ useServer=false - no Twitch connection');
     return;
   }
-  
+
   if (!cfg.autoGenerateOAuth) {
     dbg('autoGenerateOAuth=false - skipping automatic token generation');
     console.log('⚠ Auto-generate OAuth disabled. Use the dashboard to generate a token manually.');
     return;
   }
-  
+
   dbg('useServer=true, autoGenerateOAuth=true - checking Twitch connection');
-  
-  // If we already have an access token, connect if autoConnect is enabled
-  if (cfg.twitch.botOAuthToken && cfg.twitch.botOAuthToken !== 'oauth:your_bot_oauth_token_here') {
-    if (cfg.autoConnect) {
-      dbg('Access token found, autoConnect=true - connecting to Twitch');
-      connectTwitchBot();
-    } else {
-      dbg('Access token found, autoConnect=false - not connecting');
-      console.log('✓ Token available. Auto-connect disabled — use the dashboard to connect.');
-    }
-    return;
-  }
-  
-  // No access token - check if all required credentials are present
+
+  // Check if all required credentials are present before attempting any token operations
   if (!hasRequiredTwitchCredentials()) {
     console.log('⚠ Twitch credentials incomplete. Fill in clientId, clientSecret, botUsername, and channel in .env.');
     return;
   }
-  
-  // Credentials are filled but no token - try to refresh using stored refresh token
-  console.log('→ No OAuth token found, attempting automatic token generation...');
-  const refreshed = await tryAutoRefreshToken();
-  
-  if (refreshed) {
+
+  // If we have a refresh token, always attempt to refresh to get a fresh access token.
+  // This handles the case where the server was down for a while and the stored access token expired.
+  const hasRefreshToken = cfg.twitch?.refreshToken && cfg.twitch.refreshToken.trim() !== '';
+  const hasAccessToken = cfg.twitch.botOAuthToken && cfg.twitch.botOAuthToken !== 'oauth:your_bot_oauth_token_here';
+
+  if (hasRefreshToken) {
+    console.log('→ Refreshing OAuth token on startup...');
+    const refreshed = await tryAutoRefreshToken();
+
+    if (refreshed) {
+      if (cfg.autoConnect) {
+        console.log('✓ Token refreshed, autoConnect=true — connecting to Twitch...');
+        connectTwitchBot();
+      } else {
+        console.log('✓ Token refreshed. Auto-connect disabled — use the dashboard to connect.');
+      }
+      return;
+    }
+
+    // Refresh failed (refresh token expired/revoked) - need browser-based OAuth
+    console.log('→ Refresh token expired or invalid. Will open browser for Twitch authorization...');
+    needsOAuthRedirect = true;
+    dbg('needsOAuthRedirect set to true');
+    return;
+  }
+
+  // No refresh token - check if we have a stored access token to use directly
+  if (hasAccessToken) {
     if (cfg.autoConnect) {
-      console.log('✓ Token obtained, autoConnect=true — connecting to Twitch...');
+      dbg('No refresh token, but access token found — connecting to Twitch');
       connectTwitchBot();
     } else {
-      console.log('✓ Token obtained. Auto-connect disabled — use the dashboard to connect.');
+      dbg('No refresh token, but access token found — not connecting');
+      console.log('✓ Token available. Auto-connect disabled — use the dashboard to connect.');
     }
     return;
   }
-  
-  // No valid refresh token - need browser-based OAuth
-  // Mark for redirect after server starts listening
-  console.log('→ No valid refresh token. Will open browser for Twitch authorization...');
+
+  // No tokens at all - need browser-based OAuth
+  console.log('→ No OAuth token found. Will open browser for Twitch authorization...');
   needsOAuthRedirect = true;
   dbg('needsOAuthRedirect set to true');
 }

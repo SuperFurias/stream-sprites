@@ -5,6 +5,11 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.14] - 2026-03-27
+
+### Fixed
+- **OAuth auto-refresh on startup after extended downtime**: Fixed a bug where the server would skip token refresh on startup if a stored access token existed, even if that token was expired. The startup flow now always attempts a refresh using the stored refresh token before connecting, ensuring a fresh access token is obtained regardless of how long the server was offline. If the refresh token itself is expired or invalid, the browser automatically opens for re-authorization.
+
 ## [1.0.13] - 2026-03-27
 
 ### Added
