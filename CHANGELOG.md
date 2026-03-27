@@ -5,6 +5,30 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.16] - 2026-03-27
+
+### Performance
+- Removed per-frame console.log calls from animatedMediaRenderer render loop (major FPS improvement)
+- Replaced O(n) array splice with O(1) swap-pop in particle removal
+- Reused sorted sprite array cache instead of allocating and sorting every frame
+- Cached Date.now() once per frame in physics engine instead of per-sprite
+- Cached skin detection results with 5-second TTL (avoids repeated filesystem scans)
+- Cached /env config responses with 2-second TTL (avoids repeated disk reads and JSON parses)
+- Set ctx.font once per frame instead of per sprite in renderer
+
+### Fixed
+- **Sprites stuck tilted forever**: Fixed collision/explosion resetting the tilt return timer on every hit. Timer now only starts once and counts down uninterrupted, so sprites always return to upright even in dense crowds.
+- **Tilt return while airborne**: Tilt return now only starts after the sprite lands on the ground. Sprites stay tilted while flying through the air after a boom.
+- **Collision probability logic inversion**: Low sprite count now correctly means low collision processing probability, high count means high probability (was backwards).
+- **TMI.js blocked by broken SRI**: Removed placeholder SRI integrity attribute that prevented tmi.js from loading via CDN.
+
+### Changed
+- Extracted shared explosion physics into `applyExplosionPhysics()` in utils.js (deduplicated across 3 files)
+- Extracted shared permission check into `hasModPermission()` in utils.js (deduplicated across 4 locations)
+- Extracted duplicated media element creation into `createMediaElement()` helper in animatedMediaRenderer.js
+- Added periodic pruning for command cooldowns and spawn timers to prevent memory leaks
+- Removed 130-line duplicate `fallbackDefaults` object from config.js (server provides defaults)
+
 ## [1.0.15] - 2026-03-27
 
 ### Added
