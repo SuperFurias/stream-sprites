@@ -30,15 +30,20 @@ import {
   ROAM_STEER_FORCE_MULTIPLIER,
   ROAM_STEER_VERTICAL_FACTOR,
   ROAM_ARRIVAL_THRESHOLD,
+  ROAM_DISTANCE_THRESHOLD,
   ROAM_RANDOM_MOVE_CHANCE,
   ROAM_RANDOM_MOVE_FORCE,
   ROAM_RANDOM_MOVE_VERTICAL,
   COLLISION_FORCE_MULTIPLIER,
+  COLLISION_PERSONAL_SPACE_THRESHOLD,
   ANGULAR_VELOCITY_FROM_COLLISION,
   DRAGGED_GRAVITY,
   DANCE_GRAVITY_FACTOR,
   DANCE_ANGULAR_VELOCITY,
-  DANCE_FREQUENCY
+  DANCE_FREQUENCY,
+  ZONE_SELECTION_BIAS,
+  MIN_ATTRACTION_DISTANCE,
+  TEXT_WIDTH_PADDING
 } from './config.js';
 
 export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
@@ -142,7 +147,7 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
         // Different sizes: Attraction of smaller towards larger
         // Only apply when within a reasonable distance
         const attractionRadius = baseAvoidanceRadius * 1.5;
-        if (dist < attractionRadius && dist > 20) {
+        if (dist < attractionRadius && dist > MIN_ATTRACTION_DISTANCE) {
           // Attraction strength based on size difference and proximity
           // Stronger attraction when very small is near very large
           const sizeDiffFactor = (1 - sizeSimilarity) * SIZE_DIFF_FACTOR; // Up to 2x for very different sizes
@@ -159,8 +164,8 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
           } else {
             b.vx += nx * attractionForce;
             b.vy += ny * attractionForce;
-            a.vx -= nx * attractionForce * 0.3;
-            a.vy -= ny * attractionForce * 0.3;
+            a.vx -= nx * attractionForce * LARGER_REPULSION_FACTOR;
+            a.vy -= ny * attractionForce * LARGER_REPULSION_FACTOR;
           }
         }
       } else {
@@ -192,7 +197,7 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
 function updateDraggedSpritePhysics(sprite, W, H, GROUND_Y) {
   sprite.vy += DRAGGED_GRAVITY; // Reduced gravity for dragged
   
-  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + 4);
+  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + TEXT_WIDTH_PADDING);
   const topBottomRadius = sprite.collisionRadius || sprite.size / 2;
   
   if (sprite.x < leftRightRadius) {
@@ -248,7 +253,7 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
       sprite.vy = 0;
       sprite.y = GROUND_Y - (sprite.collisionRadius || sprite.size / 2);
     }
-    const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + 4);
+    const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + TEXT_WIDTH_PADDING);
     if (sprite.x < leftRightRadius) sprite.x = leftRightRadius;
     if (sprite.x > W - leftRightRadius) sprite.x = W - leftRightRadius;
     if (sprite.y < (sprite.collisionRadius || sprite.size / 2)) {
@@ -269,7 +274,7 @@ function updateSpritePhysics(sprite, dt, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE
     sprite.vy *= AIR_RESISTANCE;
   }
 
-  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + 4);
+  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + TEXT_WIDTH_PADDING);
   const topBottomRadius = sprite.collisionRadius || sprite.size / 2;
 
   // Update facing direction with threshold to prevent trembling
@@ -356,7 +361,7 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
         targetZone = Math.floor(Math.random() * NUM_ZONES);
       } else {
         // 70% chance to pick the most underpopulated zone, 30% for any underpopulated zone
-        if (Math.random() < 0.7) {
+        if (Math.random() < ZONE_SELECTION_BIAS) {
           // Keep targetZone as the most underpopulated
         } else {
           targetZone = underpopulatedZones[Math.floor(Math.random() * underpopulatedZones.length)];
@@ -375,7 +380,7 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
       const dx = sprite.roamTargetX - sprite.x;
       const dy = sprite.roamTargetY - sprite.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > 5) {
+      if (dist > ROAM_DISTANCE_THRESHOLD) {
         const nx = dx / dist;
         const ny = dy / dist;
         const walkForce = speed * ROAM_WALK_FORCE_MULTIPLIER; // Slightly stronger initial push
@@ -427,7 +432,7 @@ function handleCollisions(arr, grid) {
       const dist = Math.hypot(dx, dy);
       const personalSpace = a.collisionRadius + b.collisionRadius;
       
-      if (dist < personalSpace && dist > 0.1) {
+      if (dist < personalSpace && dist > COLLISION_PERSONAL_SPACE_THRESHOLD) {
         const nx = dx / dist, ny = dy / dist;
         const force = (personalSpace - dist) * COLLISION_FORCE_MULTIPLIER;
         

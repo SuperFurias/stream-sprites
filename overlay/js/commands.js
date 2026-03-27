@@ -1,6 +1,6 @@
 // Command handling module
 import { spawn } from './sprite.js';
-import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD, FLIP_DURATION_MS } from './config.js';
+import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD, FLIP_DURATION_MS, JUMP_VELOCITY, HEIGHT_SCALE_SIT, HEIGHT_SCALE_IDLE, FIGHT_DURATION_MS, FLIP_ANGULAR_VELOCITY, FIGHT_COIN_FLIP_PROBABILITY } from './config.js';
 
 // Debug utility
 function dbg(...args) {
@@ -22,18 +22,18 @@ export function handleCommand(username, text, tags, cfg, sprites, skins, W, GROU
 
   if (cmd === '!jump') {
     dbg('Jump command for', username);
-    sprite.vy = -12;
+    sprite.vy = JUMP_VELOCITY;
     sprite.state = 'idle';
   } else if (cmd === '!sit') {
     dbg('Sit command for', username);
     sprite.state = 'sit';
     sprite.vx = 0;
     sprite.vy = 0;
-    sprite.heightScale = 0.75;
+    sprite.heightScale = HEIGHT_SCALE_SIT;
   } else if (cmd === '!unsit') {
     dbg('Unsit command for', username);
     sprite.state = 'idle';
-    sprite.heightScale = 1.0;
+    sprite.heightScale = HEIGHT_SCALE_IDLE;
   } else if (cmd === '!boom') {
     dbg('Boom command by', username);
     handleBoomCommand(sprites, W, GROUND_Y, explosionParticles, createExplosionEffect);
@@ -196,7 +196,7 @@ function handleFlipCommand(username, args, tags, cfg, sprites, spawn, createSpri
   const now = Date.now();
   targetSprite.flipUntil = now + FLIP_DURATION_MS;
   // Start with a strong spin to create the flipping animation
-  targetSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2); // 90 degrees per frame initially
+  targetSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY; // 90 degrees per frame initially
   targetSprite.lastTiltTime = null; // Clear any existing tilt timer
   
   dbg('Flip applied to', targetUsername, 'until', new Date(targetSprite.flipUntil).toISOString());
@@ -222,14 +222,14 @@ function handleFightCommand(username, args, tags, cfg, sprites, spawn, createSpr
     return `User '${targetUsername}' not found.`;
   }
   // Randomly choose loser (50% chance)
-  const commandUserWins = Math.random() < 0.5;
+  const commandUserWins = Math.random() < FIGHT_COIN_FLIP_PROBABILITY;
   const loser = commandUserWins ? targetUsername : commandUserId;
   const loserSprite = commandUserWins ? targetSprite : commandUserSprite;
-  const duration = 10000; // 10 seconds
+  const duration = FIGHT_DURATION_MS; // 10 seconds
   // Apply animated flip to loser
   const now = Date.now();
   loserSprite.flipUntil = now + duration;
-  loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+  loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY;
   loserSprite.lastTiltTime = null;
   // Stop the loser's movement (exhausted from fight)
   loserSprite.vx = 0;

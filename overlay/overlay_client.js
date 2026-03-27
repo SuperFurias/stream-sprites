@@ -12,7 +12,7 @@ import { draw as render, updateSpriteCountDisplay } from './js/renderer.js';
 import { createGameLoop } from './js/loop.js';
 import { setupWebSocket, setupTmiFallback, handleWebSocketMessage } from './js/connection.js';
 import { createAnimatedMediaRenderer } from './js/animatedMediaRenderer.js';
-import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD } from './js/config.js';
+import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD, JUMP_VELOCITY, HEIGHT_SCALE_SIT, HEIGHT_SCALE_IDLE, FIGHT_DURATION_MS, RESIZE_DEBOUNCE_MS, FLIP_DURATION_MS, GROUND_Y_MULTIPLIER, FLIP_ANGULAR_VELOCITY } from './js/config.js';
 
 // Debug utility
 function dbg(...args) {
@@ -71,7 +71,7 @@ function dbg(...args) {
   const { canvas, ctx, DPR } = setupCanvas();
   let W = overlay.canvasWidth || 1920;
   let H = overlay.canvasHeight || 1080;
-  let GROUND_Y = H * 0.95;
+  let GROUND_Y = H * GROUND_Y_MULTIPLIER;
   
   // Initialize display
   initializeCanvasDisplay(cfg, USE_SERVER);
@@ -110,7 +110,7 @@ function dbg(...args) {
       W = result.W;
       H = result.H;
       GROUND_Y = result.GROUND_Y;
-    }, 100);
+    }, RESIZE_DEBOUNCE_MS);
   };
   resize();
   window.addEventListener('resize', resize);
@@ -183,11 +183,11 @@ function dbg(...args) {
         }
         // Always apply heightScale and velocity based on current state
         if (existingSprite.state === 'sit') {
-          existingSprite.heightScale = 0.75;
+          existingSprite.heightScale = HEIGHT_SCALE_SIT;
           existingSprite.vx = 0;
           existingSprite.vy = 0;
         } else {
-          existingSprite.heightScale = 1.0;
+          existingSprite.heightScale = HEIGHT_SCALE_IDLE;
         }
         existingSprite.lastActivity = serverSprite.lastActivity;
         existingSprite.createdAt = serverSprite.createdAt;
@@ -198,11 +198,11 @@ function dbg(...args) {
         newSprite.state = serverSprite.state || 'idle';
         // Always set heightScale based on state
         if (newSprite.state === 'sit') {
-          newSprite.heightScale = 0.75;
+          newSprite.heightScale = HEIGHT_SCALE_SIT;
           newSprite.vx = 0;
           newSprite.vy = 0;
         } else {
-          newSprite.heightScale = 1.0;
+          newSprite.heightScale = HEIGHT_SCALE_IDLE;
         }
         newSprite.lastActivity = serverSprite.lastActivity;
         newSprite.createdAt = serverSprite.createdAt;
@@ -381,7 +381,7 @@ function dbg(...args) {
       if (dist < collisionDist) {
         // Collision detected! Trigger fight effects.
         const midX = (winnerSprite.x + loserSprite.x) / 2;
-        const duration = 10000; // 10 seconds
+        const duration = FIGHT_DURATION_MS; // 10 seconds
         
         // Explosion effect
         const collisionRadius = 200 + Math.random() * 100;
@@ -389,7 +389,7 @@ function dbg(...args) {
         
         // Flip loser
         loserSprite.flipUntil = Date.now() + duration;
-        loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+        loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY;
         loserSprite.lastTiltTime = null;
         // Stop the loser's movement (exhausted from fight)
         loserSprite.vx = 0;
@@ -503,7 +503,7 @@ function dbg(...args) {
                 const userId = data.username.toLowerCase();
                 const sprite = sprites.get(userId);
                 if (sprite) {
-                  sprite.vy = -12;
+                   sprite.vy = JUMP_VELOCITY;
                   sprite.state = 'idle';
                   dbg('Applied jump velocity to', userId);
                 } else {
@@ -516,10 +516,10 @@ function dbg(...args) {
                 const userId = data.username.toLowerCase();
                 const sprite = sprites.get(userId);
                 if (sprite) {
-                  const duration = data.duration || 5000;
+                  const duration = data.duration || FLIP_DURATION_MS;
                   sprite.flipUntil = Date.now() + duration;
                   // Start with a strong spin for animated flip effect
-                  sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+                  sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY;
                   sprite.lastTiltTime = null;
                   dbg('Applied flip to', userId, 'for', duration, 'ms');
                 } else {
@@ -544,14 +544,14 @@ function dbg(...args) {
                   winnerSprite.roamTargetX = loserSprite.x;
                   winnerSprite.roamTargetY = GROUND_Y - 50;
                   winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
-                  winnerSprite.roamTimer = 10000;
+                  winnerSprite.roamTimer = FIGHT_DURATION_MS;
                   winnerSprite.state = 'idle';
                   winnerSprite.isFighting = true;
                   
                   loserSprite.roamTargetX = winnerSprite.x;
                   loserSprite.roamTargetY = GROUND_Y - 50;
                   loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
-                  loserSprite.roamTimer = 10000;
+                  loserSprite.roamTimer = FIGHT_DURATION_MS;
                   loserSprite.state = 'idle';
                   loserSprite.isFighting = true;
                   

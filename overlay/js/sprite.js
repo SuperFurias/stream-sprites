@@ -9,7 +9,9 @@ import {
   SPAWN_JITTER,
   TEXT_WIDTH_PADDING,
   MASS_DIVISOR,
-  MOMENT_OF_INERTIA_FACTOR
+  MOMENT_OF_INERTIA_FACTOR,
+  VELOCITY_BUMP,
+  WIGGLE_RANGE
 } from './config.js';
 
 export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
@@ -52,7 +54,7 @@ export function createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_S
     state: 'idle',
     createdAt: Date.now(),
     lastActivity: Date.now(),
-    wiggle: Math.random() * 1000,
+    wiggle: Math.random() * WIGGLE_RANGE,
     mass,
     momentOfInertia,
     angularVelocity: 0,
@@ -76,8 +78,8 @@ export function spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE
   const last = spawnTimes.get(key) || 0;
   if (Date.now() - last < SPAWN_THROTTLE_MS && sprites.has(key)) {
     const sprite = sprites.get(key);
-    sprite.vx += (Math.random() - 0.5) * 3;
-    sprite.vy -= Math.random() * 3;
+    sprite.vx += (Math.random() - 0.5) * VELOCITY_BUMP;
+    sprite.vy -= Math.random() * VELOCITY_BUMP;
     sprite.lastActivity = Date.now();
     return sprite;
   }

@@ -1,4 +1,6 @@
 // Canvas setup and management module
+import { GROUND_Y_MULTIPLIER } from './config.js';
+
 export function setupCanvas() {
   const canvas = document.getElementById('overlayCanvas');
   const ctx = canvas.getContext('2d');
@@ -23,7 +25,7 @@ export function resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites) {
   const oldGroundY = GROUND_Y;
   const newW = winW;
   const newH = winH;
-  const newGROUND_Y = newH * 0.99;
+  const newGROUND_Y = newH * GROUND_Y_MULTIPLIER;
   
   // Adjust existing sprites to stay on the new ground
   for (const sprite of sprites.values()) {
