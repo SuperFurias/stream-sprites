@@ -5,6 +5,16 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.15] - 2026-03-27
+
+### Added
+- **Dashboard settings for command values**: Added configurable settings for Jump Velocity, Flip Angular Velocity, Fight Coin Flip Probability, Flip Duration, Fight Duration, and Command Cooldown in the dashboard settings page (Other section).
+- **New configurable constants**: `jumpVelocity`, `flipAngularVelocity`, `fightCoinFlipProbability` added to `DEFAULT_OVERLAY` and `config.js`.
+
+### Changed
+- **Unified hardcoded values**: All duplicated hardcoded values across the overlay codebase are now defined once in `config.js` and referenced from there. Values like jump velocity, flip duration, fight duration, height scales, and angular velocity are now configurable through the dashboard settings.
+- **commands.js reads settings dynamically**: Command handler functions now read configurable values from `cfg.overlay` with fallbacks to `config.js` defaults, instead of using static imports.
+
 ## [1.0.14] - 2026-03-27
 
 ### Fixed

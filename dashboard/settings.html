@@ -749,6 +749,36 @@
             <input type="number" id="resizeDebounceMs" min="50" max="1000" step="50">
             <small>Debounce for canvas resize (100=default)</small>
           </div>
+          <div class="form-group">
+            <label>Command Cooldown (ms)</label>
+            <input type="number" id="commandCooldownMs" min="0" max="30000" step="500">
+            <small>Cooldown between commands per user (5000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Flip Duration (ms)</label>
+            <input type="number" id="flipDurationMs" min="1000" max="30000" step="500">
+            <small>How long the flip effect lasts (5000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Fight Duration (ms)</label>
+            <input type="number" id="fightDurationMs" min="1000" max="60000" step="1000">
+            <small>How long the fight exhaustion lasts (10000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Jump Velocity</label>
+            <input type="number" id="jumpVelocity" min="-30" max="-1" step="1">
+            <small>Upward velocity for jump command (-16=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Flip Angular Velocity</label>
+            <input type="number" id="flipAngularVelocity" min="0.1" max="5" step="0.1">
+            <small>Spin speed during flip (1.57=default, i.e. PI/2)</small>
+          </div>
+          <div class="form-group">
+            <label>Fight Coin Flip Probability</label>
+            <input type="number" id="fightCoinFlipProbability" min="0" max="1" step="0.05">
+            <small>Chance challenger wins a fight (0.5=default)</small>
+          </div>
         </div>
       </div>
     </div>

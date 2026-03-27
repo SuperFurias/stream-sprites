@@ -510,7 +510,10 @@ const DEFAULT_OVERLAY = {
   resizeDebounceMs: 100,
   flipDurationMs: 5000,
   fightDurationMs: 10000,
-  commandCooldownMs: 5000 // 5 seconds cooldown for all commands (exemptions apply)
+  commandCooldownMs: 5000, // 5 seconds cooldown for all commands (exemptions apply)
+  jumpVelocity: -16,
+  flipAngularVelocity: Math.PI / 2,
+  fightCoinFlipProbability: 0.5
 };
 
 const app = express();

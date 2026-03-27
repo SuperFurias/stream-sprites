@@ -132,7 +132,11 @@ export function getConfigConstants(cfg, overlay) {
     directionChangeThreshold: 0.3,
     resizeDebounceMs: 100,
     flipDurationMs: 5000,
-    fightDurationMs: 10000
+    fightDurationMs: 10000,
+    commandCooldownMs: 5000,
+    jumpVelocity: -16,
+    flipAngularVelocity: Math.PI / 2,
+    fightCoinFlipProbability: 0.5
   };
   
   // Use server-provided defaults if available, otherwise fallback
@@ -268,7 +272,11 @@ export function getConfigConstants(cfg, overlay) {
     DIRECTION_CHANGE_THRESHOLD: overlayConfig.directionChangeThreshold,
     RESIZE_DEBOUNCE_MS: overlayConfig.resizeDebounceMs,
     FLIP_DURATION_MS: overlayConfig.flipDurationMs,
-    FIGHT_DURATION_MS: overlayConfig.fightDurationMs
+    FIGHT_DURATION_MS: overlayConfig.fightDurationMs,
+    COMMAND_COOLDOWN_MS: overlayConfig.commandCooldownMs,
+    JUMP_VELOCITY: overlayConfig.jumpVelocity,
+    FLIP_ANGULAR_VELOCITY: overlayConfig.flipAngularVelocity,
+    FIGHT_COIN_FLIP_PROBABILITY: overlayConfig.fightCoinFlipProbability
   };
 }
 

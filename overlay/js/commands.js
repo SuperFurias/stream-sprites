@@ -1,6 +1,6 @@
 // Command handling module
 import { spawn } from './sprite.js';
-import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD, FLIP_DURATION_MS, JUMP_VELOCITY, HEIGHT_SCALE_SIT, HEIGHT_SCALE_IDLE, FIGHT_DURATION_MS, FLIP_ANGULAR_VELOCITY, FIGHT_COIN_FLIP_PROBABILITY } from './config.js';
+import { EXPLOSION_RADIUS_BASE, EXPLOSION_RADIUS_VAR, EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR, NAME_LENGTH_LIMIT, VELOCITY_BUMP, COLLISION_PERSONAL_SPACE_THRESHOLD, JUMP_VELOCITY as DEFAULT_JUMP_VELOCITY, HEIGHT_SCALE_SIT as DEFAULT_HEIGHT_SCALE_SIT, HEIGHT_SCALE_IDLE as DEFAULT_HEIGHT_SCALE_IDLE, FLIP_DURATION_MS as DEFAULT_FLIP_DURATION_MS, FIGHT_DURATION_MS as DEFAULT_FIGHT_DURATION_MS, FLIP_ANGULAR_VELOCITY as DEFAULT_FLIP_ANGULAR_VELOCITY, FIGHT_COIN_FLIP_PROBABILITY as DEFAULT_FIGHT_COIN_FLIP_PROBABILITY } from './config.js';
 
 // Debug utility
 function dbg(...args) {
@@ -17,6 +17,16 @@ export function handleCommand(username, text, tags, cfg, sprites, skins, W, GROU
   const cmd = text.trim().split(' ')[0].toLowerCase();
   const args = text.trim().split(' ').slice(1);
   const sprite = sprites.get(username.toLowerCase()) || spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSprite, W, GROUND_Y, ctx, userSkinCache);
+
+  // Read configurable values from overlay settings (with fallbacks from config.js defaults)
+  const ov = cfg?.overlay || {};
+  const JUMP_VELOCITY = ov.jumpVelocity ?? DEFAULT_JUMP_VELOCITY;
+  const HEIGHT_SCALE_SIT = ov.heightScaleSit ?? DEFAULT_HEIGHT_SCALE_SIT;
+  const HEIGHT_SCALE_IDLE = ov.heightScaleIdle ?? DEFAULT_HEIGHT_SCALE_IDLE;
+  const FLIP_DURATION_MS = ov.flipDurationMs ?? DEFAULT_FLIP_DURATION_MS;
+  const FIGHT_DURATION_MS = ov.fightDurationMs ?? DEFAULT_FIGHT_DURATION_MS;
+  const FLIP_ANGULAR_VELOCITY = ov.flipAngularVelocity ?? DEFAULT_FLIP_ANGULAR_VELOCITY;
+  const FIGHT_COIN_FLIP_PROBABILITY = ov.fightCoinFlipProbability ?? DEFAULT_FIGHT_COIN_FLIP_PROBABILITY;
 
   let response = null;
 
@@ -178,7 +188,12 @@ function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSpr
 
 function handleFlipCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
   const targetUsername = args[0] ? args[0].toLowerCase().replace(/^@/, '') : username.toLowerCase();
-  
+
+  // Read configurable values from overlay settings (with fallbacks from config.js defaults)
+  const ov = cfg?.overlay || {};
+  const FLIP_DURATION_MS = ov.flipDurationMs ?? DEFAULT_FLIP_DURATION_MS;
+  const FLIP_ANGULAR_VELOCITY = ov.flipAngularVelocity ?? DEFAULT_FLIP_ANGULAR_VELOCITY;
+
   let targetSprite;
   if (targetUsername === username.toLowerCase()) {
     // Flipping yourself - always allowed
@@ -210,6 +225,13 @@ function handleFightCommand(username, args, tags, cfg, sprites, spawn, createSpr
   if (targetUsername === username.toLowerCase()) {
     return 'You cannot fight yourself.';
   }
+
+  // Read configurable values from overlay settings (with fallbacks from config.js defaults)
+  const ov = cfg?.overlay || {};
+  const FIGHT_DURATION_MS = ov.fightDurationMs ?? DEFAULT_FIGHT_DURATION_MS;
+  const FLIP_ANGULAR_VELOCITY = ov.flipAngularVelocity ?? DEFAULT_FLIP_ANGULAR_VELOCITY;
+  const FIGHT_COIN_FLIP_PROBABILITY = ov.fightCoinFlipProbability ?? DEFAULT_FIGHT_COIN_FLIP_PROBABILITY;
+
   // Ensure command user has a sprite (spawn if needed)
   const commandUserId = username.toLowerCase();
   let commandUserSprite = sprites.get(commandUserId);

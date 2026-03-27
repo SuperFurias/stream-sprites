@@ -277,7 +277,13 @@ const overlayFieldMap = {
   centerPushForce: 'centerPushForce',
   groundYCenterOffset: 'groundYCenterOffset',
   directionChangeThreshold: 'directionChangeThreshold',
-  resizeDebounceMs: 'resizeDebounceMs'
+  resizeDebounceMs: 'resizeDebounceMs',
+  commandCooldownMs: 'commandCooldownMs',
+  flipDurationMs: 'flipDurationMs',
+  fightDurationMs: 'fightDurationMs',
+  jumpVelocity: 'jumpVelocity',
+  flipAngularVelocity: 'flipAngularVelocity',
+  fightCoinFlipProbability: 'fightCoinFlipProbability'
 };
 
 async function loadSettings() {
