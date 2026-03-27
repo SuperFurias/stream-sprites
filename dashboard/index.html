@@ -34,6 +34,10 @@
   .form-group{display:flex;flex-direction:column;gap:6px}
   .form-group label{font-weight:600;font-size:14px;color:#a0aec0}
   .form-group input{width:100%;margin:0}
+  .password-wrapper{position:relative;display:flex;align-items:center}
+  .password-wrapper input{width:100%;padding-right:36px}
+  .password-toggle{position:absolute;right:8px;background:none;border:none;color:#888;cursor:pointer;font-size:11px;padding:4px;line-height:1}
+  .password-toggle:hover{color:#fff}
   .button-group{display:flex;gap:12px;margin:16px 0;flex-wrap:wrap}
   .button-group button{margin:0}
   .token-display{margin:16px 0;padding:12px;background:#2d3748;border-radius:6px;border:1px solid #4a5568}
@@ -98,7 +102,7 @@
 <body>
   <div class="header">
     <div class="header-left">
-      <h1 class="page-title">🎮 Stream Sprites</h1>
+      <h1 class="page-title"><span style="user-select:none;font-size:1.3em">🎮</span> Stream Sprites</h1>
       <p class="page-subtitle">Admin Dashboard</p>
     </div>
     <div class="header-right">

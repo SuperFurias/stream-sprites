@@ -41,7 +41,7 @@ Users can control their sprites via Twitch chat:
 - **70+ Tunable Parameters** – Fine-tune physics, visuals, spawning, and behavior
 - **Dynamic Updates** – Changes apply without server restart
 - **Debug Logging** – Console and file-based logging with granular control
-- **OAuth Management** – Secure token generation with optional persistence
+- **OAuth Management** – Automatic token generation with refresh token persistence
 - **User Exclusion System** – Ban users with custom reason tracking
 - **Skin Assignment Manager** – Bulk user skin management with pagination
 
@@ -104,11 +104,12 @@ The server will:
 3. **Generate OAuth Token**:
    - Click "Generate OAuth Token"
    - Authorize the application in the Twitch popup
-   - Copy the token and paste it into the OAuth field (or it may auto-populate)
+   - The refresh token is saved automatically for future auto-connection
 
 4. **Connect to Twitch**:
    - Click "Connect to Twitch"
    - Verify connection status shows success
+   - (Optional) Enable **Auto-Generate OAuth** and **Auto-Connect** toggles to skip manual steps on future server starts
 
 5. **Add Overlay to OBS**:
    - Open OBS Studio
@@ -407,7 +408,7 @@ Stream Sprites/
 ## 🔒 Security Notes
 
 - **Development Mode**: Admin endpoints have no authentication. Add reverse proxy auth or implement JWT for production.
-- **OAuth Token**: By default, tokens are stored in memory only and cleared on restart. Set `persistOAuthToken=true` to save to `.env`.
+- **OAuth Token**: Access tokens are stored in memory only and never saved to disk. Refresh tokens are stored in `.env` for automatic reconnection. Enable **Auto-Generate OAuth** in the dashboard to use them on startup, or disable both toggles to clear all stored tokens.
 - **.env File**: Automatically added to `.gitignore`. Never commit credentials.
 - **Input Validation**: Usernames limited to 25 characters in the dashboard UI. Server validates all inputs.
 

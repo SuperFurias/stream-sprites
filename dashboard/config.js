@@ -1,5 +1,17 @@
 // Config tab functions
 
+function togglePassword(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = 'hide';
+  } else {
+    input.type = 'password';
+    btn.innerHTML = '&#128065;';
+  }
+}
+
 async function loadConfig(){
   try{
     const res = await fetch('/env');
@@ -28,7 +40,8 @@ function updateFormFields(cfg, clearValues = false){
   const clientSecretInput = document.getElementById('clientSecret');
   const botUsernameInput = document.getElementById('botUsername');
   const channelInput = document.getElementById('channel');
-  const persistOAuthTokenInput = document.getElementById('persistOAuthToken');
+  const autoGenerateOAuthInput = document.getElementById('autoGenerateOAuth');
+  const autoConnectInput = document.getElementById('autoConnect');
 
   if(!clientIdInput || !clientSecretInput || !botUsernameInput || !channelInput) return;
 
@@ -37,13 +50,15 @@ function updateFormFields(cfg, clearValues = false){
     clientSecretInput.value = '';
     botUsernameInput.value = '';
     channelInput.value = '';
-    if(persistOAuthTokenInput) persistOAuthTokenInput.checked = false;
+    if(autoGenerateOAuthInput) autoGenerateOAuthInput.checked = false;
+    if(autoConnectInput) autoConnectInput.checked = false;
   } else {
     clientIdInput.value = cfg.twitch?.clientId || '';
     clientSecretInput.value = cfg.twitch?.clientSecret || '';
     botUsernameInput.value = cfg.botUsername || '';
     channelInput.value = cfg.channel || '';
-    if(persistOAuthTokenInput) persistOAuthTokenInput.checked = cfg.persistOAuthToken || false;
+    if(autoGenerateOAuthInput) autoGenerateOAuthInput.checked = cfg.autoGenerateOAuth || false;
+    if(autoConnectInput) autoConnectInput.checked = cfg.autoConnect || false;
   }
 }
 
@@ -58,12 +73,15 @@ async function saveConfig(){
     if(!res.ok) throw new Error('config not found');
     const currentCfg = await res.json();
 
-    const persistOAuthTokenInput = document.getElementById('persistOAuthToken');
-    const persistOAuthToken = persistOAuthTokenInput ? persistOAuthTokenInput.checked : false;
+    const autoGenerateOAuthInput = document.getElementById('autoGenerateOAuth');
+    const autoGenerateOAuth = autoGenerateOAuthInput ? autoGenerateOAuthInput.checked : false;
+    const autoConnectInput = document.getElementById('autoConnect');
+    const autoConnect = autoConnectInput ? autoConnectInput.checked : false;
     
     const cfg = {
       ...currentCfg,
-      persistOAuthToken: persistOAuthToken,
+      autoGenerateOAuth: autoGenerateOAuth,
+      autoConnect: autoConnect,
       twitch: {
         ...currentCfg.twitch || {},
         clientId: document.getElementById('clientId').value.trim(),
@@ -72,13 +90,6 @@ async function saveConfig(){
       botUsername: document.getElementById('botUsername').value.trim(),
       channel: document.getElementById('channel').value.trim()
     };
-
-    if(!cfg.twitch.clientId || !cfg.twitch.clientSecret || !cfg.botUsername || !cfg.channel){
-      alert('Please fill in all required fields');
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Config';
-      return;
-    }
 
      const result = await sharedAPI('/api/local/saveConfig', { method:'POST', body: JSON.stringify(cfg) });
     alert('✓ Config saved! ' + (result.message || ''));
@@ -93,9 +104,10 @@ async function saveConfig(){
 
 async function generateOAuth(){
   const clientId = document.getElementById('clientId').value;
+  const clientSecret = document.getElementById('clientSecret').value;
   const botUsername = document.getElementById('botUsername').value;
-  if(!clientId || !botUsername){
-    alert('Set Client ID and Bot Username first');
+  if(!clientId || !clientSecret || !botUsername){
+    alert('Set Client ID, Client Secret, and Bot Username first');
     return;
   }
   // Let server generate proper CSRF state and handle OAuth flow

@@ -45,6 +45,7 @@ function sanitizeLogArgs(args) {
       const sanitized = { ...arg };
       // Redact known sensitive fields
       if (sanitized.botOAuthToken) sanitized.botOAuthToken = '***REDACTED***';
+      if (sanitized.refreshToken) sanitized.refreshToken = '***REDACTED***';
       if (sanitized.access_token) sanitized.access_token = '***REDACTED***';
       if (sanitized.refresh_token) sanitized.refresh_token = '***REDACTED***';
       if (sanitized.clientSecret) sanitized.clientSecret = '***REDACTED***';
@@ -186,11 +187,13 @@ function loadConfig(){
     twitch: {
       clientId: "",
       clientSecret: "",
-      botOAuthToken: ""
+      botOAuthToken: "",
+      refreshToken: ""
     },
     channel: "",
     botUsername: "",
-    persistOAuthToken: false,
+    autoGenerateOAuth: false,
+    autoConnect: false,
     autoOpenBrowser: true
   };
   
@@ -273,14 +276,107 @@ function loadConfig(){
 loadConfig();
 if(!cfg) process.exit(1);
 
-// On startup: if persistOAuthToken is false, clear any existing token from disk
-if(cfg.persistOAuthToken === false && cfg.twitch?.botOAuthToken) {
+// Backward compat: migrate old persistOAuthToken to autoGenerateOAuth
+if ('persistOAuthToken' in cfg && !('autoGenerateOAuth' in cfg)) {
+  cfg.autoGenerateOAuth = !!cfg.persistOAuthToken;
+  if (!('autoConnect' in cfg)) cfg.autoConnect = !!cfg.persistOAuthToken;
+  delete cfg.persistOAuthToken;
   try {
-    cfg.twitch.botOAuthToken = '';
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    console.log('✓ Cleared OAuth token from .env (persistOAuthToken=false)');
+    console.log('✓ Migrated persistOAuthToken to autoGenerateOAuth + autoConnect');
   } catch(e) {
-    console.error('✗ Failed to clear OAuth token on startup:', e.message);
+    dbg('Failed to save migrated config:', e.message);
+  }
+}
+// Backward compat: migrate old autoConnect (single toggle) to autoGenerateOAuth
+if ('autoConnect' in cfg && !('autoGenerateOAuth' in cfg) && !('persistOAuthToken' in cfg)) {
+  // Old autoConnect meant "auto-refresh + auto-connect" combined
+  cfg.autoGenerateOAuth = cfg.autoConnect;
+  // autoConnect stays as-is
+  try {
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    console.log('✓ Migrated old autoConnect to autoGenerateOAuth + autoConnect');
+  } catch(e) {}
+}
+// Clean up any leftover persistOAuthToken
+if ('persistOAuthToken' in cfg) {
+  delete cfg.persistOAuthToken;
+  try { fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2)); } catch(e) {}
+}
+
+// If both auto settings are off, clear stored tokens from disk for security
+if (!cfg.autoGenerateOAuth && !cfg.autoConnect) {
+  let tokensCleared = false;
+  if (cfg.twitch?.refreshToken) {
+    cfg.twitch.refreshToken = '';
+    tokensCleared = true;
+  }
+  if (cfg.twitch?.botOAuthToken) {
+    cfg.twitch.botOAuthToken = '';
+    tokensCleared = true;
+  }
+  if (tokensCleared) {
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      console.log('✓ Auto-generate and auto-connect disabled — cleared stored tokens from .env');
+    } catch(e) {
+      dbg('Failed to clear tokens:', e.message);
+    }
+  }
+}
+
+// Check if all required Twitch credentials are filled
+function hasRequiredTwitchCredentials() {
+  return !!(cfg.twitch?.clientId && cfg.twitch.clientId.trim() !== '' &&
+            cfg.twitch?.clientSecret && cfg.twitch.clientSecret.trim() !== '' &&
+            cfg.botUsername && cfg.botUsername.trim() !== '' &&
+            cfg.channel && cfg.channel.trim() !== '');
+}
+
+// Attempt to silently refresh the OAuth token using a stored refresh token
+// Returns true if a valid access token was obtained, false otherwise
+async function tryAutoRefreshToken() {
+  const refreshToken = cfg.twitch?.refreshToken;
+  if (!refreshToken || refreshToken.trim() === '') {
+    dbg('No refresh token available for auto-refresh');
+    return false;
+  }
+  
+  try {
+    console.log('→ Attempting to refresh OAuth token...');
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: cfg.twitch.clientId,
+      client_secret: cfg.twitch.clientSecret
+    });
+    const resp = await axios.post('https://id.twitch.tv/oauth2/token', params.toString(), { timeout: 10000 });
+    const { access_token, refresh_token, expires_in } = resp.data;
+    
+    cfg.twitch.botOAuthToken = access_token;
+    botTokenInfo = { access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000) };
+    
+    // Always persist the new refresh token
+    cfg.twitch.refreshToken = refresh_token;
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+      dbg('Refresh token updated in .env');
+    } catch(e) {
+      dbg('Failed to save refreshed token to config:', e.message);
+    }
+    
+    console.log('✓ OAuth token refreshed automatically');
+    return true;
+  } catch(e) {
+    dbg('Auto-refresh failed:', e.message);
+    // Clear invalid refresh token
+    cfg.twitch.refreshToken = '';
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    } catch(writeErr) {
+      dbg('Failed to clear invalid refresh token:', writeErr.message);
+    }
+    return false;
   }
 }
 
@@ -557,12 +653,6 @@ app.get('/env', (req,res) => {
   try {
     if(fs.existsSync(cfgPath)) {
       fileCfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-      // Update in-memory config to match file (but preserve runtime state like botOAuthToken if not persisting)
-      if(fileCfg.persistOAuthToken === false && cfg.twitch?.botOAuthToken) {
-        // Keep the in-memory token, don't overwrite with file (which would have empty token)
-        fileCfg.twitch = fileCfg.twitch || {};
-        fileCfg.twitch.botOAuthToken = cfg.twitch.botOAuthToken;
-      }
       cfg = fileCfg;
       dbg('Config reloaded from disk');
     }
@@ -586,6 +676,7 @@ app.get('/env', (req,res) => {
     // Store whether token exists without exposing the actual token
     safeCfg.hasOAuthToken = !!(cfg.twitch?.botOAuthToken && cfg.twitch.botOAuthToken.trim() !== '');
     safeCfg.twitch.botOAuthToken = undefined; // Never expose OAuth token to client
+    safeCfg.twitch.refreshToken = undefined; // Never expose refresh token to client
     // Note: clientSecret is included as it's needed for OAuth and app is local-only
   }
   
@@ -754,9 +845,6 @@ app.post('/api/local/disconnectTwitch', (req,res)=>{
 app.post('/api/local/saveConfig', (req,res)=>{
   try{
     const newCfg = req.body;
-    if(!newCfg.twitch?.clientId || !newCfg.twitch?.clientSecret || !newCfg.botUsername || !newCfg.channel){
-      return res.status(400).json({error: 'Missing required fields'});
-    }
     const merged = deepMerge(cfg, newCfg);
     // Skins are auto-detected from assets, never save them to config
     delete merged.skins;
@@ -765,27 +853,16 @@ app.post('/api/local/saveConfig', (req,res)=>{
       delete cfg.skins;
     }
     
-    // Handle OAuth token based on persistOAuthToken setting
+    // Always preserve refresh token and access token in memory
     const tokenForMemory = cfg.twitch?.botOAuthToken || '';
+    const refreshTokenForMemory = cfg.twitch?.refreshToken || '';
     if(merged.twitch) {
-      if(cfg.persistOAuthToken) {
-        // Keep token in merged (will be saved to disk)
-      } else {
-        // Clear token for disk write, preserve in memory
-        merged.twitch.botOAuthToken = '';
-      }
+      merged.twitch.botOAuthToken = tokenForMemory;
+      merged.twitch.refreshToken = refreshTokenForMemory;
     }
     
     fs.writeFileSync(cfgPath, JSON.stringify(merged, null, 2));
-    // Restore token in memory if not persisting
-    if(cfg.twitch && !cfg.persistOAuthToken) {
-      cfg.twitch.botOAuthToken = tokenForMemory;
-    }
     Object.assign(cfg, merged);
-    // Ensure token is preserved in memory if not persisting
-    if(cfg.twitch && !cfg.persistOAuthToken) {
-      cfg.twitch.botOAuthToken = tokenForMemory;
-    }
     
     res.json({ok:true, message:'Config saved'});
   }catch(e){
@@ -829,25 +906,12 @@ app.post('/api/local/applySettings', (req,res)=>{
     
     // Save to config file
     const configToSave = { ...cfg };
-    // Remove runtime properties that shouldn't be saved
-    // (the config object might have other non-serializable properties)
-    // Handle OAuth token based on persistOAuthToken setting
-    const tokenForMemory = cfg.twitch?.botOAuthToken || '';
-    if(configToSave.twitch) {
-      if(cfg.persistOAuthToken) {
-        // Keep token in configToSave (will be saved to disk)
-      } else {
-        // Clear token for disk write
-        configToSave.twitch.botOAuthToken = '';
-      }
-    }
+    // Always preserve tokens in memory, don't write access token to disk
+    configToSave.twitch = { ...configToSave.twitch };
+    configToSave.twitch.botOAuthToken = '';
     // Skins are auto-detected from assets, never save them to config
     delete configToSave.skins;
     fs.writeFileSync(cfgPath, JSON.stringify(configToSave, null, 2));
-    // Restore token in memory if not persisting
-    if(cfg.twitch && !cfg.persistOAuthToken) {
-      cfg.twitch.botOAuthToken = tokenForMemory;
-    }
     
     dbg('Settings applied dynamically:', cfg.debug);
     res.json({ok:true, message:'Settings applied', settings: cfg.debug});
@@ -1136,53 +1200,54 @@ const server = app.listen(port, () => {
   clearServerSprites();
   console.log('✓ Cleared all sprites on startup');
   
-   // Auto-open browser to local control panel (if enabled, default true)
+   // Auto-open browser to local control panel or OAuth (if enabled, default true)
   if(cfg.autoOpenBrowser !== false){
     setTimeout(async () => {
       try{
-        const url = `http://localhost:${port}/`;
-        
-         // Check if dashboard is already open by querying our presence tracker
-         // Retry up to 5 times over 3 seconds to give dashboard time to start
-         let isOpen = false;
-         for(let i = 0; i < 5; i++){
-           try{
-             const checkRes = await axios.get(`http://localhost:${port}/api/dashboard/isOpen`, { timeout: 500 });
-             if(checkRes.data && checkRes.data.isOpen){
-               isOpen = true;
-               break;
-             }
-           }catch(e){
-             // Check failed, continue to retry
-             dbg('Dashboard presence check attempt ' + (i+1) + ' failed:', e.message);
-             // If we get a connection error on first attempt, break early (server not ready)
-             if (i === 0 && e.code === 'ECONNREFUSED') {
-               dbg('Server not ready, will not retry');
-               break;
-             }
-           }
-           // Wait 600ms before next retry
-           await new Promise(resolve => setTimeout(resolve, 600));
-         }
+        // Check if dashboard is already open
+        let isOpen = false;
+        try{
+          const checkRes = await axios.get(`http://localhost:${port}/api/dashboard/isOpen`, { timeout: 500 });
+          if(checkRes.data && checkRes.data.isOpen){
+            isOpen = true;
+          }
+        }catch(e){
+          dbg('Dashboard not open:', e.message);
+        }
         
         if(isOpen){
           console.log('✓ Dashboard already open, skipping browser launch');
           return;
         }
         
-        // Dashboard not open, launch browser
-        console.log('→ Opening dashboard in browser:', url);
-        if(process.platform === 'win32'){
-          exec(`start "" "${url}"`);
-        } else if(process.platform === 'darwin'){
-          exec(`open "${url}"`);
+        // Dashboard not open - briefly wait for OAuth decision before launching browser
+        let targetUrl = `http://localhost:${port}/`;
+        let oauthCheckAttempts = 0;
+        const maxOAuthCheckAttempts = 5;
+        while (!needsOAuthRedirect && !cfg.twitch.botOAuthToken && oauthCheckAttempts < maxOAuthCheckAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          oauthCheckAttempts++;
+        }
+        
+        if (needsOAuthRedirect) {
+          targetUrl = `http://localhost:${port}/auth/twitch`;
+          console.log('→ Opening browser for Twitch OAuth:', targetUrl);
         } else {
-          exec(`xdg-open "${url}"`);
+          console.log('→ Opening dashboard in browser:', targetUrl);
+        }
+        
+        // Launch browser with the appropriate URL
+        if(process.platform === 'win32'){
+          exec(`rundll32 url.dll,FileProtocolHandler "${targetUrl}"`);
+        } else if(process.platform === 'darwin'){
+          exec(`open "${targetUrl}"`);
+        } else {
+          exec(`xdg-open "${targetUrl}"`);
         }
       }catch(e){
         console.log('✓ Open browser manually:', `http://localhost:${port}/`);
       }
-    }, 1000);
+    }, 500);
   } else {
     console.log('✓ Auto-open browser disabled. Open manually:', `http://localhost:${port}/`);
   }
@@ -1835,17 +1900,16 @@ async function connectTwitchBot(){
         
         refreshFailures = 0; // Reset on success
         
-        // Save to disk if persistOAuthToken is enabled
-        if(cfg.persistOAuthToken) {
-          try {
-            fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-            dbg('Token refreshed and saved to .env');
-          } catch(e) {
-            dbg('Token refreshed but failed to save to config:', e.message);
-          }
-        } else {
-          dbg('Token refreshed in memory only (persistOAuthToken=false)');
+        // Always persist the new refresh token for auto-reconnection on next startup
+        cfg.twitch.refreshToken = refresh_token;
+        try {
+          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+          dbg('Refresh token updated in .env');
+        } catch(e) {
+          dbg('Failed to save refresh token:', e.message);
         }
+        
+        dbg('Token refreshed');
         
         if(twitchClient){
           try {
@@ -1923,13 +1987,64 @@ function updateServerSprite(username, tags) {
   broadcastSpriteState();
 }
 
-if(cfg.useServer){
-  dbg('useServer=true - connecting Twitch bot');
-  connectTwitchBot();
-} else {
-  dbg('useServer=false - no Twitch connection');
-  console.log('⚠ useServer=false - no Twitch connection');
+// Auto-connect: check for token, attempt refresh, or open browser for OAuth
+let needsOAuthRedirect = false;
+
+async function handleStartupTwitchConnection() {
+  if (!cfg.useServer) {
+    dbg('useServer=false - no Twitch connection');
+    console.log('⚠ useServer=false - no Twitch connection');
+    return;
+  }
+  
+  if (!cfg.autoGenerateOAuth) {
+    dbg('autoGenerateOAuth=false - skipping automatic token generation');
+    console.log('⚠ Auto-generate OAuth disabled. Use the dashboard to generate a token manually.');
+    return;
+  }
+  
+  dbg('useServer=true, autoGenerateOAuth=true - checking Twitch connection');
+  
+  // If we already have an access token, connect if autoConnect is enabled
+  if (cfg.twitch.botOAuthToken && cfg.twitch.botOAuthToken !== 'oauth:your_bot_oauth_token_here') {
+    if (cfg.autoConnect) {
+      dbg('Access token found, autoConnect=true - connecting to Twitch');
+      connectTwitchBot();
+    } else {
+      dbg('Access token found, autoConnect=false - not connecting');
+      console.log('✓ Token available. Auto-connect disabled — use the dashboard to connect.');
+    }
+    return;
+  }
+  
+  // No access token - check if all required credentials are present
+  if (!hasRequiredTwitchCredentials()) {
+    console.log('⚠ Twitch credentials incomplete. Fill in clientId, clientSecret, botUsername, and channel in .env.');
+    return;
+  }
+  
+  // Credentials are filled but no token - try to refresh using stored refresh token
+  console.log('→ No OAuth token found, attempting automatic token generation...');
+  const refreshed = await tryAutoRefreshToken();
+  
+  if (refreshed) {
+    if (cfg.autoConnect) {
+      console.log('✓ Token obtained, autoConnect=true — connecting to Twitch...');
+      connectTwitchBot();
+    } else {
+      console.log('✓ Token obtained. Auto-connect disabled — use the dashboard to connect.');
+    }
+    return;
+  }
+  
+  // No valid refresh token - need browser-based OAuth
+  // Mark for redirect after server starts listening
+  console.log('→ No valid refresh token. Will open browser for Twitch authorization...');
+  needsOAuthRedirect = true;
+  dbg('needsOAuthRedirect set to true');
 }
+
+handleStartupTwitchConnection();
 
 // Graceful shutdown
 async function shutdown(signal) {
@@ -1941,22 +2056,8 @@ async function shutdown(signal) {
     dbg('Cleanup interval cleared');
   }
   
-  // Handle OAuth token based on persistOAuthToken setting
-  if(cfg && cfg.twitch) {
-    if(!cfg.persistOAuthToken) {
-      // Clear token from memory and disk if not persisting
-      cfg.twitch.botOAuthToken = '';
-      try {
-        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        dbg('OAuth token cleared from .env (persistOAuthToken=false)');
-      } catch(e) {
-        dbg('Failed to clear OAuth token:', e.message);
-      }
-    } else {
-      // Token is persisted, keep it in config
-      dbg('OAuth token preserved in .env (persistOAuthToken=true)');
-    }
-  }
+  // Access token is always in-memory only, refresh token is always in .env
+  dbg('Shutdown: tokens handled (access in-memory, refresh in .env)');
   
   if(twitchClient) {
     try {
@@ -1993,6 +2094,7 @@ setInterval(() => {
 
 // OAuth for bot token generation
 app.get('/auth/twitch', (req,res)=>{
+  console.log('→ GET /auth/twitch - redirecting to Twitch OAuth');
   dbg('GET /auth/twitch - redirecting to Twitch OAuth');
   // Generate cryptographically secure random state for CSRF protection
   const state = crypto.randomBytes(16).toString('hex');
@@ -2001,6 +2103,7 @@ app.get('/auth/twitch', (req,res)=>{
   // Build OAuth Redirect URL (must match the one configured in Twitch Dev Console)
   const oauthRedirectUrl = `http://localhost:${cfg.serverPort || 8080}/auth/callback`;
   const url = `https://id.twitch.tv/oauth2/authorize?client_id=${cfg.twitch.clientId}&redirect_uri=${encodeURIComponent(oauthRedirectUrl)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
+  console.log('→ Redirecting to:', url.substring(0, 80) + '...');
   res.redirect(url);
 });
 
@@ -2037,24 +2140,23 @@ app.get('/auth/callback', async (req,res)=>{
     cfg.twitch.botOAuthToken = access_token;
     botTokenInfo = {access_token, refresh_token, expires_at: Date.now() + (expires_in * 1000)};
     
-    // Save to disk if persistOAuthToken is enabled
-    if(cfg.persistOAuthToken) {
+    // Always persist the refresh token for automatic reconnection on next startup
+    if (refresh_token) {
+      cfg.twitch.refreshToken = refresh_token;
       try {
         fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-        dbg('OAuth token saved to .env (persistOAuthToken=true)');
+        dbg('Refresh token saved to .env');
       } catch(e) {
-        dbg('Failed to save token to config:', e.message);
+        dbg('Failed to save refresh token:', e.message);
       }
-    } else {
-      dbg('OAuth token stored in memory only (persistOAuthToken=false)');
     }
     
-    // After successful OAuth, redirect to the dashboard on the correct port (serverPort)
+    // Redirect to dashboard after successful OAuth
     const dashboardUrl = `http://localhost:${cfg.serverPort || 8080}/`;
     res.send(`
       <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
         <h2>✓ OAuth Token Generated</h2>
-        <p>Token ${cfg.persistOAuthToken ? 'saved to .env' : 'stored in memory only'}</p>
+        <p>Refresh token saved. Use the dashboard to connect to Twitch.</p>
          <p><a href="${dashboardUrl}" style="color:#0af">Go to Local Control Dashboard</a></p>
         <p>Redirecting in 3 seconds...</p>
         <script>

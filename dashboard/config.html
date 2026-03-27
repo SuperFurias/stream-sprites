@@ -72,7 +72,10 @@
     
     <div class="form-group">
       <label for="clientSecret">Client Secret</label>
-      <input id="clientSecret" type="password" placeholder="your_twitch_client_secret_here">
+      <div class="password-wrapper">
+        <input id="clientSecret" type="password" placeholder="your_twitch_client_secret_here">
+        <button type="button" class="password-toggle" onclick="togglePassword('clientSecret', this)">&#128065;</button>
+      </div>
     </div>
     
     <div class="form-group">
@@ -88,12 +91,21 @@
   </div>
   
   <div class="form-group">
-    <label for="persistOAuthToken" class="toggle-label">
-      <input id="persistOAuthToken" type="checkbox" class="toggle">
+    <label for="autoGenerateOAuth" class="toggle-label">
+      <input id="autoGenerateOAuth" type="checkbox" class="toggle">
       <span class="toggle-slider"></span>
-      <span class="toggle-text">Persist OAuth Token to Disk</span>
+      <span class="toggle-text">Auto-Generate OAuth on Startup</span>
     </label>
-    <small>If enabled, the OAuth token will be saved to .env and survive server restarts. If disabled (default), token is stored in memory only and cleared on shutdown for better security.</small>
+    <small>If enabled, the server will automatically refresh and generate a new OAuth token when it starts using a stored refresh token. If disabled (default), you must generate a token manually.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="autoConnect" class="toggle-label">
+      <input id="autoConnect" type="checkbox" class="toggle">
+      <span class="toggle-slider"></span>
+      <span class="toggle-text">Auto-Connect to Twitch on Startup</span>
+    </label>
+    <small>If enabled, the server will automatically connect to the Twitch channel after obtaining a token. Requires Auto-Generate OAuth to also be enabled.</small>
   </div>
   
   <div class="button-group">

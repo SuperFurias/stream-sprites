@@ -5,6 +5,28 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.13] - 2026-03-27
+
+### Added
+- **Automatic OAuth token generation**: Server can now automatically refresh and obtain new OAuth tokens on startup using a stored refresh token. No more manual browser authorization after the first time.
+- **Auto-Generate OAuth toggle**: New dashboard setting to enable/disable automatic token generation on server startup (default: off).
+- **Auto-Connect toggle**: Separate dashboard setting to automatically connect to the Twitch channel after obtaining a token (default: off). Requires Auto-Generate OAuth to also be enabled.
+- **Refresh token persistence**: Twitch refresh tokens are now stored in `.env` and automatically rotated on each use, enabling seamless reconnection across server restarts.
+- **Password visibility toggle**: Client Secret field in the dashboard now has an eye icon to show/hide the value.
+- **Token cleanup on startup**: If both Auto-Generate and Auto-Connect are disabled, stored tokens are automatically cleared from `.env` for security.
+- **Backward compatibility migration**: Old `persistOAuthToken` setting is automatically migrated to the new `autoGenerateOAuth` + `autoConnect` settings.
+
+### Changed
+- **OAuth token generation**: Clicking "Generate OAuth Token" no longer automatically connects to Twitch. It stores the token and redirects to the dashboard, where the user can connect manually.
+- **Browser auto-open**: Integrated OAuth redirect into the existing dashboard browser-open flow. If no token exists and auto-generate is enabled, the browser opens to the Twitch authorization page instead of the dashboard. Dashboard presence check reduced from 5 retries to 1.
+- **Config validation removed**: Users can now save the config with empty fields. Server-side validation for required fields was also removed.
+- **Generate OAuth validation**: "Generate OAuth Token" now requires Client ID, Client Secret, and Bot Username (previously only Client ID and Bot Username).
+- **Access token handling**: Access tokens are now always stored in memory only and never persisted to disk. The refresh token mechanism replaces the need for access token persistence.
+- **Simplified token management**: Removed all `persistOAuthToken` logic from save handlers, shutdown handler, and settings handler. Tokens are now managed purely through the refresh mechanism.
+
+### Removed
+- **`persistOAuthToken` setting**: Replaced by `autoGenerateOAuth` and `autoConnect` toggles. Old settings are automatically migrated.
+
 ## [1.0.12] - 2026-03-26
 
 ### Added
