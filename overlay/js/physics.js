@@ -1,5 +1,5 @@
 // Physics engine module
-import { SpatialHash } from './spatialHash.js';
+import { SpatialHash } from './core.js';
 import { getCollisionProbability } from './utils.js';
 import {
   SPATIAL_HASH_CELL_SIZE,

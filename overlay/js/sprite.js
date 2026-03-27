@@ -1,5 +1,5 @@
 // Sprite creation and spawning module
-import { getUserSkinFromCache } from './userSkinCache.js';
+import { getUserSkinFromCache } from './core.js';
 import { colorFromName } from './utils.js';
 import {
   SPAWN_MAX_TRIES,
