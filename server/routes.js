@@ -102,7 +102,8 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       if (fs.existsSync(_cfgPath)) {
         const fileCfg = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
         Object.assign(_cfg, fileCfg);
-        ws.invalidateOverlayConfigCache();
+      ws.invalidateOverlayConfigCache();
+      envCache = null; // Invalidate /env cache
       }
     } catch (e) {
       _dbg('Failed to reload config from disk:', e.message);
@@ -237,6 +238,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       fs.writeFileSync(_cfgPath, JSON.stringify(merged, null, 2));
       Object.assign(_cfg, merged);
       ws.invalidateOverlayConfigCache();
+      envCache = null; // Invalidate /env cache so loadConfig gets fresh data
 
       res.json({ ok: true, message: 'Config saved' });
     } catch (e) {

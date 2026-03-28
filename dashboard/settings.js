@@ -302,12 +302,13 @@ async function loadSettings() {
       logToFile: false
     };
     
-    document.getElementById('serverDebug').checked = debugSettings.serverDebug || false;
-    document.getElementById('twitchDebug').checked = debugSettings.twitchDebug || false;
-    document.getElementById('twitchAuthErrors').checked = debugSettings.twitchAuthErrors || false;
-    document.getElementById('twitchOtherErrors').checked = debugSettings.twitchOtherErrors || false;
-    document.getElementById('verboseMessages').checked = debugSettings.verboseMessages || false;
-    document.getElementById('logToFile').checked = debugSettings.logToFile || false;
+    const el = (id) => document.getElementById(id);
+    if(el('serverDebug')) el('serverDebug').checked = debugSettings.serverDebug || false;
+    if(el('twitchDebug')) el('twitchDebug').checked = debugSettings.twitchDebug || false;
+    if(el('twitchAuthErrors')) el('twitchAuthErrors').checked = debugSettings.twitchAuthErrors || false;
+    if(el('twitchOtherErrors')) el('twitchOtherErrors').checked = debugSettings.twitchOtherErrors || false;
+    if(el('verboseMessages')) el('verboseMessages').checked = debugSettings.verboseMessages || false;
+    if(el('logToFile')) el('logToFile').checked = debugSettings.logToFile || false;
     
     // Load overlay settings
     const overlay = config.overlay || {};
@@ -329,8 +330,8 @@ async function loadSettings() {
     
     updateCurrentSettingsDisplay(config);
     
-    document.getElementById('settingsStatus').textContent = '';
-    document.getElementById('settingsSuccess').textContent = '';
+    if(el('settingsStatus')) el('settingsStatus').textContent = '';
+    if(el('settingsSuccess')) el('settingsSuccess').textContent = '';
   } catch (err) {
     showError('settingsStatus', 'Failed to load settings: ' + err.message);
   }
@@ -338,13 +339,14 @@ async function loadSettings() {
 
 async function saveSettings() {
   // Collect debug settings
+  const el = (id) => document.getElementById(id);
   const debugSettings = {
-    serverDebug: document.getElementById('serverDebug').checked,
-    twitchDebug: document.getElementById('twitchDebug').checked,
-    twitchAuthErrors: document.getElementById('twitchAuthErrors').checked,
-    twitchOtherErrors: document.getElementById('twitchOtherErrors').checked,
-    verboseMessages: document.getElementById('verboseMessages').checked,
-    logToFile: document.getElementById('logToFile').checked
+    serverDebug: el('serverDebug')?.checked || false,
+    twitchDebug: el('twitchDebug')?.checked || false,
+    twitchAuthErrors: el('twitchAuthErrors')?.checked || false,
+    twitchOtherErrors: el('twitchOtherErrors')?.checked || false,
+    verboseMessages: el('verboseMessages')?.checked || false,
+    logToFile: el('logToFile')?.checked || false
   };
   
   // Collect overlay settings
@@ -404,12 +406,13 @@ function resetSettings() {
   if (!confirm('Reset all settings to defaults? This will clear all custom overlay configuration.')) return;
   
   // Reset debug checkboxes
-  document.getElementById('serverDebug').checked = false;
-  document.getElementById('twitchDebug').checked = false;
-  document.getElementById('twitchAuthErrors').checked = false;
-  document.getElementById('twitchOtherErrors').checked = false;
-  document.getElementById('verboseMessages').checked = false;
-  document.getElementById('logToFile').checked = false;
+  const el = (id) => document.getElementById(id);
+  if(el('serverDebug')) el('serverDebug').checked = false;
+  if(el('twitchDebug')) el('twitchDebug').checked = false;
+  if(el('twitchAuthErrors')) el('twitchAuthErrors').checked = false;
+  if(el('twitchOtherErrors')) el('twitchOtherErrors').checked = false;
+  if(el('verboseMessages')) el('verboseMessages').checked = false;
+  if(el('logToFile')) el('logToFile').checked = false;
   
   // Reset all overlay fields to defaults
   for (const [fieldId] of Object.entries(overlayFieldMap)) {
@@ -422,14 +425,13 @@ function resetSettings() {
     }
   }
   
-  document.getElementById('settingsStatus').textContent = '';
-  document.getElementById('settingsSuccess').textContent = '';
+  if(el('settingsStatus')) el('settingsStatus').textContent = '';
+  if(el('settingsSuccess')) el('settingsSuccess').textContent = '';
 }
 
 function updateCurrentSettingsDisplay(settings) {
   const display = document.getElementById('currentSettings');
-  const formatted = JSON.stringify(settings, null, 2);
-  display.textContent = formatted;
+  if(display) display.textContent = JSON.stringify(settings, null, 2);
 }
 
 function applySettings(settings) {
@@ -445,20 +447,16 @@ function applySettings(settings) {
 
 function showError(elementId, message) {
   const el = document.getElementById(elementId);
-  el.textContent = message;
-  el.style.display = 'block';
+  if(el) { el.textContent = message; el.style.display = 'block'; }
   
   const successEl = document.getElementById('settingsSuccess');
-  successEl.textContent = '';
-  successEl.style.display = 'none';
+  if(successEl) { successEl.textContent = ''; successEl.style.display = 'none'; }
 }
 
 function showSuccess(elementId, message) {
   const el = document.getElementById(elementId);
-  el.textContent = message;
-  el.style.display = 'block';
+  if(el) { el.textContent = message; el.style.display = 'block'; }
   
   const errorEl = document.getElementById('settingsStatus');
-  errorEl.textContent = '';
-  errorEl.style.display = 'none';
+  if(errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
 }

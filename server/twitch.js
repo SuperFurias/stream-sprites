@@ -100,6 +100,7 @@ function handleSit(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(userId)) {
     const sprite = ws.serverSprites.get(userId);
     sprite.state = 'sit';
+    sprite.heightScale = 0.75;
     sprite.lastActivity = now;
     ctx.stateChanged = true;
     return null;
@@ -111,6 +112,7 @@ function handleUnsit(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(userId)) {
     const sprite = ws.serverSprites.get(userId);
     sprite.state = 'idle';
+    sprite.heightScale = 1.0;
     sprite.lastActivity = now;
     ctx.stateChanged = true;
     return null;
@@ -232,11 +234,15 @@ function handleFight(username, userId, args, tags, now, ctx) {
     winnerSprite.roamTargetY = ov.GROUND_Y - 50;
     winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
     winnerSprite.roamTimer = ov.fightDurationMs || 10000;
+    winnerSprite.isFighting = true;
+    winnerSprite._fightTarget = loser;
 
     loserSprite.roamTargetX = winnerSprite.x;
     loserSprite.roamTargetY = ov.GROUND_Y - 50;
     loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
     loserSprite.roamTimer = ov.fightDurationMs || 10000;
+    loserSprite.isFighting = true;
+    loserSprite._fightTarget = winner;
   }
 
   ctx.stateChanged = true;

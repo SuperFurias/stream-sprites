@@ -152,8 +152,8 @@ function loadConfig(cfgPath) {
       botOAuthToken: "",
       refreshToken: ""
     },
-    channel: "",
     botUsername: "",
+    channel: "",
     autoGenerateOAuth: false,
     autoConnect: false,
     autoOpenBrowser: true

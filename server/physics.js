@@ -487,8 +487,9 @@ function handleCollisions(arr, grid, now) {
 
         const tangentX = -ny, tangentY = nx;
         const tangentVel = (b.vx - a.vx) * tangentX + (b.vy - a.vy) * tangentY;
-        a.angularVelocity += tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
-        b.angularVelocity -= tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
+        // Don't add collision angular velocity during flips — it stacks and causes crazy spinning
+        if (!a.flipUntil) a.angularVelocity += tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
+        if (!b.flipUntil) b.angularVelocity -= tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
 
         if (!a.lastTiltTime) a.lastTiltTime = now;
         if (!b.lastTiltTime) b.lastTiltTime = now;

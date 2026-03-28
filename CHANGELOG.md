@@ -5,6 +5,26 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-03-28
+
+### Fixed
+- **Dashboard tab switching**: Config and Settings tabs no longer interfere with each other. Renamed `showError`/`showSuccess` in config.js to `configShowError`/`configShowSuccess` to fix a name collision with settings.js that broke toggle validation when switching from Settings to Config.
+- **Toggle validation persistence**: Auto-Generate OAuth and Auto-Connect toggle validators now re-attach to new DOM elements after tab switches (using per-element `_hasListener` flag).
+- **Connect Twitch validation**: Button validates Bot Username, Channel, and OAuth token before connecting, showing errors inline.
+- **Generate OAuth validation**: Validates Client ID and Client Secret are filled and saved to `.env` before redirecting.
+- **`!sit` height**: Sit command now correctly sets `heightScale = 0.75` so the sprite visually squishes. Unsit resets to `1.0`.
+- **`!flip` collision stacking**: Collision angular velocity is now skipped when a flip is active, preventing erratic spinning.
+- **`!fight` resolution**: Fight handler now sets `_fightTarget` on both sprites so the game loop's collision resolution actually triggers.
+- **`/env` cache stale data**: Config save now invalidates the `/env` cache so the dashboard immediately reflects saved values.
+- **Settings tab null guards**: All `getElementById` calls in settings.js now have null checks to prevent crashes when elements don't exist.
+
+### Changed
+- **Dashboard error messages**: All validation and status messages use inline elements with 2-second auto-fade instead of browser `alert()` popups.
+- **Toggle label structure**: Toggle labels only wrap the slider (clicking text no longer toggles the checkbox).
+- **Disconnect button**: Removed "Disconnecting..." state — button stays as-is.
+- **Save Config**: Simplified — no button state changes, shows inline status message.
+- **Default config order**: `botUsername` now appears before `channel` in generated `.env` files.
+
 ## [2.0.0] - 2026-03-28 (Pre-release)
 
 ### Changed
