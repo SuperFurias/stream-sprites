@@ -5,6 +5,13 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-03-28
+
+### Fixed
+- **Canvas scaling**: Sprites now scale automatically to fit any browser window size. Server includes its canvas dimensions in every physics broadcast; client computes scale factors and applies them to all sprite positions, sizes, and collision radii. Drag coordinates are converted back to server space before transmission.
+- **Rendering lag**: Added linear interpolation between server physics state updates for smooth 60fps rendering. Client stores previous and current server positions and interpolates between them on each render frame.
+- **Broadcast rate**: Increased physics state broadcast from 20Hz (50ms) to 30Hz (33ms) for reduced latency.
+
 ## [1.2.0] - 2026-03-28
 
 ### Changed

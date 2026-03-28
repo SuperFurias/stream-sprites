@@ -69,8 +69,9 @@ function broadcast(obj) {
   _wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// Broadcast full physics state to all clients (~20Hz)
+// Broadcast full physics state to all clients (~30Hz)
 function broadcastPhysicsState() {
+  const ov = getOverlayConfig();
   const sprites = [];
   for (const sprite of serverSprites.values()) {
     sprites.push(physics.serializeSpritePhysics(sprite));
@@ -79,6 +80,9 @@ function broadcastPhysicsState() {
   const msg = JSON.stringify({
     type: 'physicsState',
     sprites,
+    W: ov.W,
+    H: ov.H,
+    GROUND_Y: ov.GROUND_Y,
     timestamp: Date.now()
   });
 
@@ -90,6 +94,7 @@ function broadcastPhysicsState() {
 // Send full state to a specific client (for initial sync)
 function sendFullStateToClient(ws) {
   if (ws.readyState !== WebSocket.OPEN) return;
+  const ov = getOverlayConfig();
   const sprites = [];
   for (const sprite of serverSprites.values()) {
     sprites.push(physics.serializeSpritePhysics(sprite));
@@ -97,6 +102,9 @@ function sendFullStateToClient(ws) {
   ws.send(JSON.stringify({
     type: 'physicsState',
     sprites,
+    W: ov.W,
+    H: ov.H,
+    GROUND_Y: ov.GROUND_Y,
     timestamp: Date.now()
   }));
 }
@@ -262,10 +270,10 @@ function startGameLoop() {
     }
   }, FRAME_MS);
 
-  // Broadcast physics state at 20Hz (every 50ms)
+  // Broadcast physics state at 30Hz (every 33ms)
   broadcastIntervalId = setInterval(() => {
     broadcastPhysicsState();
-  }, 50);
+  }, 33);
 }
 
 // ── Initialize WebSocket ──────────────────────────────────────────────────
