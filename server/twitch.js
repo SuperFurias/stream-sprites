@@ -88,8 +88,9 @@ function handleJump(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(userId)) {
     const sprite = ws.serverSprites.get(userId);
     sprite.lastActivity = now;
+    sprite.vy = -16; // JUMP_VELOCITY
+    sprite.state = 'idle';
     ctx.stateChanged = true;
-    ws.broadcast({ type: 'cmd', cmd: 'jump', username });
     return null;
   }
   return 'You need to appear first!';
@@ -118,8 +119,18 @@ function handleUnsit(username, userId, args, tags, now, ctx) {
 }
 
 function handleBoom() {
-  _dbg('Boom command - broadcasting explosion effect');
-  ws.broadcast({ type: 'cmd', cmd: 'boom' });
+  _dbg('Boom command - applying explosion on server sprites');
+  const ov = ws.getOverlayConfig();
+  const epicenterX = Math.random() * (ov.W - (ov.EXPLOSION_RADIUS_BASE || 400)) + ((ov.EXPLOSION_RADIUS_BASE || 400) / 2);
+  const explosionRadius = (ov.EXPLOSION_RADIUS_BASE || 400) + Math.random() * (ov.EXPLOSION_RADIUS_VAR || 300);
+  const spriteArray = Array.from(ws.serverSprites.values());
+  const { applyExplosionPhysics } = require('./physics');
+  applyExplosionPhysics(spriteArray, epicenterX, ov.GROUND_Y, explosionRadius,
+    ov.EXPLOSION_FORCE_MULTIPLIER || 60, ov.EXPLOSION_UPWARD_BIAS || 0.7,
+    ov.SPIN_STRENGTH_FACTOR || 0.05, ov.RANDOM_JITTER_FACTOR || 0.2,
+    ov.COLLISION_PERSONAL_SPACE_THRESHOLD || 0.1);
+  // Also broadcast for explosion visual effect on clients
+  ws.broadcast({ type: 'cmd', cmd: 'boom', x: epicenterX, radius: explosionRadius });
   return null;
 }
 
@@ -187,7 +198,12 @@ function handleFlip(username, userId, args, tags, now, ctx) {
     if (resolvedId) targetUser = resolvedId;
   }
   const ov = ws.getOverlayConfig();
-  ws.broadcast({ type: 'cmd', cmd: 'flip', username: targetUser, duration: ov.flipDurationMs });
+  const sprite = ws.serverSprites.get(targetUser);
+  if (sprite) {
+    sprite.flipUntil = now + (ov.flipDurationMs || 5000);
+    sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+    sprite.lastTiltTime = null;
+  }
   ctx.stateChanged = true;
   return null;
 }
@@ -210,7 +226,19 @@ function handleFight(username, userId, args, tags, now, ctx) {
   if (winnerSprite) winnerSprite.state = 'idle';
   if (loserSprite) loserSprite.state = 'idle';
 
-  ws.broadcast({ type: 'cmd', cmd: 'fight', winner, loser, duration: ov.fightDurationMs });
+  // Apply fight on server sprites
+  if (winnerSprite && loserSprite) {
+    winnerSprite.roamTargetX = loserSprite.x;
+    winnerSprite.roamTargetY = ov.GROUND_Y - 50;
+    winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+    winnerSprite.roamTimer = ov.fightDurationMs || 10000;
+
+    loserSprite.roamTargetX = winnerSprite.x;
+    loserSprite.roamTargetY = ov.GROUND_Y - 50;
+    loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+    loserSprite.roamTimer = ov.fightDurationMs || 10000;
+  }
+
   ctx.stateChanged = true;
   return null;
 }
