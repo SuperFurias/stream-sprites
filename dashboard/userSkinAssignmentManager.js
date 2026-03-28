@@ -1,5 +1,63 @@
 // Skin Assignment Manager - handles user skin assignment functionality
 
+// NOTE: Variable names use _sa prefix (e.g., _saRenderPagination) to avoid conflicts
+// with userExclusionManager.js. Both scripts run in the global scope and const/let
+// cannot be redeclared in the same scope. Do NOT rename to generic names like
+// _renderPagination — it will break the other manager script.
+
+// Use shared utilities with fallback (unique var names to avoid conflicts)
+const _saRenderPagination = (window.dashboardUtils && window.dashboardUtils.renderPagination)
+  ? window.dashboardUtils.renderPagination
+  : function(containerId, totalItems, pageSize, currentPage, onPageChange) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      const totalPages = Math.ceil(totalItems / pageSize);
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = '\u2190';
+      prevBtn.disabled = currentPage === 1;
+      prevBtn.onclick = function() { onPageChange(Math.max(1, currentPage - 1)); };
+      container.appendChild(prevBtn);
+      const info = document.createElement('span');
+      info.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+      info.style.margin = '0 8px';
+      container.appendChild(info);
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = '\u2192';
+      nextBtn.disabled = currentPage === totalPages;
+      nextBtn.onclick = function() { onPageChange(Math.min(totalPages, currentPage + 1)); };
+      container.appendChild(nextBtn);
+    };
+const _saFetchAvailableSkins = (window.dashboardUtils && window.dashboardUtils.fetchAvailableSkins)
+  ? window.dashboardUtils.fetchAvailableSkins
+  : async function() {
+      try {
+        const res = await fetch('/api/skins/auto');
+        if (res.ok) return await res.json();
+      } catch (e) { console.warn('Failed to fetch skins:', e); }
+      return [];
+    };
+const _saPopulateSkinSelect = (window.dashboardUtils && window.dashboardUtils.populateSkinSelect)
+  ? window.dashboardUtils.populateSkinSelect
+  : function(selectId, skins) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+      select.innerHTML = '';
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = 'default';
+      defaultOpt.textContent = 'default';
+      defaultOpt.selected = true;
+      select.appendChild(defaultOpt);
+      skins.forEach(function(s) {
+        if (s.id !== 'default') {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          select.appendChild(opt);
+        }
+      });
+    };
+
 // State
 let allUsers = [];
 let filteredUsers = [];
@@ -9,47 +67,11 @@ let userPageSize = 5;
 // Load config and populate skin select
 async function loadConfigForUsers() {
   try {
-    const res = await fetch('/env');
-    if (!res.ok) throw new Error('config not found');
-    const cfg = await res.json();
-
-    // Fetch auto-detected skins
-    let allSkins = [];
-    try {
-      const autoRes = await fetch('/api/skins/auto');
-      if (autoRes.ok) {
-        allSkins = await autoRes.json();
-      }
-    } catch (e) {
-      console.warn('Failed to fetch auto-detected skins:', e);
-      allSkins = cfg.skins || [];
-    }
-
-    populateSkinSelect(allSkins);
+    const allSkins = await _saFetchAvailableSkins();
+    _saPopulateSkinSelect('assignSkin', allSkins);
   } catch (e) {
     console.error('Failed to load config for users tab:', e);
   }
-}
-
-function populateSkinSelect(skins) {
-  const select = document.getElementById('assignSkin');
-  if (!select) return;
-  select.innerHTML = '';
-  // Add default option first and select it by default
-  const defaultOpt = document.createElement('option');
-  defaultOpt.value = 'default';
-  defaultOpt.textContent = 'default';
-  defaultOpt.selected = true;
-  select.appendChild(defaultOpt);
-  // Add other skins
-  skins.forEach(s => {
-    if (s.id !== 'default') {
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = s.name;
-      select.appendChild(opt);
-    }
-  });
 }
 
 // Load users from API
@@ -118,7 +140,7 @@ function renderUserTable() {
     tbody.appendChild(tr);
   });
 
-  renderPagination('userPagination', filteredUsers.length, userPageSize, userCurrentPage, (page) => {
+  _saRenderPagination('userPagination', filteredUsers.length, userPageSize, userCurrentPage, (page) => {
     userCurrentPage = page;
     renderUserTable();
   });
@@ -173,28 +195,13 @@ function showEditSkinModal(userId, currentSkin) {
   defaultOpt.textContent = 'default';
   skinSelect.appendChild(defaultOpt);
   
-  // Get available skins from config
-  fetch('/env')
-    .then(res => res.json())
-    .then(cfg => {
-      // Try to fetch auto-detected skins
-      return fetch('/api/skins/auto').then(r => r.ok ? r.json() : cfg.skins || []).catch(() => cfg.skins || []);
-    })
-    .then(skins => {
-      skins.forEach(s => {
-        if (s.id !== 'default') {
-          const opt = document.createElement('option');
-          opt.value = s.id;
-          opt.textContent = s.name;
-          skinSelect.appendChild(opt);
-        }
-      });
-      // Set current value after populating
-      skinSelect.value = currentSkin || 'default';
-    })
-    .catch(err => {
-      console.error('Failed to load skins for edit modal:', err);
-    });
+  // Populate skin options using cached skins
+  _saFetchAvailableSkins().then(function(skins) {
+    _saPopulateSkinSelect('editSkinSelect', skins);
+    skinSelect.value = currentSkin || 'default';
+  }).catch(function(err) {
+    console.error('Failed to load skins for edit modal:', err);
+  });
   
   currentEditingSkinUserId = userId;
   usernameSpan.textContent = userId;
@@ -226,35 +233,6 @@ async function saveEditedSkin() {
   } catch (e) {
     alert('Error: ' + e.message);
   }
-}
-
-// Shared pagination renderer
-function renderPagination(containerId, totalItems, pageSize, currentPage, onPageChange) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = '';
-
-  const totalPages = Math.ceil(totalItems / pageSize);
-
-  // Previous button
-  const prevBtn = document.createElement('button');
-  prevBtn.textContent = '←';
-  prevBtn.disabled = currentPage === 1;
-  prevBtn.onclick = () => onPageChange(Math.max(1, currentPage - 1));
-  container.appendChild(prevBtn);
-
-  // Page info
-  const info = document.createElement('span');
-  info.textContent = `Page ${currentPage} of ${totalPages}`;
-  info.style.margin = '0 8px';
-  container.appendChild(info);
-
-  // Next button
-  const nextBtn = document.createElement('button');
-  nextBtn.textContent = '→';
-  nextBtn.disabled = currentPage === totalPages;
-  nextBtn.onclick = () => onPageChange(Math.min(totalPages, currentPage + 1));
-  container.appendChild(nextBtn);
 }
 
 // Expose functions globally for HTML onclick handlers

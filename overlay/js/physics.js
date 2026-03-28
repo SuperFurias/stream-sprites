@@ -46,16 +46,34 @@ import {
   TEXT_WIDTH_PADDING
 } from './config.js';
 
+// Pre-allocated SpatialHash instance (reused across frames to avoid GC pressure)
+const spatialHash = new SpatialHash(SPATIAL_HASH_CELL_SIZE, 1920, 1080);
+
+// Pre-allocated sprite array (maintained alongside Map to avoid Array.from per frame)
+let spriteArray = [];
+let spriteArrayDirty = true;
+
+export function markSpriteArrayDirty() {
+  spriteArrayDirty = true;
+}
+
 export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                               GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
                               BOUNCE_DAMPING, MIN_VELOCITY) {
-  // Convert to array once per frame to minimize GC pressure
-  const arr = Array.from(sprites.values());
+  // Rebuild sprite array only when sprites have been added/removed
+  if (spriteArrayDirty || spriteArray.length !== sprites.size) {
+    spriteArray.length = 0;
+    for (const s of sprites.values()) {
+      spriteArray.push(s);
+    }
+    spriteArrayDirty = false;
+  }
+  const arr = spriteArray;
   const now = Date.now();
-  
-  // Build spatial hash for proximity queries
-  const grid = new SpatialHash(SPATIAL_HASH_CELL_SIZE, W, H);
-  for (const s of arr) grid.insert(s);
+
+  // Reuse spatial hash instance (clear + reinitialize instead of new)
+  spatialHash.reinitialize(SPATIAL_HASH_CELL_SIZE, W, H);
+  for (const s of arr) spatialHash.insert(s);
 
   // Calculate zone densities for distribution
   const zoneWidth = W / NUM_ZONES;
@@ -80,84 +98,71 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
   }
 
   // Handle collisions (probabilistic)
-  handleCollisions(arr, grid, now);
-  
+  handleCollisions(arr, spatialHash, now);
+
   // Apply avoidance forces to prevent clustering
-  applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
-  
-  // Return array for lifetime management to avoid re-conversion
+  applyAvoidance(arr, spatialHash, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
+
   return arr;
 }
 
 function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
   // Center of the screen
   const centerX = W / 2;
-  const centerY = GROUND_Y * GROUND_Y_CENTER_OFFSET; // Slightly above ground
-  
+  const centerY = GROUND_Y * GROUND_Y_CENTER_OFFSET;
+
+  // Pre-compute squared center push radius
+  const centerPushRadiusSq = CENTER_PUSH_RADIUS * CENTER_PUSH_RADIUS;
+
   for (const a of arr) {
-    // Skip avoidance forces for fighting sprites
     if (a.isFighting) continue;
-    
+
     const near = grid.query(a, a);
     for (const b of near) {
-      // Skip avoidance if either sprite is fighting
       if (b.isFighting) continue;
-      
+
       const dx = b.x - a.x;
       const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy);
-      
-      if (dist <= 0) continue;
-      
+      // Use squared distance for initial checks, only sqrt when needed
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq <= 0) continue;
+      const dist = Math.sqrt(distSq);
+
       const nx = dx / dist;
       const ny = dy / dist;
-      
-      // Calculate size ratio (smaller / larger)
+
       const sizeA = a.size || 50;
       const sizeB = b.size || 50;
       const largerSize = Math.max(sizeA, sizeB);
       const smallerSize = Math.min(sizeA, sizeB);
       const sizeRatio = smallerSize / largerSize;
-      const sizeDiff = largerSize - smallerSize;
-      
-      // Calculate base avoidance radius based on combined size
+
       const baseAvoidanceRadius = (a.collisionRadius + b.collisionRadius) * AVOIDANCE_RADIUS_MULTIPLIER;
-      
-      // Determine interaction type based on size similarity
-      // sizeSimilarity: 1.0 = identical size, 0.0 = very different sizes
-      const sizeSimilarity = sizeRatio;
-      
-      if (sizeSimilarity > SIZE_SIMILARITY_THRESHOLD) {
-        // Similar sizes: Strong repulsion that increases exponentially as they get closer
-        // Also increase the effective avoidance radius for similar-sized sprites
-        const expandedRadius = baseAvoidanceRadius * (1.0 + (sizeSimilarity - SIZE_SIMILARITY_THRESHOLD) * EXPANDED_RADIUS_MULTIPLIER); // Up to 3x radius for identical sizes
-        if (dist < expandedRadius) {
+      const baseAvoidanceRadiusSq = baseAvoidanceRadius * baseAvoidanceRadius;
+
+      if (sizeRatio > SIZE_SIMILARITY_THRESHOLD) {
+        const expandedRadius = baseAvoidanceRadius * (1.0 + (sizeRatio - SIZE_SIMILARITY_THRESHOLD) * EXPANDED_RADIUS_MULTIPLIER);
+        const expandedRadiusSq = expandedRadius * expandedRadius;
+        if (distSq < expandedRadiusSq) {
           const normalizedDist = dist / expandedRadius;
-          // Exponential force curve: much stronger when very close
           const force = Math.pow(1 - normalizedDist, 3) * 0.25;
-          
-          // Apply repulsion to both
           a.vx -= nx * force;
           a.vy -= ny * force;
           b.vx += nx * force;
           b.vy += ny * force;
         }
-      } else if (sizeSimilarity < SIZE_DIFF_THRESHOLD_LOW) {
-        // Different sizes: Attraction of smaller towards larger
-        // Only apply when within a reasonable distance
+      } else if (sizeRatio < SIZE_DIFF_THRESHOLD_LOW) {
         const attractionRadius = baseAvoidanceRadius * 1.5;
-        if (dist < attractionRadius && dist > MIN_ATTRACTION_DISTANCE) {
-          // Attraction strength based on size difference and proximity
-          // Stronger attraction when very small is near very large
-          const sizeDiffFactor = (1 - sizeSimilarity) * SIZE_DIFF_FACTOR; // Up to 2x for very different sizes
-          const proximityFactor = 1 - (dist / attractionRadius); // Stronger when closer
+        const attractionRadiusSq = attractionRadius * attractionRadius;
+        const minAttrDistSq = MIN_ATTRACTION_DISTANCE * MIN_ATTRACTION_DISTANCE;
+        if (distSq < attractionRadiusSq && distSq > minAttrDistSq) {
+          const sizeDiffFactor = (1 - sizeRatio) * SIZE_DIFF_FACTOR;
+          const proximityFactor = 1 - (dist / attractionRadius);
           const attractionForce = sizeDiffFactor * proximityFactor * ATTRACTION_FORCE_BASE;
-          
-          // Determine which is smaller and apply attraction towards larger
           if (sizeA < sizeB) {
             a.vx += nx * attractionForce;
             a.vy += ny * attractionForce;
-            // Larger sprite gets slight repulsion to prevent clustering
             b.vx -= nx * attractionForce * LARGER_REPULSION_FACTOR;
             b.vy -= ny * attractionForce * LARGER_REPULSION_FACTOR;
           } else {
@@ -168,11 +173,9 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
           }
         }
       } else {
-        // Moderate size difference: mild repulsion
-        if (dist < baseAvoidanceRadius) {
+        if (distSq < baseAvoidanceRadiusSq) {
           const normalizedDist = dist / baseAvoidanceRadius;
           const force = Math.pow(1 - normalizedDist, 2) * MODERATE_REPULSION_FORCE;
-          
           a.vx -= nx * force;
           a.vy -= ny * force;
           b.vx += nx * force;
@@ -180,12 +183,15 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
         }
       }
     }
-    
-    // Add gentle push away from center to distribute sprites to edges
-    const distFromCenter = Math.hypot(a.x - centerX, a.y - centerY);
-    if (distFromCenter < CENTER_PUSH_RADIUS) {
-      const nx = (a.x - centerX) / distFromCenter;
-      const ny = (a.y - centerY) / distFromCenter;
+
+    // Push away from center using squared distance
+    const dcx = a.x - centerX;
+    const dcy = a.y - centerY;
+    const distFromCenterSq = dcx * dcx + dcy * dcy;
+    if (distFromCenterSq < centerPushRadiusSq) {
+      const distFromCenter = Math.sqrt(distFromCenterSq);
+      const nx = dcx / distFromCenter;
+      const ny = dcy / distFromCenter;
       const centerForce = (CENTER_PUSH_RADIUS - distFromCenter) / CENTER_PUSH_RADIUS * CENTER_PUSH_FORCE;
       a.vx += nx * centerForce;
       a.vy += ny * centerForce;
@@ -420,41 +426,40 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
 
 function handleCollisions(arr, grid, now) {
   const collisionProbability = getCollisionProbability(arr.length);
+  const thresholdSq = COLLISION_PERSONAL_SPACE_THRESHOLD * COLLISION_PERSONAL_SPACE_THRESHOLD;
   for (const a of arr) {
     const near = grid.query(a, a);
     for (const b of near) {
       if (a.id >= b.id) continue;
-      
-      // Skip collisions if either sprite is in a fight (fighting sprites ignore regular collisions)
       if (a.isFighting || b.isFighting) continue;
-      
       if (Math.random() > collisionProbability) continue;
-      
+
       const dx = b.x - a.x, dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy);
+      const distSq = dx * dx + dy * dy;
       const personalSpace = a.collisionRadius + b.collisionRadius;
-      
-      if (dist < personalSpace && dist > COLLISION_PERSONAL_SPACE_THRESHOLD) {
+      const personalSpaceSq = personalSpace * personalSpace;
+
+      if (distSq < personalSpaceSq && distSq > thresholdSq) {
+        const dist = Math.sqrt(distSq);
         const nx = dx / dist, ny = dy / dist;
         const force = (personalSpace - dist) * COLLISION_FORCE_MULTIPLIER;
-        
+
         const invMassA = 1 / (a.mass || 1);
         const invMassB = 1 / (b.mass || 1);
-        
+
         const fx = force * nx;
         const fy = force * ny;
-        
+
         a.vx -= fx * invMassA;
         a.vy -= fy * invMassA;
         b.vx += fx * invMassB;
         b.vy += fy * invMassB;
-        
+
         const tangentX = -ny, tangentY = nx;
         const tangentVel = (b.vx - a.vx) * tangentX + (b.vy - a.vy) * tangentY;
         a.angularVelocity += tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
         b.angularVelocity -= tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
-        
-        // Only set lastTiltTime if not already tilting (don't restart the return timer)
+
         if (!a.lastTiltTime) a.lastTiltTime = now;
         if (!b.lastTiltTime) b.lastTiltTime = now;
       }

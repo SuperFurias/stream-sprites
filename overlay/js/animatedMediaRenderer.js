@@ -1,5 +1,11 @@
 // Animated Media Renderer - manages DOM-based rendering for GIF and WebM animations
 // Optimized with element pooling and separate animated sprite tracking
+//
+// IMPORTANT: Animated skins (GIF/WebM) are NOT drawn on the canvas. They render
+// as DOM elements here. The canvas sort in renderer.js does NOT apply to them.
+// This module must apply its own z-index ordering based on sprite size so that
+// small sprites appear on top of big ones. The container z-index (5001) must be
+// ABOVE the canvas (5000) so animated elements are visible.
 
 const CSS_BASE = 'position:absolute;transform-origin:center center;pointer-events:none;will-change:transform,opacity;';
 
@@ -12,11 +18,12 @@ function createPooledElement(type) {
 export function createAnimatedMediaRenderer() {
   const container = document.createElement('div');
   container.id = 'animated-media-container';
-  container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1;';
+  container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5001;';
   document.body.appendChild(container);
 
   const mediaElements = new Map(); // spriteId -> { el, skinFile, type }
-  const animatedSpriteIds = new Set(); // Tracks which sprite IDs currently have animated skins
+  const animatedSpriteIds = new Set();
+  let lastSkinCheckGeneration = -1; // Track when skins change
 
   // Element pools for reuse
   const imgPool = [];
@@ -41,16 +48,23 @@ export function createAnimatedMediaRenderer() {
     container,
     mediaElements,
     animatedSpriteIds,
+    _skinGeneration: 0,
 
     update(sprites, skins, W, H, GROUND_Y) {
-      // Rebuild animated sprite set
+      // Build animated sprite list and determine z-order by size
+      this._skinGeneration++;
       animatedSpriteIds.clear();
+      const animatedSprites = [];
       for (const sprite of sprites.values()) {
         const skin = skins.get(sprite.skin);
         if (skin && (skin.isGif || skin.isWebm)) {
           animatedSpriteIds.add(sprite.id);
+          animatedSprites.push(sprite);
         }
       }
+
+      // Sort by size descending: largest first (z-index 1 = back), smallest last (z-index N = front)
+      animatedSprites.sort((a, b) => b.size - a.size);
 
       // Remove entries for sprites that no longer have animated media
       for (const [id, entry] of mediaElements) {
@@ -60,33 +74,37 @@ export function createAnimatedMediaRenderer() {
         }
       }
 
-      // Update or create elements for animated sprites
-      for (const sprite of sprites.values()) {
+      // Update or create elements for animated sprites (in sorted order)
+      for (let i = 0; i < animatedSprites.length; i++) {
+        const sprite = animatedSprites[i];
         const skin = skins.get(sprite.skin);
         if (!skin || (!skin.isGif && !skin.isWebm)) continue;
 
         const isVideo = skin.isWebm;
         const entryType = isVideo ? 'video' : 'img';
         const entry = mediaElements.get(sprite.id);
+        // z-index: small sprites get higher z (drawn on top)
+        const zIndex = 1 + i;
 
         if (entry) {
-          // Check if skin changed
           if (entry.skinFile !== skin.file) {
             releaseElement(entry.el, entry.type);
             const newEl = acquireElement(entryType);
+            newEl.style.zIndex = zIndex;
             setupElement(newEl, skin, sprite.username);
             container.appendChild(newEl);
             mediaElements.set(sprite.id, { el: newEl, skinFile: skin.file, type: entryType });
+          } else {
+            entry.el.style.zIndex = zIndex;
           }
         } else {
-          // Create new element from pool
           const el = acquireElement(entryType);
+          el.style.zIndex = zIndex;
           setupElement(el, skin, sprite.username);
           container.appendChild(el);
           mediaElements.set(sprite.id, { el, skinFile: skin.file, type: entryType });
         }
 
-        // Update transform
         const currentEntry = mediaElements.get(sprite.id);
         const el = currentEntry.el;
         const heightScale = sprite.heightScale || 1.0;
@@ -131,9 +149,7 @@ export function createAnimatedMediaRenderer() {
 }
 
 function setupElement(el, skin, username) {
-  const zIndex = Math.round(5000 + (50 - 50) * 50);
   el.dataset.skinFile = skin.file;
-  el.style.zIndex = zIndex;
   el.alt = `${username}'s ${skin.isWebm ? 'WebM' : 'GIF'}`;
 
   if (skin.isWebm) {

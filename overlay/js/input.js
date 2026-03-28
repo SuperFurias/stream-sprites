@@ -5,15 +5,25 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
   let dragOffset = { x: 0, y: 0 };
   let cachedRect = null;
 
-  // Velocity tracking — stores previous frame's mouse position so mouseup
-  // can compute the last displacement even if no mousemove fires between
-  // the last move and the release
+  // Velocity tracking
   let prevMouseX = 0;
   let prevMouseY = 0;
   let lastMouseX = 0;
   let lastMouseY = 0;
 
-  // Cache rect on resize and initially
+  // Cached sorted sprite array (rebuilt only when sprite count changes)
+  let sortedCache = [];
+  let sortedCacheSize = -1;
+
+  function rebuildSortedCache() {
+    sortedCache.length = 0;
+    for (const s of sprites.values()) {
+      sortedCache.push(s);
+    }
+    sortedCache.sort((a, b) => b.y - a.y);
+    sortedCacheSize = sprites.size;
+  }
+
   function updateCachedRect() {
     cachedRect = canvas.getBoundingClientRect();
   }
@@ -32,21 +42,21 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
     if (!cachedRect) updateCachedRect();
     const { x: mouseX, y: mouseY } = toCanvasCoords(e);
 
-    // Find sprite under mouse (check from top to bottom)
-    const arr = Array.from(sprites.values()).sort((a, b) => b.y - a.y);
-    for (const sprite of arr) {
+    // Rebuild sorted cache only when sprite count changes
+    if (sortedCacheSize !== sprites.size) {
+      rebuildSortedCache();
+    }
+
+    for (const sprite of sortedCache) {
       const dx = mouseX - sprite.x;
       const dy = mouseY - sprite.y;
-      const distSq = dx * dx + dy * dy;
-      const radiusSq = sprite.collisionRadius * sprite.collisionRadius;
-      if (distSq <= radiusSq) {
+      if (dx * dx + dy * dy <= sprite.collisionRadius * sprite.collisionRadius) {
         isDragging = true;
         draggedSprite = sprite;
         dragOffset.x = dx;
         dragOffset.y = dy;
         sprite.vx = 0;
         sprite.vy = 0;
-        // Initialize velocity tracking
         prevMouseX = mouseX;
         prevMouseY = mouseY;
         lastMouseX = mouseX;
@@ -67,7 +77,6 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
     draggedSprite.x = mouseX - dragOffset.x;
     draggedSprite.y = mouseY - dragOffset.y;
 
-    // Shift: current becomes previous, then update current
     prevMouseX = lastMouseX;
     prevMouseY = lastMouseY;
     lastMouseX = mouseX;
@@ -78,18 +87,13 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
 
   window.addEventListener('mouseup', (e) => {
     if (isDragging && draggedSprite) {
-      // Release velocity from last displacement between two consecutive frames.
-      // prevMouseX/Y holds the position BEFORE the most recent mousemove update,
-      // so (lastMouseX - prevMouseX) is the actual per-frame mouse movement.
-      // Physics uses px/frame convention (gravity=0.6, jump=-16), so this matches.
       let throwVx = lastMouseX - prevMouseX;
       let throwVy = lastMouseY - prevMouseY;
 
-      // Clamp to prevent absurd launches
       const maxThrow = 25;
-      const speed = Math.hypot(throwVx, throwVy);
-      if (speed > maxThrow) {
-        const scale = maxThrow / speed;
+      const speedSq = throwVx * throwVx + throwVy * throwVy;
+      if (speedSq > maxThrow * maxThrow) {
+        const scale = maxThrow / Math.sqrt(speedSq);
         throwVx *= scale;
         throwVy *= scale;
       }
@@ -97,7 +101,6 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
       draggedSprite.vx = throwVx;
       draggedSprite.vy = throwVy;
 
-      // Clamp position to canvas bounds on release
       const dpr = window.devicePixelRatio || 1;
       const W = canvas.width / dpr;
       const H = canvas.height / dpr;

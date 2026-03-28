@@ -5,6 +5,36 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.18] - 2026-03-28
+
+### Fixed
+- **Animated sprite z-ordering**: GIF/WebM skins render as DOM elements (not on canvas), so the canvas sort did not apply to them. Animated media renderer now applies its own z-index ordering based on sprite size, and the container z-index is raised above the canvas so animated sprites are visible and properly layered.
+- **Usernames freezing at spawn point**: An aggressive "skip rendering" optimization caused the canvas to stop redrawing after the first frame, freezing all sprites and usernames in place.
+- **Client secret not appearing in config dashboard**: Server's `/env` endpoint was explicitly stripping `clientSecret` from the response; removed the filter since the dashboard needs it for editing.
+- **Excluded users not loading in dashboard**: Both `userSkinAssignmentManager.js` and `userExclusionManager.js` declared `const _renderPagination` in the global scope, causing a `SyntaxError` that prevented the exclusion manager from loading. Renamed to unique prefixed variables.
+- **Sprite lifetime fade calculation**: Restored original fade progress formula from v1.0.10.
+- **ManageLifetime opacity check**: Restored the `sprite.opacity <= 0` guard on deletion to match original behavior.
+
+### Performance
+- **Server startup config batching**: Consolidated 4 separate `fs.writeFileSync` calls into a single batched write.
+- **Command cooldown tracking**: Replaced string-concatenation keys (`userId + ':' + cmd`) with a two-level Map to avoid garbage allocation.
+- **Sprite snapshot serialization**: Server now updates snapshot entries in-place instead of clearing and rebuilding the entire map on every broadcast.
+- **Rate limiter memory cap**: Added max entries limit (1000) to prevent unbounded memory growth.
+- **Physics spatial hash reuse**: Module-level SpatialHash instance is reused via `reinitialize()` instead of allocating a new one every frame.
+- **Physics parallel array**: Maintains a persistent sprite array that only rebuilds when sprites are added/removed.
+- **Squared distance comparisons**: Replaced `Math.hypot` with `dx*dx + dy*dy` vs `r*r` where exact distance isn't needed.
+- **Input handler cached sort**: Mouse hit-testing uses a cached sorted array that only rebuilds when sprite count changes.
+- **Text width cache LRU eviction**: Capped at 1000 entries to prevent unbounded growth during long streams.
+
+### Changed
+- **Overlay command handler**: Refactored `handleCommand` to accept a context object instead of 20+ individual parameters.
+- **Extracted shared helpers**: `applySpriteState()` and `sendChatResponse()` deduplicated across overlay client.
+- **Connection reconnect interval**: Now properly cleared on successful WebSocket connect, preventing duplicate intervals.
+- **Connection command dispatch**: Replaced if-else chain with Map/object lookup.
+- **Dashboard shared utilities**: Extracted `renderPagination`, `fetchAvailableSkins`, `populateSkinSelect` into `dashboardUtils.js`.
+- Removed unused `spawn` import from `child_process` in server.js.
+- Extracted duplicate `AUTH_ERROR_PATTERNS` constant in server.js.
+
 ## [1.0.17] - 2026-03-28
 
 ### Performance

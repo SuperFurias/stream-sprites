@@ -14,14 +14,25 @@ import {
   WIGGLE_RANGE
 } from './config.js';
 
-// Text measurement cache to avoid repeated Canvas API calls
+// Text measurement cache with LRU eviction to prevent unbounded growth
+const TEXT_WIDTH_CACHE_MAX = 1000;
 const textWidthCache = new Map();
 
 function getCachedTextWidth(ctx, username) {
   const cached = textWidthCache.get(username);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Move to end (most recently used)
+    textWidthCache.delete(username);
+    textWidthCache.set(username, cached);
+    return cached;
+  }
   const width = ctx.measureText(username).width;
   textWidthCache.set(username, width);
+  // Evict oldest entry if over capacity
+  if (textWidthCache.size > TEXT_WIDTH_CACHE_MAX) {
+    const oldestKey = textWidthCache.keys().next().value;
+    textWidthCache.delete(oldestKey);
+  }
   return width;
 }
 

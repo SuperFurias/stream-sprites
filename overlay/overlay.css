@@ -1,6 +1,9 @@
 
 html,body{height:100%;margin:0;background:transparent;overflow:hidden;font-family:Inter, system-ui, Arial;}
 body.browser-mode{background:#000;}
+/* z-index layering: animated-media-container (5001, set in JS) > canvas (5000) > animated-media-container children (1).
+   Animated sprites (GIF/WebM) render as DOM elements ABOVE the canvas. Do NOT change these values
+   without also updating animatedMediaRenderer.js — the container z-index must stay above the canvas. */
 canvas{display:block;position:fixed;inset:0;width:100vw;height:100vh;max-width:100%;max-height:100%;z-index:5000;}
 #animated-media-container{position:fixed;inset:0;pointer-events:none;overflow:hidden;}
 #animated-media-container img,

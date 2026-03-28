@@ -12,8 +12,13 @@ function dbg(...args) {
   }
 }
 
-export function handleCommand(username, text, tags, cfg, sprites, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
-                              spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, createSprite, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdate, DEBUG = false) {
+export function handleCommand(username, text, tags, cmdCtx) {
+  // Destructure from context object instead of 20+ individual params
+  const { cfg, sprites, skins, W, GROUND_Y, explosionParticles, createExplosionEffect,
+          spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS,
+          createSprite, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX,
+          sendSpriteUpdate, DEBUG = false } = cmdCtx;
+
   dbg('handleCommand:', { username, text, cmd: text.trim().split(' ')[0].toLowerCase() });
   const cmd = text.trim().split(' ')[0].toLowerCase();
   const args = text.trim().split(' ').slice(1);
@@ -32,208 +37,131 @@ export function handleCommand(username, text, tags, cfg, sprites, skins, W, GROU
   let response = null;
 
   if (cmd === '!jump') {
-    dbg('Jump command for', username);
     sprite.vy = JUMP_VELOCITY;
     sprite.state = 'idle';
   } else if (cmd === '!sit') {
-    dbg('Sit command for', username);
     sprite.state = 'sit';
     sprite.vx = 0;
     sprite.vy = 0;
     sprite.heightScale = HEIGHT_SCALE_SIT;
   } else if (cmd === '!unsit') {
-    dbg('Unsit command for', username);
     sprite.state = 'idle';
     sprite.heightScale = HEIGHT_SCALE_IDLE;
   } else if (cmd === '!boom') {
-    dbg('Boom command by', username);
     handleBoomCommand(sprites, W, GROUND_Y, explosionParticles, createExplosionEffect);
   } else if (cmd === '!skin') {
     const parts = text.trim().split(' ');
     if (parts[1] && skins.has(parts[1])) {
-      dbg('Skin change for', username, 'to', parts[1]);
       sprite.skin = parts[1];
-    } else {
-      dbg('Invalid skin attempt:', parts[1]);
     }
   } else if (cmd === '!skins') {
-    dbg('Skins list requested by', username);
     const skinList = Array.from(skins.keys()).sort();
-    if (skinList.length > 0) {
-      response = `Available skins: ${skinList.join(', ')}`;
-    } else {
-      response = 'No skins available.';
-    }
-    dbg('Skins response:', response);
+    response = skinList.length > 0 ? `Available skins: ${skinList.join(', ')}` : 'No skins available.';
   } else if (cmd === '!spawn') {
-    dbg('Spawn command by', username, 'args:', args);
     handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdate);
   } else if (cmd === '!flip') {
-    dbg('Flip command by', username, 'args:', args);
-    handleFlipCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    handleFlipCommand(username, args, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, FLIP_DURATION_MS, FLIP_ANGULAR_VELOCITY);
   } else if (cmd === '!fight') {
-    dbg('Fight command by', username, 'args:', args);
-    handleFightCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+    handleFightCommand(username, args, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, FIGHT_DURATION_MS, FLIP_ANGULAR_VELOCITY, FIGHT_COIN_FLIP_PROBABILITY);
   }
 
   return response;
 }
 
-const commandDescriptions = {
-  '!jump': 'Make your sprite jump',
-  '!sit': 'Make your sprite sit down',
-  '!unsit': 'Make your sprite stand up',
-  '!boom': 'Create an explosion',
-  '!skin': 'Change your sprite skin (!skin <skinname>)',
-  '!skins': 'List available skins',
-  '!spawn': 'Spawn sprites - [qty] [skin] [user] in any order (mods/broadcaster only)',
-  '!flip': 'Flip your sprite upside down (!flip [username] for others)',
-  '!fight': 'Fight another sprite - loser flips for 10 seconds (!fight <username>)'
-};
-
 function handleBoomCommand(sprites, W, GROUND_Y, explosionParticles, createExplosionEffect) {
   if (sprites.size === 0) return;
 
   const epicenterX = Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
-  const epicenterY = GROUND_Y;
   const explosionRadius = EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
 
-  createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
+  createExplosionEffect(epicenterX, GROUND_Y, explosionRadius, explosionParticles);
 
-  applyExplosionPhysics(sprites, epicenterX, epicenterY, explosionRadius,
+  applyExplosionPhysics(sprites, epicenterX, GROUND_Y, explosionRadius,
     EXPLOSION_FORCE_MULTIPLIER + Math.random() * (EXPLOSION_FORCE_MULTIPLIER * 0.5),
     EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR, RANDOM_JITTER_FACTOR,
     COLLISION_PERSONAL_SPACE_THRESHOLD);
 }
 
-function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdate, DEBUG = false) {
-  if (DEBUG) console.log('!spawn command received:', { username, args, tags, channel: cfg.channel, botUsername: cfg.botUsername });
+function handleSpawnCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, skins, spawnTimes, MAX_SPRITES, MAX_SPAWN_QUANTITY, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, sendSpriteUpdate) {
+  if (!hasModPermission(tags, username, cfg)) return;
 
-  if (DEBUG) console.log('Permission check:', { hasMod: hasModPermission(tags, username, cfg), badges: tags?.badges, mod: tags?.mod });
+  let quantity = 1;
+  let targetSkin = 'default';
+  let targetName = '';
 
-  if (hasModPermission(tags, username, cfg)) {
-    let quantity = 1;
-    let targetSkin = 'default';
-    let targetName = '';
-
-    for (const arg of args) {
-      if (/^\d+$/.test(arg)) {
-        quantity = Math.min(MAX_SPAWN_QUANTITY, Math.max(1, parseInt(arg, 10)));
-      } else if (skins.has(arg)) {
-        targetSkin = arg;
-      } else if (!targetName) {
-        targetName = arg.trim().replace(/^@/, '');
-      }
+  for (const arg of args) {
+    if (/^\d+$/.test(arg)) {
+      quantity = Math.min(MAX_SPAWN_QUANTITY, Math.max(1, parseInt(arg, 10)));
+    } else if (skins.has(arg)) {
+      targetSkin = arg;
+    } else if (!targetName) {
+      targetName = arg.trim().replace(/^@/, '');
     }
+  }
 
-    if (!targetName) {
-      targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
+  if (!targetName) {
+    targetName = 'Sprite_' + Math.random().toString(36).substring(2, 8);
+  } else {
+    targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, NAME_LENGTH_LIMIT);
+  }
+
+  for (let i = 0; i < quantity; i++) {
+    const uniqueName = quantity > 1 ? targetName + '_' + (i + 1) : targetName;
+    const uniqueId = uniqueName.toLowerCase();
+
+    const existing = sprites.get(uniqueId);
+    let sprite;
+    if (!existing) {
+      sprite = spawn(uniqueName, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSprite, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
+      sprite.skin = targetSkin;
+      sprite.lastActivity = Date.now();
     } else {
-      targetName = targetName.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, NAME_LENGTH_LIMIT);
+      sprite = existing;
+      sprite.skin = targetSkin;
+      sprite.lastActivity = Date.now();
+      sprite.vx += (Math.random() - 0.5) * VELOCITY_BUMP;
+      sprite.vy -= Math.random() * VELOCITY_BUMP;
     }
-    
-    if (DEBUG) console.log('!spawn creating:', { quantity, targetName, targetSkin });
-    
-    for (let i = 0; i < quantity; i++) {
-      const uniqueName = quantity > 1 ? targetName + '_' + (i + 1) : targetName;
-      const uniqueId = uniqueName.toLowerCase();
-      
-      const existing = sprites.get(uniqueId);
-      let sprite;
-      if (!existing) {
-        sprite = spawn(uniqueName, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSprite, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
-        sprite.skin = targetSkin;
-        sprite.lastActivity = Date.now();
-        if (DEBUG) console.log('!spawn created new sprite:', sprite.id);
-      } else {
-        sprite = existing;
-        sprite.skin = targetSkin;
-        sprite.lastActivity = Date.now();
-        sprite.vx += (Math.random() - 0.5) * VELOCITY_BUMP;
-        sprite.vy -= Math.random() * VELOCITY_BUMP;
-        if (DEBUG) console.log('!spawn updated existing sprite:', sprite.id);
-      }
-      // Notify server about this sprite (server-authoritative sync)
-      if (sendSpriteUpdate && typeof sendSpriteUpdate === 'function') {
-        sendSpriteUpdate(sprite);
-      }
+    if (sendSpriteUpdate && typeof sendSpriteUpdate === 'function') {
+      sendSpriteUpdate(sprite);
     }
-  } else if (DEBUG) {
-    console.log('!spawn denied: insufficient permissions');
   }
 }
 
-function handleFlipCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
+function handleFlipCommand(username, args, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, FLIP_DURATION_MS, FLIP_ANGULAR_VELOCITY) {
   const targetUsername = args[0] ? args[0].toLowerCase().replace(/^@/, '') : username.toLowerCase();
-
-  // Read configurable values from overlay settings (with fallbacks from config.js defaults)
-  const ov = cfg?.overlay || {};
-  const FLIP_DURATION_MS = ov.flipDurationMs ?? DEFAULT_FLIP_DURATION_MS;
-  const FLIP_ANGULAR_VELOCITY = ov.flipAngularVelocity ?? DEFAULT_FLIP_ANGULAR_VELOCITY;
 
   let targetSprite;
   if (targetUsername === username.toLowerCase()) {
-    // Flipping yourself - always allowed
     targetSprite = sprites.get(username.toLowerCase()) || spawn(username, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSprite, W, GROUND_Y, ctx, userSkinCache);
   } else {
-    // Flipping someone else - allowed for everyone (no permission restrictions)
     targetSprite = sprites.get(targetUsername);
-    if (!targetSprite) {
-      dbg('Flip failed: target sprite not found for', targetUsername);
-      return `User ${targetUsername} not found.`;
-    }
+    if (!targetSprite) return;
   }
-  
-  // Apply animated flip effect
-  const now = Date.now();
-  targetSprite.flipUntil = now + FLIP_DURATION_MS;
-  // Start with a strong spin to create the flipping animation
-  targetSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY; // 90 degrees per frame initially
-  targetSprite.lastTiltTime = null; // Clear any existing tilt timer
-  
-  dbg('Flip applied to', targetUsername, 'until', new Date(targetSprite.flipUntil).toISOString());
+
+  targetSprite.flipUntil = Date.now() + FLIP_DURATION_MS;
+  targetSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY;
+  targetSprite.lastTiltTime = null;
 }
 
-function handleFightCommand(username, args, tags, cfg, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
+function handleFightCommand(username, args, sprites, spawn, createSprite, W, GROUND_Y, ctx, userSkinCache, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX, FIGHT_DURATION_MS, FLIP_ANGULAR_VELOCITY, FIGHT_COIN_FLIP_PROBABILITY) {
   const targetUsername = args[0] ? args[0].toLowerCase().replace(/^@/, '') : null;
-  if (!targetUsername) {
-    return 'Usage: !fight <username>';
-  }
-  if (targetUsername === username.toLowerCase()) {
-    return 'You cannot fight yourself.';
-  }
+  if (!targetUsername || targetUsername === username.toLowerCase()) return;
 
-  // Read configurable values from overlay settings (with fallbacks from config.js defaults)
-  const ov = cfg?.overlay || {};
-  const FIGHT_DURATION_MS = ov.fightDurationMs ?? DEFAULT_FIGHT_DURATION_MS;
-  const FLIP_ANGULAR_VELOCITY = ov.flipAngularVelocity ?? DEFAULT_FLIP_ANGULAR_VELOCITY;
-  const FIGHT_COIN_FLIP_PROBABILITY = ov.fightCoinFlipProbability ?? DEFAULT_FIGHT_COIN_FLIP_PROBABILITY;
-
-  // Ensure command user has a sprite (spawn if needed)
   const commandUserId = username.toLowerCase();
   let commandUserSprite = sprites.get(commandUserId);
   if (!commandUserSprite) {
     commandUserSprite = spawn(commandUserId, sprites, spawnTimes, MAX_SPRITES, SPAWN_THROTTLE_MS, createSprite, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
   }
-  // Ensure target exists
   const targetSprite = sprites.get(targetUsername);
-  if (!targetSprite) {
-    return `User '${targetUsername}' not found.`;
-  }
-  // Randomly choose loser (50% chance)
+  if (!targetSprite) return;
+
   const commandUserWins = Math.random() < FIGHT_COIN_FLIP_PROBABILITY;
-  const loser = commandUserWins ? targetUsername : commandUserId;
   const loserSprite = commandUserWins ? targetSprite : commandUserSprite;
-  const duration = FIGHT_DURATION_MS; // 10 seconds
-  // Apply animated flip to loser
-  const now = Date.now();
-  loserSprite.flipUntil = now + duration;
+  loserSprite.flipUntil = Date.now() + FIGHT_DURATION_MS;
   loserSprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY;
   loserSprite.lastTiltTime = null;
-  // Stop the loser's movement (exhausted from fight)
   loserSprite.vx = 0;
   loserSprite.vy = 0;
   loserSprite.isExhausted = true;
-  dbg('Fight result:', { winner: commandUserWins ? commandUserId : targetUsername, loser, duration });
-  // No chat response (silent command)
 }

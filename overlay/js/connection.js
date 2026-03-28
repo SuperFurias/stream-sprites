@@ -8,52 +8,53 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
   let ws = null;
   let reconnectIntervalId = null;
   let isConnected = false;
-  
+
   function connect() {
     dbg('Connecting WebSocket...');
     try {
       ws = new WebSocket(WS_URL);
-      
+
       ws.addEventListener('open', () => {
         dbg('WebSocket opened');
         isConnected = true;
+        // Clear reconnect loop on successful connection
+        if (reconnectIntervalId) {
+          clearInterval(reconnectIntervalId);
+          reconnectIntervalId = null;
+        }
         if (onOpen) onOpen();
       });
-      
+
       ws.addEventListener('message', (ev) => {
         try {
           const data = JSON.parse(ev.data);
-          dbg('WebSocket message received:', data);
           onMessage(data);
         } catch (e) {
           dbg('WebSocket parse error:', e);
         }
       });
-      
+
       ws.addEventListener('close', () => {
         dbg('WebSocket closed');
         isConnected = false;
         startReconnectLoop();
       });
-      
+
       ws.addEventListener('error', (err) => {
         dbg('WebSocket error:', err);
         isConnected = false;
       });
-      
+
     } catch (e) {
       dbg('WebSocket connection failed:', e);
       isConnected = false;
       startReconnectLoop();
     }
   }
-  
+
   function startReconnectLoop() {
+    if (reconnectIntervalId) return; // Already reconnecting
     dbg('Starting reconnect loop');
-    if (reconnectIntervalId) {
-      clearInterval(reconnectIntervalId);
-    }
-    
     reconnectIntervalId = setInterval(() => {
       if (!isConnected) {
         dbg('Attempting to reconnect to server...');
@@ -61,7 +62,7 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
       }
     }, 5000);
   }
-  
+
   function stopReconnectLoop() {
     dbg('Stopping reconnect loop');
     if (reconnectIntervalId) {
@@ -69,33 +70,30 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
       reconnectIntervalId = null;
     }
   }
-  
-  // Expose control functions
+
   const connection = {
-    connect: connect,
-    stopReconnectLoop: stopReconnectLoop,
+    connect,
+    stopReconnectLoop,
     getWebSocket: () => ws,
     isConnected: () => isConnected,
     send: (data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       } else {
         dbg('Cannot send: WebSocket not open');
       }
     }
   };
-  
-  // Start initial connection
+
   connect();
-  
-  // Clean up on page unload
+
   window.addEventListener('beforeunload', () => {
     stopReconnectLoop();
     if (ws) {
       ws.close();
     }
   });
-  
+
   return connection;
 }
 
@@ -134,45 +132,36 @@ export function setupTmiFallback(cfg, onMessage) {
   document.head.appendChild(script);
 }
 
+// Command dispatch map (replaces if-else chain)
+const COMMAND_HANDLERS = {
+  clearSprites: (onCommand, data) => onCommand('clearSprites', data),
+  refresh: (onCommand, data) => {
+    const delay = Math.random() * 1000;
+    dbg(`Overlay refresh scheduled in ${delay.toFixed(0)}ms`);
+    setTimeout(() => {
+      dbg('Reloading overlay page...');
+      window.location.reload();
+    }, delay);
+  },
+  boom: (onCommand, data) => onCommand('boom', data),
+  sit: (onCommand, data) => onCommand('sit', data),
+  unsit: (onCommand, data) => onCommand('unsit', data),
+  jump: (onCommand, data) => onCommand('jump', data),
+  flip: (onCommand, data) => onCommand('flip', data),
+  fight: (onCommand, data) => onCommand('fight', data),
+};
+
 export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState, onSpriteDelta) {
-  dbg('handleWebSocketMessage:', data);
   if (data.type === 'chat') {
     onChat(data.username, data.message, data.tags || {});
   } else if (data.type === 'cmd') {
-    if (data.cmd === 'clearSprites') {
-      dbg('clearSprites command');
-      onCommand('clearSprites', data);
-    } else if (data.cmd === 'refresh') {
-      const delay = Math.random() * 1000;
-      dbg(`Overlay refresh scheduled in ${delay.toFixed(0)}ms`);
-      setTimeout(() => {
-        dbg('Reloading overlay page...');
-        window.location.reload();
-      }, delay);
-    } else if (data.cmd === 'boom') {
-      dbg('boom command received from server');
-      onCommand('boom', data);
-    } else if (data.cmd === 'sit') {
-      dbg('sit command received from server');
-      onCommand('sit', data);
-    } else if (data.cmd === 'unsit') {
-      dbg('unsit command received from server');
-      onCommand('unsit', data);
-    } else if (data.cmd === 'jump') {
-      dbg('jump command received from server');
-      onCommand('jump', data);
-    } else if (data.cmd === 'flip') {
-      dbg('flip command received from server');
-      onCommand('flip', data);
-    } else if (data.cmd === 'fight') {
-      dbg('fight command received from server');
-      onCommand('fight', data);
+    const handler = COMMAND_HANDLERS[data.cmd];
+    if (handler) {
+      handler(onCommand, data);
     }
   } else if (data.type === 'spriteState' && onSpriteState) {
-    dbg('spriteState update received');
     onSpriteState(data);
   } else if (data.type === 'spriteDelta' && onSpriteDelta) {
-    dbg('spriteDelta update received');
     onSpriteDelta(data);
   }
 }

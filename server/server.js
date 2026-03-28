@@ -20,7 +20,10 @@ const Database = require('better-sqlite3');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const axios = require('axios');
-const { spawn, exec } = require('child_process');
+const { exec } = require('child_process');
+
+// Known Twitch authentication error patterns
+const AUTH_ERROR_PATTERNS = ['Login unsuccessful', 'Login authentication failed', 'Improperly formatted auth', 'Invalid NICK'];
 
 // Log sanitization utility to prevent sensitive data exposure
 function sanitizeLogMessage(message) {
@@ -92,8 +95,7 @@ function shouldLogTwitchError(err) {
     errMsg = String(err);
   }
   
-  const authErrors = ['Login unsuccessful', 'Login authentication failed', 'Improperly formatted auth', 'Invalid NICK'];
-  const isAuthError = authErrors.some(pattern => errMsg && errMsg.includes(pattern));
+  const isAuthError = AUTH_ERROR_PATTERNS.some(pattern => errMsg && errMsg.includes(pattern));
   
   if (isAuthError) {
     return cfg.debug?.twitchAuthErrors !== false; // defaults to false
@@ -119,8 +121,7 @@ class FilteredLogger {
   _log(level, message) {
     // Filter authentication errors if disabled
     if (level === 'error' && typeof message === 'string') {
-      const authErrors = ['Login unsuccessful', 'Login authentication failed', 'Improperly formatted auth', 'Invalid NICK'];
-      const isAuthError = authErrors.some(pattern => message.includes(pattern));
+      const isAuthError = AUTH_ERROR_PATTERNS.some(pattern => message.includes(pattern));
       
       if (isAuthError && cfg.debug?.twitchAuthErrors === false) {
         return; // Skip logging auth errors if disabled
@@ -276,52 +277,52 @@ function loadConfig(){
 loadConfig();
 if(!cfg) process.exit(1);
 
-// Backward compat: migrate old persistOAuthToken to autoGenerateOAuth
+// Backward compat migrations and startup config cleanup (batched into single write)
+let configChangedAtStartup = false;
+
+// Migrate old persistOAuthToken to autoGenerateOAuth
 if ('persistOAuthToken' in cfg && !('autoGenerateOAuth' in cfg)) {
   cfg.autoGenerateOAuth = !!cfg.persistOAuthToken;
   if (!('autoConnect' in cfg)) cfg.autoConnect = !!cfg.persistOAuthToken;
   delete cfg.persistOAuthToken;
-  try {
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    console.log('✓ Migrated persistOAuthToken to autoGenerateOAuth + autoConnect');
-  } catch(e) {
-    dbg('Failed to save migrated config:', e.message);
-  }
+  configChangedAtStartup = true;
+  console.log('✓ Migrated persistOAuthToken to autoGenerateOAuth + autoConnect');
 }
-// Backward compat: migrate old autoConnect (single toggle) to autoGenerateOAuth
+
+// Migrate old autoConnect (single toggle) to autoGenerateOAuth
 if ('autoConnect' in cfg && !('autoGenerateOAuth' in cfg) && !('persistOAuthToken' in cfg)) {
-  // Old autoConnect meant "auto-refresh + auto-connect" combined
   cfg.autoGenerateOAuth = cfg.autoConnect;
-  // autoConnect stays as-is
-  try {
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    console.log('✓ Migrated old autoConnect to autoGenerateOAuth + autoConnect');
-  } catch(e) {}
+  configChangedAtStartup = true;
+  console.log('✓ Migrated old autoConnect to autoGenerateOAuth + autoConnect');
 }
+
 // Clean up any leftover persistOAuthToken
 if ('persistOAuthToken' in cfg) {
   delete cfg.persistOAuthToken;
-  try { fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2)); } catch(e) {}
+  configChangedAtStartup = true;
 }
 
 // If both auto settings are off, clear stored tokens from disk for security
 if (!cfg.autoGenerateOAuth && !cfg.autoConnect) {
-  let tokensCleared = false;
   if (cfg.twitch?.refreshToken) {
     cfg.twitch.refreshToken = '';
-    tokensCleared = true;
+    configChangedAtStartup = true;
   }
   if (cfg.twitch?.botOAuthToken) {
     cfg.twitch.botOAuthToken = '';
-    tokensCleared = true;
+    configChangedAtStartup = true;
   }
-  if (tokensCleared) {
-    try {
-      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-      console.log('✓ Auto-generate and auto-connect disabled — cleared stored tokens from .env');
-    } catch(e) {
-      dbg('Failed to clear tokens:', e.message);
-    }
+  if (configChangedAtStartup) {
+    console.log('✓ Auto-generate and auto-connect disabled — cleared stored tokens from .env');
+  }
+}
+
+// Single batched write for all startup config changes
+if (configChangedAtStartup) {
+  try {
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  } catch(e) {
+    dbg('Failed to save startup config changes:', e.message);
   }
 }
 
@@ -527,11 +528,17 @@ app.use(bodyParser.json());
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 1000; // 1 second window
 const RATE_LIMIT_MAX_REQUESTS = 100; // max requests per window per IP
+const RATE_LIMIT_MAX_ENTRIES = 1000; // max tracked IPs to prevent memory exhaustion
 function rateLimiter(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
   let entry = rateLimitMap.get(ip);
   if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    // Evict oldest entry if at capacity
+    if (rateLimitMap.size >= RATE_LIMIT_MAX_ENTRIES) {
+      const oldestKey = rateLimitMap.keys().next().value;
+      rateLimitMap.delete(oldestKey);
+    }
     entry = { windowStart: now, count: 1 };
     rateLimitMap.set(ip, entry);
   } else {
@@ -688,11 +695,9 @@ app.get('/api/skins', (req,res) => {
   res.json(skins);
 });
 
-// Auto-detect skins from assets/skins folder
+// Auto-detect skins from assets/skins folder (alias for /api/skins)
 app.get('/api/skins/auto', (req,res) => {
-  dbg('GET /api/skins/auto');
   const skins = detectSkinsFromAssets();
-  dbg('Returning auto-detected skins:', skins.map(s => s.id));
   res.json(skins);
 });
 
@@ -737,7 +742,6 @@ app.get('/env', (req,res) => {
     safeCfg.hasOAuthToken = !!(cfg.twitch?.botOAuthToken && cfg.twitch.botOAuthToken.trim() !== '');
     safeCfg.twitch.botOAuthToken = undefined; // Never expose OAuth token to client
     safeCfg.twitch.refreshToken = undefined; // Never expose refresh token to client
-    safeCfg.twitch.clientSecret = undefined; // Never expose client secret to client (server handles OAuth)
   }
   
   dbg('Returning config (skins excluded, OAuth token filtered, use /api/skins for skin data)');
@@ -1341,8 +1345,8 @@ let cleanupIntervalId = null;
 let spriteSnapshot = new Map(); // id -> serialized sprite snapshot
 let spriteDirty = true; // Set true when any sprite changes
 
-// Command cooldown tracking (per user per command)
-const commandCooldowns = new Map();
+// Command cooldown tracking (per user per command) - two-level Map to avoid string concat
+const commandCooldowns = new Map(); // Map<userId, Map<cmd, timestamp>>
 
 // Hard limit safeguard to prevent memory exhaustion
 const MAX_SERVER_SPRITES_HARD_LIMIT = 2000; // Should match or exceed overlay maxSprites config
@@ -1585,13 +1589,17 @@ function processServerCommand(username, text, tags) {
     const exempt = hasModPermission(tags, username) || isVip || isSub;
 
     if (!exempt) {
-      const cooldownKey = userId + ':' + cmd;
-      const lastUsed = commandCooldowns.get(cooldownKey) || 0;
+      let userCooldowns = commandCooldowns.get(userId);
+      if (!userCooldowns) {
+        userCooldowns = new Map();
+        commandCooldowns.set(userId, userCooldowns);
+      }
+      const lastUsed = userCooldowns.get(cmd) || 0;
       if (now - lastUsed < cooldownMs) {
         const remaining = Math.ceil((cooldownMs - (now - lastUsed)) / 1000);
         return { result: `Please wait ${remaining} seconds before using ${cmd} again.`, stateChanged: false };
       }
-      commandCooldowns.set(cooldownKey, now);
+      userCooldowns.set(cmd, now);
     }
   }
 
@@ -1623,6 +1631,7 @@ function broadcastSpriteState() {
   const currentIds = new Set();
   const added = [];
   const updated = [];
+  const toRemoveFromSnapshot = [];
 
   for (const [id, sprite] of serverSprites) {
     currentIds.add(id);
@@ -1630,20 +1639,27 @@ function broadcastSpriteState() {
     const prev = spriteSnapshot.get(id);
     if (!prev) {
       added.push(serialized);
+      spriteSnapshot.set(id, serialized);
     } else if (prev.skin !== serialized.skin || prev.state !== serialized.state || prev.lastActivity !== serialized.lastActivity) {
       updated.push(serialized);
+      // Update existing snapshot entry in-place
+      prev.skin = serialized.skin;
+      prev.state = serialized.state;
+      prev.lastActivity = serialized.lastActivity;
     }
   }
 
   const removed = [];
   for (const id of spriteSnapshot.keys()) {
-    if (!currentIds.has(id)) removed.push(id);
+    if (!currentIds.has(id)) {
+      removed.push(id);
+      toRemoveFromSnapshot.push(id);
+    }
   }
 
-  // Update snapshot
-  spriteSnapshot.clear();
-  for (const [id, sprite] of serverSprites) {
-    spriteSnapshot.set(id, serializeSprite(sprite));
+  // Remove deleted entries from snapshot
+  for (const id of toRemoveFromSnapshot) {
+    spriteSnapshot.delete(id);
   }
 
   // Only broadcast if there are actual changes
@@ -1823,9 +1839,14 @@ cleanupIntervalId = setInterval(() => {
   // Prune expired command cooldowns (older than 2x cooldown window)
   const cooldownMs = (cfg.overlay && cfg.overlay.commandCooldownMs) || 5000;
   const cooldownExpiry = cooldownMs * 2;
-  for (const [key, timestamp] of commandCooldowns) {
-    if (now - timestamp > cooldownExpiry) {
-      commandCooldowns.delete(key);
+  for (const [userId, userCooldowns] of commandCooldowns) {
+    for (const [cmd, timestamp] of userCooldowns) {
+      if (now - timestamp > cooldownExpiry) {
+        userCooldowns.delete(cmd);
+      }
+    }
+    if (userCooldowns.size === 0) {
+      commandCooldowns.delete(userId);
     }
   }
 

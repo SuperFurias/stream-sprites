@@ -1,5 +1,34 @@
 // Exclusion Manager - handles user exclusion functionality
 
+// NOTE: Variable names use _ex prefix (e.g., _exRenderPagination) to avoid conflicts
+// with userSkinAssignmentManager.js. Both scripts run in the global scope and const/let
+// cannot be redeclared in the same scope. Do NOT rename to generic names like
+// _renderPagination — it will break the other manager script.
+
+// Use shared utilities with fallback (unique var names to avoid conflicts)
+const _exRenderPagination = (window.dashboardUtils && window.dashboardUtils.renderPagination)
+  ? window.dashboardUtils.renderPagination
+  : function(containerId, totalItems, pageSize, currentPage, onPageChange) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      const totalPages = Math.ceil(totalItems / pageSize);
+      const prevBtn = document.createElement('button');
+      prevBtn.textContent = '\u2190';
+      prevBtn.disabled = currentPage === 1;
+      prevBtn.onclick = function() { onPageChange(Math.max(1, currentPage - 1)); };
+      container.appendChild(prevBtn);
+      const info = document.createElement('span');
+      info.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+      info.style.margin = '0 8px';
+      container.appendChild(info);
+      const nextBtn = document.createElement('button');
+      nextBtn.textContent = '\u2192';
+      nextBtn.disabled = currentPage === totalPages;
+      nextBtn.onclick = function() { onPageChange(Math.min(totalPages, currentPage + 1)); };
+      container.appendChild(nextBtn);
+    };
+
 // State
 let allExcluded = [];
 let filteredExcluded = [];
@@ -9,22 +38,31 @@ let currentEditingUserId = null;
 
 // Load excluded users from API
 async function loadExcluded() {
-   try {
-     allExcluded = await sharedAPI('/api/local/excluded');
+  try {
+    console.log('[EXCLUDED] Loading excluded users...');
+    console.log('[EXCLUDED] sharedAPI available:', typeof sharedAPI);
+    allExcluded = await sharedAPI('/api/local/excluded');
+    console.log('[EXCLUDED] API returned:', allExcluded);
     const search = document.getElementById('excludedSearch');
     const searchVal = search ? search.value.toLowerCase() : '';
     filteredExcluded = allExcluded.filter(u => u.id.toLowerCase().includes(searchVal));
+    console.log('[EXCLUDED] Filtered:', filteredExcluded.length, 'items');
     excludedCurrentPage = 1;
     renderExcludedTable();
+    console.log('[EXCLUDED] Table rendered');
   } catch (e) {
-    console.error('load excluded error', e);
+    console.error('[EXCLUDED] load excluded error:', e);
   }
 }
 
 // Render excluded users table with pagination
 function renderExcludedTable() {
   const tbody = document.getElementById('excludedTable');
-  if (!tbody) return;
+  console.log('[EXCLUDED] renderExcludedTable called, tbody found:', !!tbody, 'data:', filteredExcluded.length, 'items');
+  if (!tbody) {
+    console.error('[EXCLUDED] excludedTable element not found in DOM!');
+    return;
+  }
   tbody.innerHTML = '';
 
   const start = (excludedCurrentPage - 1) * excludedPageSize;
@@ -89,7 +127,7 @@ function renderExcludedTable() {
     tbody.appendChild(tr);
   });
 
-  renderPagination('excludedPagination', filteredExcluded.length, excludedPageSize, excludedCurrentPage, (page) => {
+  _exRenderPagination('excludedPagination', filteredExcluded.length, excludedPageSize, excludedCurrentPage, (page) => {
     excludedCurrentPage = page;
     renderExcludedTable();
   });
@@ -176,35 +214,6 @@ async function saveEditedReason() {
   } catch (e) {
     alert('Error: ' + e.message);
   }
-}
-
-// Shared pagination renderer (same as in skin assignment)
-function renderPagination(containerId, totalItems, pageSize, currentPage, onPageChange) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = '';
-
-  const totalPages = Math.ceil(totalItems / pageSize);
-
-  // Previous button
-  const prevBtn = document.createElement('button');
-  prevBtn.textContent = '←';
-  prevBtn.disabled = currentPage === 1;
-  prevBtn.onclick = () => onPageChange(Math.max(1, currentPage - 1));
-  container.appendChild(prevBtn);
-
-  // Page info
-  const info = document.createElement('span');
-  info.textContent = `Page ${currentPage} of ${totalPages}`;
-  info.style.margin = '0 8px';
-  container.appendChild(info);
-
-  // Next button
-  const nextBtn = document.createElement('button');
-  nextBtn.textContent = '→';
-  nextBtn.disabled = currentPage === totalPages;
-  nextBtn.onclick = () => onPageChange(Math.min(totalPages, currentPage + 1));
-  container.appendChild(nextBtn);
 }
 
 // Expose functions globally for HTML onclick handlers

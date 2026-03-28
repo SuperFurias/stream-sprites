@@ -3,6 +3,10 @@
 // Register initializer
 window.tabInitializers = window.tabInitializers || {};
 window.tabInitializers.users = async function () {
+  console.log('[USERS] Initializing users tab...');
+  console.log('[USERS] userSkinAssignment available:', !!window.userSkinAssignment);
+  console.log('[USERS] userExclusion available:', !!window.userExclusion);
+
   // Initialize skin assignment manager
   if (window.userSkinAssignment) {
     await window.userSkinAssignment.loadConfigForUsers();
@@ -13,6 +17,7 @@ window.tabInitializers.users = async function () {
 
   // Initialize exclusion manager
   if (window.userExclusion) {
+    console.log('[USERS] Calling loadExcluded...');
     await window.userExclusion.loadExcluded();
   } else {
     console.error('userExclusion manager not found');

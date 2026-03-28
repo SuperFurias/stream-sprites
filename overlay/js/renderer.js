@@ -1,4 +1,17 @@
 // Renderer module — optimized with pre-rendered text and better dirty tracking
+// NOTE: Do NOT add a "skip rendering when nothing changed" early return.
+// Sprites move every frame via physics (gravity, velocity, bouncing), so
+// the canvas must be redrawn every frame. An earlier attempt to skip frames
+// using a renderNeeded flag caused sprites and usernames to freeze in place.
+//
+// NOTE: This sort only applies to NON-ANIMATED sprites (PNG etc). Animated
+// skins (GIF/WebM) are rendered as DOM elements in animatedMediaRenderer.js,
+// which must apply its own z-index ordering. Do NOT assume this sort covers
+// all sprites — it doesn't.
+//
+// NOTE: Sprites are sorted by size descending (larger first = background,
+// smaller later = foreground). This was the working approach from v1.0.10.
+// Do NOT change this sort order or add caching that skips the sort.
 
 // Reusable sorted array cache to avoid allocating + sorting every frame
 let sortedSpriteCache = [];
@@ -19,6 +32,7 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
       sortedSpriteCache.push(s);
     }
     // Sort by size descending (larger first = background, smaller later = foreground)
+    // Then by Y as secondary factor for consistent ordering among same-sized sprites
     sortedSpriteCache.sort((a, b) => b.size - a.size);
     spriteCountSnapshot = sprites.size;
     spriteDirtyFlag = false;
@@ -39,25 +53,6 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-}
-
-// Pre-rendered text shadow offscreen canvas
-const textShadowCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-const textShadowCtx = textShadowCanvas ? textShadowCanvas.getContext('2d') : null;
-
-function drawTextWithShadow(ctx, text, x, y) {
-  // Use native shadow for simplicity but with reduced blur for performance
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'center';
-  // Use a single shadow pass with minimal blur instead of expensive blur
-  ctx.shadowColor = 'rgba(0,0,0,0.8)';
-  ctx.shadowBlur = 2; // Reduced from 4 to 2 for performance
-  ctx.shadowOffsetX = 1;
-  ctx.shadowOffsetY = 1;
-  ctx.fillText(text, x, y);
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
 }
 
 function drawSprite(ctx, sprite, skins, GROUND_Y) {
@@ -97,8 +92,13 @@ function drawSprite(ctx, sprite, skins, GROUND_Y) {
   }
   ctx.restore();
 
-  // Draw username with optimized shadow
-  drawTextWithShadow(ctx, sprite.username, sprite.x, sprite.y - sprite.size / 2 - 8);
+  // Draw username
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 4;
+  ctx.fillText(sprite.username, sprite.x, sprite.y - sprite.size / 2 - 8);
+  ctx.shadowBlur = 0;
 
   // Draw state emojis
   if (sprite.state === 'dance') {
