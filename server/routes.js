@@ -395,7 +395,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
   // Dashboard presence
   app.get('/api/dashboard/ping', (req, res) => {
     dashboardLastSeen = Date.now();
-    res.json({ status: 'ok', timestamp: dashboardLastSeen });
+    res.json({ status: 'ok', timestamp: dashboardLastSeen, stopPinging: true });
   });
 
   app.get('/api/dashboard/isOpen', (req, res) => {

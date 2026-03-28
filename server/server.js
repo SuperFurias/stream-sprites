@@ -87,9 +87,11 @@ const server = app.listen(port, () => {
   websocket.clearServerSprites();
   console.log('✓ Cleared all sprites on startup');
 
+  // Start Twitch connection before browser opens (so needsOAuthRedirect is set)
+  twitch.handleStartupTwitchConnection();
+
   // Auto-open browser
   if (cfg.autoOpenBrowser !== false) {
-    // Wait for dashboard presence ping (it pings every 2s, so check after 3s)
     setTimeout(async () => {
       try {
         const axios = require('axios');
@@ -123,7 +125,7 @@ const server = app.listen(port, () => {
       } catch (e) {
         console.log('✓ Open browser manually:', `http://localhost:${port}/`);
       }
-    }, 3000);
+    }, 500);
   } else {
     console.log('✓ Auto-open browser disabled. Open manually:', `http://localhost:${port}/`);
   }
@@ -141,9 +143,6 @@ const wss = websocket.initWebSocket(server, cfg, db, dbg, loginUsernameIndex);
 
 // Set up stats broadcasting
 websocket.setBroadcastStatsFn(routes.broadcastStats);
-
-// Start Twitch connection
-twitch.handleStartupTwitchConnection();
 
 // Graceful shutdown
 async function shutdown(signal) {

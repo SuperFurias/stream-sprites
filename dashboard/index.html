@@ -304,8 +304,8 @@
       }
     }
 
-    // Ping every 2 seconds to indicate dashboard is open
-    pingInterval = setInterval(announceDashboard, 2000);
+    // Ping every 100ms to indicate dashboard is open
+    pingInterval = setInterval(announceDashboard, 100);
     // Initial ping
     announceDashboard();
 
