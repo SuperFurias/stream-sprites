@@ -10,33 +10,33 @@ export function setupCanvas() {
   return { canvas, ctx, DPR };
 }
 
-export function resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites) {
-  // Make canvas exactly match window size (no aspect ratio preservation)
+export function resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites, USE_SERVER, serverW, serverH, serverGroundY) {
   const winW = window.innerWidth;
   const winH = window.innerHeight;
   
-  // Set canvas to full window size in device pixels
+  // Canvas always matches window size for correct input handling
   canvas.width = winW * DPR;
   canvas.height = winH * DPR;
   canvas.style.width = winW + 'px';
   canvas.style.height = winH + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   
-  // Update logical coordinate system to match
+  if (USE_SERVER) {
+    // Server mode: return server dimensions (physics coords stay in server space)
+    // The render function will scale server coords to screen coords
+    return { W: serverW, H: serverH, GROUND_Y: serverGroundY };
+  }
+  
+  // Local mode: canvas matches window (original behavior)
   const oldGroundY = GROUND_Y;
-  const newW = winW;
-  const newH = winH;
-  const newGROUND_Y = newH * GROUND_Y_MULTIPLIER;
+  const newGROUND_Y = winH * GROUND_Y_MULTIPLIER;
   
-  // Adjust existing sprites to stay on the new ground
   for (const sprite of sprites.values()) {
     const offsetFromGround = sprite.y - oldGroundY;
     sprite.y = newGROUND_Y + offsetFromGround;
   }
   
-  // Reset transform for new size
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  
-  return { W: newW, H: newH, GROUND_Y: newGROUND_Y };
+  return { W: winW, H: winH, GROUND_Y: newGROUND_Y };
 }
 
 export function initializeCanvasDisplay(cfg, USE_SERVER) {

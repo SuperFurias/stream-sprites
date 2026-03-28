@@ -22,8 +22,12 @@ export function markSpritesDirty() {
   spriteDirtyFlag = true;
 }
 
-export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
-  ctx.clearRect(0, 0, W, H);
+export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles, scaleX, scaleY) {
+  scaleX = scaleX || 1;
+  scaleY = scaleY || 1;
+  const isScaled = scaleX !== 1 || scaleY !== 1;
+
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   // Rebuild sorted array when sprite count changes or dirty flag is set
   if (spriteDirtyFlag || spriteCountSnapshot !== sprites.size) {
@@ -31,8 +35,6 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
     for (const s of sprites.values()) {
       sortedSpriteCache.push(s);
     }
-    // Sort by size descending (larger first = background, smaller later = foreground)
-    // Then by Y as secondary factor for consistent ordering among same-sized sprites
     sortedSpriteCache.sort((a, b) => b.size - a.size);
     spriteCountSnapshot = sprites.size;
     spriteDirtyFlag = false;
@@ -40,7 +42,7 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
 
   ctx.font = 'bold 12px system-ui, Arial';
   for (let i = 0; i < sortedSpriteCache.length; i++) {
-    drawSprite(ctx, sortedSpriteCache[i], skins, GROUND_Y);
+    drawSprite(ctx, sortedSpriteCache[i], skins, GROUND_Y, scaleX, scaleY);
   }
 
   // Draw explosion particles
@@ -49,50 +51,53 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.arc(p.x * scaleX, p.y * scaleY, p.size * Math.min(scaleX, scaleY), 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-function drawSprite(ctx, sprite, skins, GROUND_Y) {
+function drawSprite(ctx, sprite, skins, GROUND_Y, scaleX, scaleY) {
+  // Scale sprite position from server coords to screen coords
+  const sx = sprite.x * scaleX;
+  const sy = sprite.y * scaleY;
+  const size = sprite.size * Math.min(scaleX, scaleY);
+
   ctx.globalAlpha = sprite.opacity || 1;
 
-  // Only draw shadow for sprites near the ground (saves draw calls for airborne sprites)
-  const collisionRadius = sprite.collisionRadius || sprite.size / 2;
-  const onGround = sprite.y >= GROUND_Y - collisionRadius - 20;
+  // Only draw shadow for sprites near the ground (uses screen-space GROUND_Y)
+  const collisionRadius = (sprite.collisionRadius || sprite.size / 2) * Math.min(scaleX, scaleY);
+  const onGround = sy >= GROUND_Y - collisionRadius - 20;
   if (onGround) {
     ctx.beginPath();
     ctx.fillStyle = 'rgba(0,0,0,0.16)';
-    const shadowWidth = sprite.size * 0.5;
-    const shadowHeight = sprite.size * 0.15;
-    ctx.ellipse(sprite.x, GROUND_Y + 2, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
+    const shadowWidth = size * 0.5;
+    const shadowHeight = size * 0.15;
+    ctx.ellipse(sx, GROUND_Y + 2, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
   // Draw skin with rotation and flip (skip for GIF skins - handled by DOM)
   const s = skins.get(sprite.skin);
   const heightScale = sprite.heightScale || 1.0;
-  const scaledHeight = sprite.size * heightScale;
-  const yOffset = (sprite.size - scaledHeight) / 2;
+  const scaledHeight = size * heightScale;
+  const yOffset = (size - scaledHeight) / 2;
 
   ctx.save();
-  ctx.translate(sprite.x, sprite.y + yOffset);
+  ctx.translate(sx, sy + yOffset);
   ctx.rotate(sprite.angle || 0);
   if (!sprite.facingRight) { ctx.scale(-1, 1); }
 
-  // Only draw static images on canvas; GIFs and WebMs are rendered as DOM elements
   if (s && s.img && !s.isGif && !s.isWebm) {
-    ctx.drawImage(s.img, -sprite.size / 2, -scaledHeight / 2, sprite.size, scaledHeight);
+    ctx.drawImage(s.img, -size / 2, -scaledHeight / 2, size, scaledHeight);
   } else if (!s || (!s.img && !s.isGif && !s.isWebm)) {
-    // Fallback: draw colored circle with eyes (only for non-animated skins without an image)
     ctx.beginPath();
     ctx.fillStyle = sprite.color;
     ctx.arc(0, 0, scaledHeight / 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.fillRect(-sprite.size * 0.18, -scaledHeight * 0.06, sprite.size * 0.12, scaledHeight * 0.12);
-    ctx.fillRect(sprite.size * 0.06, -scaledHeight * 0.06, sprite.size * 0.12, scaledHeight * 0.12);
+    ctx.fillRect(-size * 0.18, -scaledHeight * 0.06, size * 0.12, scaledHeight * 0.12);
+    ctx.fillRect(size * 0.06, -scaledHeight * 0.06, size * 0.12, scaledHeight * 0.12);
   }
   ctx.restore();
 
@@ -101,12 +106,12 @@ function drawSprite(ctx, sprite, skins, GROUND_Y) {
   ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.8)';
   ctx.shadowBlur = 4;
-  ctx.fillText(sprite.username, sprite.x, sprite.y - sprite.size / 2 - 8);
+  ctx.fillText(sprite.username, sx, sy - size / 2 - 8);
   ctx.shadowBlur = 0;
 
   // Draw state emojis
   if (sprite.state === 'dance') {
-    ctx.fillText('💃', sprite.x, sprite.y - sprite.size / 1.6);
+    ctx.fillText('💃', sx, sy - size / 1.6);
   }
 
   ctx.globalAlpha = 1;

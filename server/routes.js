@@ -58,6 +58,11 @@ const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 // Dashboard presence
 let dashboardLastSeen = null;
+let dashboardConfirmedOpen = false;
+
+function setDashboardConfirmedOpen(v) {
+  dashboardConfirmedOpen = v;
+}
 
 function initRoutes(app, cfg, cfgPath, db, dbg) {
   _app = app;
@@ -395,7 +400,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
   // Dashboard presence
   app.get('/api/dashboard/ping', (req, res) => {
     dashboardLastSeen = Date.now();
-    res.json({ status: 'ok', timestamp: dashboardLastSeen });
+    res.json({ status: 'ok', timestamp: dashboardLastSeen, stopPinging: dashboardConfirmedOpen });
   });
 
   app.get('/api/dashboard/isOpen', (req, res) => {
@@ -526,5 +531,6 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
 module.exports = {
   initRoutes,
   broadcastStats,
-  refreshStatsCache
+  refreshStatsCache,
+  setDashboardConfirmedOpen
 };

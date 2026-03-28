@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const { getUserSkinFromDB } = require('./db');
 const physics = require('./physics');
+const { DEFAULT_OVERLAY } = require('./config');
 
 // Shared state (set by server.js via initWebSocket)
 let _cfg, _db, _dbg, _wss;
@@ -30,31 +31,32 @@ let _overlayConfigCache = null;
 function getOverlayConfig() {
   if (!_overlayConfigCache) {
     const ov = _cfg.overlay || {};
+    const d = DEFAULT_OVERLAY;
     _overlayConfigCache = {
-      MAX_SPRITES: ov.maxSprites || 1500,
-      MAX_SPAWN_QUANTITY: ov.maxSpawnQuantity || 100,
-      SPAWN_THROTTLE_MS: ov.spawnThrottleMs || 700,
-      GROUND_Y: ov.groundY || 920,
-      W: ov.canvasWidth || 1920,
-      H: ov.canvasHeight || 1080,
-      GRAVITY: ov.gravity || 0.6,
-      AIR_RESISTANCE: ov.airResistance || 0.992,
-      GROUND_FRICTION: ov.groundFriction || 0.92,
-      BOUNCE_DAMPING: ov.bounceDamping || 0.65,
-      MIN_VELOCITY: ov.minVelocity || 0.15,
-      SPRITE_SIZE_MIN: ov.spriteSizeMin || 30,
-      SPRITE_SIZE_MAX: ov.spriteSizeMax || 80,
-      SPRITE_LIFETIME_MS: ov.spriteLifetimeMs || 30 * 60 * 1000,
-      FADE_WARNING_MS: ov.fadeWarningMs || 5 * 60 * 1000,
-      COLLISION_PERSONAL_SPACE_THRESHOLD: ov.collisionPersonalSpaceThreshold || 0.1,
-      EXPLOSION_FORCE_MULTIPLIER: ov.explosionForceMultiplier || 60,
-      EXPLOSION_RADIUS_BASE: ov.explosionRadiusBase || 400,
-      EXPLOSION_RADIUS_VAR: ov.explosionRadiusVar || 300,
-      EXPLOSION_UPWARD_BIAS: ov.explosionUpwardBias || 0.7,
-      SPIN_STRENGTH_FACTOR: ov.spinStrengthFactor || 0.05,
-      RANDOM_JITTER_FACTOR: ov.randomJitterFactor || 0.2,
-      flipDurationMs: ov.flipDurationMs || 5000,
-      fightDurationMs: ov.fightDurationMs || 10000
+      MAX_SPRITES: ov.maxSprites ?? d.maxSprites,
+      MAX_SPAWN_QUANTITY: ov.maxSpawnQuantity ?? d.maxSpawnQuantity,
+      SPAWN_THROTTLE_MS: ov.spawnThrottleMs ?? d.spawnThrottleMs,
+      GROUND_Y: ov.groundY ?? d.groundY,
+      W: ov.canvasWidth ?? d.canvasWidth,
+      H: ov.canvasHeight ?? d.canvasHeight,
+      GRAVITY: ov.gravity ?? d.gravity,
+      AIR_RESISTANCE: ov.airResistance ?? d.airResistance,
+      GROUND_FRICTION: ov.groundFriction ?? d.groundFriction,
+      BOUNCE_DAMPING: ov.bounceDamping ?? d.bounceDamping,
+      MIN_VELOCITY: ov.minVelocity ?? d.minVelocity,
+      SPRITE_SIZE_MIN: ov.spriteSizeMin ?? d.spriteSizeMin,
+      SPRITE_SIZE_MAX: ov.spriteSizeMax ?? d.spriteSizeMax,
+      SPRITE_LIFETIME_MS: ov.spriteLifetimeMs ?? d.spriteLifetimeMs,
+      FADE_WARNING_MS: ov.fadeWarningMs ?? d.fadeWarningMs,
+      COLLISION_PERSONAL_SPACE_THRESHOLD: ov.collisionPersonalSpaceThreshold ?? d.collisionPersonalSpaceThreshold,
+      EXPLOSION_FORCE_MULTIPLIER: ov.explosionForceMultiplier ?? d.explosionForceMultiplier,
+      EXPLOSION_RADIUS_BASE: ov.explosionRadiusBase ?? d.explosionRadiusBase,
+      EXPLOSION_RADIUS_VAR: ov.explosionRadiusVar ?? d.explosionRadiusVar,
+      EXPLOSION_UPWARD_BIAS: ov.explosionUpwardBias ?? d.explosionUpwardBias,
+      SPIN_STRENGTH_FACTOR: ov.spinStrengthFactor ?? d.spinStrengthFactor,
+      RANDOM_JITTER_FACTOR: ov.randomJitterFactor ?? d.randomJitterFactor,
+      flipDurationMs: ov.flipDurationMs ?? d.flipDurationMs,
+      fightDurationMs: ov.fightDurationMs ?? d.fightDurationMs
     };
   }
   return _overlayConfigCache;
@@ -62,6 +64,7 @@ function getOverlayConfig() {
 
 function invalidateOverlayConfigCache() {
   _overlayConfigCache = null;
+  cachedOv = null;
 }
 
 function broadcast(obj) {
@@ -69,9 +72,8 @@ function broadcast(obj) {
   _wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// Broadcast full physics state to all clients (~30Hz)
+// Broadcast full physics state to all clients (~20Hz)
 function broadcastPhysicsState() {
-  const ov = getOverlayConfig();
   const sprites = [];
   for (const sprite of serverSprites.values()) {
     sprites.push(physics.serializeSpritePhysics(sprite));
@@ -80,9 +82,6 @@ function broadcastPhysicsState() {
   const msg = JSON.stringify({
     type: 'physicsState',
     sprites,
-    W: ov.W,
-    H: ov.H,
-    GROUND_Y: ov.GROUND_Y,
     timestamp: Date.now()
   });
 
@@ -94,7 +93,6 @@ function broadcastPhysicsState() {
 // Send full state to a specific client (for initial sync)
 function sendFullStateToClient(ws) {
   if (ws.readyState !== WebSocket.OPEN) return;
-  const ov = getOverlayConfig();
   const sprites = [];
   for (const sprite of serverSprites.values()) {
     sprites.push(physics.serializeSpritePhysics(sprite));
@@ -102,9 +100,6 @@ function sendFullStateToClient(ws) {
   ws.send(JSON.stringify({
     type: 'physicsState',
     sprites,
-    W: ov.W,
-    H: ov.H,
-    GROUND_Y: ov.GROUND_Y,
     timestamp: Date.now()
   }));
 }
@@ -116,6 +111,7 @@ function clearServerSprites() {
   spriteSnapshot.clear();
   if (_loginUsernameIndex) _loginUsernameIndex.clear();
   spriteDirty = true;
+  markServerSpriteArrayDirty();
   broadcastPhysicsState();
 }
 
@@ -160,6 +156,7 @@ function spawnServerSprite(name, skinId, now, stateChangedRef) {
   serverSprites.set(uniqueId, newSprite);
   if (stateChangedRef) stateChangedRef.value = true;
   spriteDirty = true;
+  markServerSpriteArrayDirty();
   return newSprite;
 }
 
@@ -189,6 +186,7 @@ function updateServerSprite(username, tags) {
     if (loginUsername !== null) {
       _loginUsernameIndex.set(loginUsername, userId);
     }
+    markServerSpriteArrayDirty();
   }
 
   spriteDirty = true;
@@ -209,71 +207,110 @@ function setBroadcastStatsFn(fn) {
 
 // ── Server Game Loop ──────────────────────────────────────────────────────
 
+// Pre-allocated sprite array (rebuilt only when sprites change)
+let cachedSpriteArray = [];
+let spriteArrayDirty = true;
+
+function markServerSpriteArrayDirty() {
+  spriteArrayDirty = true;
+}
+
+function getServerSpriteArray() {
+  if (spriteArrayDirty || cachedSpriteArray.length !== serverSprites.size) {
+    cachedSpriteArray.length = 0;
+    for (const s of serverSprites.values()) {
+      cachedSpriteArray.push(s);
+    }
+    spriteArrayDirty = false;
+  }
+  return cachedSpriteArray;
+}
+
+// Cache overlay config for the game loop
+let cachedOv = null;
+
+function getGameLoopConfig() {
+  if (!cachedOv) cachedOv = getOverlayConfig();
+  return cachedOv;
+}
+
 function startGameLoop() {
   const TARGET_FPS = 60;
   const FRAME_MS = 1000 / TARGET_FPS;
   let lastTime = Date.now();
+  let accumulator = 0;
 
-  gameLoopIntervalId = setInterval(() => {
+  // Use setImmediate with throttling for more precise timing
+  function tick() {
     const now = Date.now();
-    const rawDt = (now - lastTime) / 1000;
-    const dt = Math.min(0.05, rawDt); // DT_CAP
+    const elapsed = now - lastTime;
     lastTime = now;
+    accumulator += elapsed;
 
-    const ov = getOverlayConfig();
-    const spriteArray = Array.from(serverSprites.values());
+    // Cap accumulator to prevent spiral of death
+    if (accumulator > 200) accumulator = 200;
 
-    if (spriteArray.length > 0) {
-      physics.updatePhysics(dt, spriteArray, ov.W, ov.H, ov.GROUND_Y,
-        ov.GRAVITY, ov.AIR_RESISTANCE, ov.GROUND_FRICTION,
-        ov.BOUNCE_DAMPING, ov.MIN_VELOCITY);
+    while (accumulator >= FRAME_MS) {
+      const dt = FRAME_MS / 1000;
+      const ov = getGameLoopConfig();
+      const spriteArray = getServerSpriteArray();
 
-      physics.manageLifetime(serverSprites, spriteArray, ov.SPRITE_LIFETIME_MS, ov.FADE_WARNING_MS, now);
+      if (spriteArray.length > 0) {
+        physics.updatePhysics(dt, spriteArray, ov.W, ov.H, ov.GROUND_Y,
+          ov.GRAVITY, ov.AIR_RESISTANCE, ov.GROUND_FRICTION,
+          ov.BOUNCE_DAMPING, ov.MIN_VELOCITY);
 
-      // Check fight collisions
-      for (const sprite of spriteArray) {
-        if (sprite._fightTarget) {
-          const target = serverSprites.get(sprite._fightTarget);
-          if (target) {
-            const dx = sprite.x - target.x;
-            const dy = sprite.y - target.y;
-            const distSq = dx * dx + dy * dy;
-            const collisionDist = (sprite.collisionRadius || sprite.size / 2) + (target.collisionRadius || target.size / 2);
-            if (distSq < collisionDist * collisionDist) {
-              // Fight collision resolved
-              const loser = sprite.id < target._fightTarget ? target : sprite;
-              const winner = sprite.id < target._fightTarget ? sprite : target;
-              loser.flipUntil = now + (ov.fightDurationMs || 10000);
-              loser.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * physics.FLIP_ANGULAR_VELOCITY;
-              loser.lastTiltTime = null;
-              loser.vx = 0;
-              loser.vy = 0;
-              loser.isExhausted = true;
-              loser.isFighting = false;
-              delete loser._fightTarget;
+        physics.manageLifetime(serverSprites, spriteArray, ov.SPRITE_LIFETIME_MS, ov.FADE_WARNING_MS, now);
 
-              winner.vx += (Math.random() - 0.5) * 8;
-              winner.vy -= 4;
-              winner.isFighting = false;
-              delete winner._fightTarget;
+        // Check fight collisions
+        for (const sprite of spriteArray) {
+          if (sprite._fightTarget) {
+            const target = serverSprites.get(sprite._fightTarget);
+            if (target) {
+              const dx = sprite.x - target.x;
+              const dy = sprite.y - target.y;
+              const distSq = dx * dx + dy * dy;
+              const collisionDist = (sprite.collisionRadius || sprite.size / 2) + (target.collisionRadius || target.size / 2);
+              if (distSq < collisionDist * collisionDist) {
+                const loser = sprite.id < target._fightTarget ? target : sprite;
+                const winner = sprite.id < target._fightTarget ? sprite : target;
+                loser.flipUntil = now + (ov.fightDurationMs || 10000);
+                loser.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * physics.FLIP_ANGULAR_VELOCITY;
+                loser.lastTiltTime = null;
+                loser.vx = 0;
+                loser.vy = 0;
+                loser.isExhausted = true;
+                loser.isFighting = false;
+                delete loser._fightTarget;
 
-              // Broadcast explosion effect for clients
-              const midX = (sprite.x + target.x) / 2;
-              broadcast({ type: 'cmd', cmd: 'boom', x: midX, radius: 200 + Math.random() * 100 });
+                winner.vx += (Math.random() - 0.5) * 8;
+                winner.vy -= 4;
+                winner.isFighting = false;
+                delete winner._fightTarget;
+
+                const midX = (sprite.x + target.x) / 2;
+                broadcast({ type: 'cmd', cmd: 'boom', x: midX, radius: 200 + Math.random() * 100 });
+              }
+            } else {
+              sprite.isFighting = false;
+              delete sprite._fightTarget;
             }
-          } else {
-            sprite.isFighting = false;
-            delete sprite._fightTarget;
           }
         }
       }
-    }
-  }, FRAME_MS);
 
-  // Broadcast physics state at 30Hz (every 33ms)
+      accumulator -= FRAME_MS;
+    }
+
+    gameLoopIntervalId = setTimeout(tick, 1);
+  }
+
+  gameLoopIntervalId = setTimeout(tick, FRAME_MS);
+
+  // Broadcast physics state at 20Hz (every 50ms)
   broadcastIntervalId = setInterval(() => {
     broadcastPhysicsState();
-  }, 33);
+  }, 50);
 }
 
 // ── Initialize WebSocket ──────────────────────────────────────────────────
@@ -324,7 +361,10 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
         changed = true;
       }
     }
-    if (changed) spriteDirty = true;
+    if (changed) {
+      spriteDirty = true;
+      markServerSpriteArrayDirty();
+    }
 
     // Prune expired command cooldowns
     const cooldownMs = (_cfg.overlay && _cfg.overlay.commandCooldownMs) || 5000;

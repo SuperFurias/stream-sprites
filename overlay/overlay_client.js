@@ -118,9 +118,14 @@ async function sendChatResponse(username, message) {
 
   // Canvas setup
   const { canvas, ctx, DPR } = setupCanvas();
-  let W = overlay.canvasWidth || 1920;
-  let H = overlay.canvasHeight || 1080;
-  let GROUND_Y = H * GROUND_Y_MULTIPLIER;
+  const SERVER_W = overlay.canvasWidth || 1920;
+  const SERVER_H = overlay.canvasHeight || 1080;
+  const SERVER_GROUND_Y = SERVER_H * GROUND_Y_MULTIPLIER;
+  let W = SERVER_W;
+  let H = SERVER_H;
+  let GROUND_Y = SERVER_GROUND_Y;
+  let renderScaleX = 1;
+  let renderScaleY = 1;
 
   // Initialize display
   initializeCanvasDisplay(cfg, USE_SERVER);
@@ -168,23 +173,17 @@ async function sendChatResponse(username, message) {
   const resize = () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      const result = resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites);
+      const result = resizeCanvas(canvas, ctx, DPR, W, H, GROUND_Y, sprites, USE_SERVER, SERVER_W, SERVER_H, SERVER_H * GROUND_Y_MULTIPLIER);
       W = result.W;
       H = result.H;
       GROUND_Y = result.GROUND_Y;
-
-      // Re-scale all sprite positions from server coordinates
+      // Compute scale from server coords to screen coords (non-uniform for correct ground level)
       if (USE_SERVER) {
-        const scaleX = getScaleX();
-        const scaleY = getScaleY();
-        for (const sprite of sprites.values()) {
-          if (sprite._serverX !== undefined) {
-            sprite.x = sprite._serverX * scaleX;
-            sprite.y = sprite._serverY * scaleY;
-          }
-        }
-        markSpritesDirty();
-        markSpriteArrayDirty();
+        const screenW = window.innerWidth;
+        const screenH = window.innerHeight;
+        renderScaleX = screenW / SERVER_W;
+        renderScaleY = screenH / SERVER_H;
+        GROUND_Y = screenH * GROUND_Y_MULTIPLIER;
       }
     }, RESIZE_DEBOUNCE_MS);
   };
@@ -196,47 +195,43 @@ async function sendChatResponse(username, message) {
   setupInputHandlers(canvas, sprites,
     (sprite) => {
       draggedSprite = sprite;
-      // Notify server of drag start (convert client coords to server coords)
+      // Notify server of drag start
       if (USE_SERVER && window._SA?.connection) {
-        const invScaleX = serverW / W;
-        const invScaleY = serverH / H;
         window._SA.connection.send(JSON.stringify({
           type: 'dragStart',
           spriteId: sprite.id,
-          x: sprite.x * invScaleX,
-          y: sprite.y * invScaleY
+          x: sprite.x,
+          y: sprite.y
         }));
       }
     },
     (sprite, mx, my) => {
-      // Notify server of drag move (convert client coords to server coords)
+      // Notify server of drag move
       if (USE_SERVER && window._SA?.connection) {
-        const invScaleX = serverW / W;
-        const invScaleY = serverH / H;
         window._SA.connection.send(JSON.stringify({
           type: 'dragMove',
           spriteId: sprite.id,
-          x: sprite.x * invScaleX,
-          y: sprite.y * invScaleY
+          x: sprite.x,
+          y: sprite.y
         }));
       }
     },
     (sprite) => {
-      // Notify server of drag end with throw velocity (convert client coords to server coords)
+      // Notify server of drag end with throw velocity
       if (USE_SERVER && window._SA?.connection) {
-        const invScaleX = serverW / W;
-        const invScaleY = serverH / H;
         window._SA.connection.send(JSON.stringify({
           type: 'dragEnd',
           spriteId: sprite.id,
-          x: sprite.x * invScaleX,
-          y: sprite.y * invScaleY,
-          vx: sprite.vx * invScaleX,
-          vy: sprite.vy * invScaleY
+          x: sprite.x,
+          y: sprite.y,
+          vx: sprite.vx,
+          vy: sprite.vy
         }));
       }
       draggedSprite = null;
-    }
+    },
+    USE_SERVER ? SERVER_W : null,
+    USE_SERVER ? SERVER_H : null
   );
 
   // Create sprite factory bound to current context
@@ -410,62 +405,48 @@ async function sendChatResponse(username, message) {
     }
   }
 
-  // Server-authoritative scaling and interpolation state
-  let serverW = W;   // Server's canvas width
-  let serverH = H;   // Server's canvas height
-  let serverGROUND_Y = GROUND_Y; // Server's ground Y
-  let prevPhysicsState = null; // Previous server state for interpolation
-  let currPhysicsState = null; // Current server state for interpolation
-  let physicsStateTimestamp = 0; // When last state was received
+  // Sync physics state from server — replaces local physics simulation
+  // With interpolation for smooth rendering between 20Hz server updates
+  let prevServerState = new Map(); // id -> snapshot
+  let nextServerState = new Map(); // id -> snapshot
+  let lastServerUpdateTime = 0;
+  const SERVER_UPDATE_INTERVAL = 50; // 20Hz
 
-  // Scale factors from server space to client space
-  function getScaleX() { return W / serverW; }
-  function getScaleY() { return H / serverH; }
-
-  // Sync physics state from server — with interpolation support
-  function syncPhysicsFromServer(data) {
-    const serverSprites = data.sprites;
-
-    // Update server dimensions if provided
-    if (data.W && data.H) {
-      serverW = data.W;
-      serverH = data.H;
-      serverGROUND_Y = data.GROUND_Y || serverH * GROUND_Y_MULTIPLIER;
-    }
-
-    // Store states for interpolation
-    prevPhysicsState = currPhysicsState;
-    currPhysicsState = { sprites: serverSprites, timestamp: data.timestamp || Date.now() };
-    physicsStateTimestamp = Date.now();
-
-    const serverIds = new Set(serverSprites.map(s => s.id));
+  function syncPhysicsFromServer(serverState) {
+    const serverIds = new Set(serverState.map(s => s.id));
     let changed = false;
 
     // Remove sprites that are no longer on the server
     for (const [id, sprite] of sprites) {
       if (!serverIds.has(id)) {
         sprites.delete(id);
+        prevServerState.delete(id);
+        nextServerState.delete(id);
         changed = true;
       }
     }
 
-    const scaleX = getScaleX();
-    const scaleY = getScaleY();
+    // Store previous state for interpolation
+    prevServerState = new Map(nextServerState);
+    nextServerState.clear();
+    lastServerUpdateTime = performance.now();
 
-    // Apply server-authoritative physics state (scaled to client canvas)
-    for (const ss of serverSprites) {
+    // Apply server-authoritative physics state
+    for (const ss of serverState) {
+      nextServerState.set(ss.id, ss);
+
       let sprite = sprites.get(ss.id);
       if (!sprite) {
         sprite = {
           id: ss.id,
           username: ss.username,
-          x: ss.x * scaleX, y: ss.y * scaleY,
-          vx: 0, vy: 0,
-          size: ss.size * scaleX,
-          collisionRadius: (ss.collisionRadius || ss.size / 2) * scaleX,
-          boundaryRadius: (ss.boundaryRadius || ss.size / 2) * scaleX,
+          x: ss.x, y: ss.y,
+          vx: ss.vx, vy: ss.vy,
+          size: ss.size,
+          collisionRadius: ss.collisionRadius,
+          boundaryRadius: ss.boundaryRadius,
           angle: ss.angle,
-          angularVelocity: 0,
+          angularVelocity: ss.angularVelocity || 0,
           facingRight: ss.facingRight,
           skin: ss.skin,
           color: '#888',
@@ -479,33 +460,14 @@ async function sendChatResponse(username, message) {
           lastTiltTime: null,
           flipUntil: null,
           isExhausted: false,
-          textWidth: 0,
-          // Server-space values for interpolation
-          _serverX: ss.x, _serverY: ss.y,
-          _prevServerX: ss.x, _prevServerY: ss.y
+          roamTargetX: null, roamTargetY: null,
+          roamSpeed: 1, roamTimer: 0, roamDuration: 0,
+          textWidth: 0
         };
+        // Store initial state as both prev and next so interpolation works immediately
+        prevServerState.set(ss.id, ss);
         sprites.set(ss.id, sprite);
         changed = true;
-      } else {
-        // Store previous server position for interpolation
-        sprite._prevServerX = sprite._serverX;
-        sprite._prevServerY = sprite._serverY;
-        sprite._serverX = ss.x;
-        sprite._serverY = ss.y;
-
-        // Update with scaled values
-        sprite.x = ss.x * scaleX;
-        sprite.y = ss.y * scaleY;
-        sprite.size = ss.size * scaleX;
-        sprite.collisionRadius = (ss.collisionRadius || ss.size / 2) * scaleX;
-        sprite.boundaryRadius = (ss.boundaryRadius || ss.size / 2) * scaleX;
-        sprite.angle = ss.angle;
-        sprite.facingRight = ss.facingRight;
-        sprite.opacity = ss.opacity;
-        sprite.heightScale = ss.heightScale;
-        sprite.state = ss.state;
-        sprite.skin = ss.skin;
-        sprite.lastActivity = ss.lastActivity;
       }
     }
 
@@ -515,36 +477,39 @@ async function sendChatResponse(username, message) {
     }
   }
 
-  // Interpolate sprite positions between physics state updates
+  // Interpolate sprite positions between server updates (called every render frame)
   function interpolateSprites() {
-    if (!currPhysicsState || !prevPhysicsState) return;
+    if (prevServerState.size === 0) return;
 
-    const now = Date.now();
-    const elapsed = now - physicsStateTimestamp;
-    const interval = 33; // 30Hz broadcast interval
-    const t = Math.min(1, elapsed / interval);
+    const now = performance.now();
+    const elapsed = now - lastServerUpdateTime;
+    const t = Math.min(1, elapsed / SERVER_UPDATE_INTERVAL);
 
-    const scaleX = getScaleX();
-    const scaleY = getScaleY();
+    for (const [id, sprite] of sprites) {
+      const prev = prevServerState.get(id);
+      const next = nextServerState.get(id);
+      if (!prev || !next) continue;
 
-    for (const sprite of sprites.values()) {
-      if (sprite._serverX !== undefined && sprite._prevServerX !== undefined) {
-        // Linear interpolation between previous and current server positions
-        const interpX = sprite._prevServerX + (sprite._serverX - sprite._prevServerX) * t;
-        const interpY = sprite._prevServerY + (sprite._serverY - sprite._prevServerY) * t;
-        sprite.x = interpX * scaleX;
-        sprite.y = interpY * scaleY;
-      }
+      sprite.x = prev.x + (next.x - prev.x) * t;
+      sprite.y = prev.y + (next.y - prev.y) * t;
+      sprite.angle = prev.angle + (next.angle - prev.angle) * t;
+      sprite.opacity = next.opacity;
+      sprite.facingRight = next.facingRight;
+      sprite.size = next.size;
+      sprite.skin = next.skin;
+      sprite.state = next.state;
+      sprite.heightScale = next.heightScale;
+      sprite.collisionRadius = next.collisionRadius;
+      sprite.boundaryRadius = next.boundaryRadius;
     }
   }
 
-  // Physics update: server mode interpolates, local mode runs physics
+  // Physics update: server mode just renders, local mode runs physics
   let spriteArrayCache = null;
 
   function updatePhysicsWrapper(dt) {
     if (USE_SERVER) {
-      // Interpolate sprite positions between server updates for smooth rendering
-      interpolateSprites();
+      // Server is authoritative — physics runs on server, just update array cache
       spriteArrayCache = Array.from(sprites.values());
       return;
     }
@@ -604,7 +569,10 @@ async function sendChatResponse(username, message) {
 
   // Render wrapper
   function renderWrapper() {
-    render(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles);
+    // Interpolate sprite positions for smooth 60fps rendering between 20Hz server updates
+    if (USE_SERVER) interpolateSprites();
+    // In server mode, renderScaleX/Y map server coords (1920x1080) to screen coords
+    render(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles, USE_SERVER ? renderScaleX : 1, USE_SERVER ? renderScaleY : 1);
     animatedMediaRenderer.update(sprites, skins, W, H, GROUND_Y);
     updateSpriteCountDisplay(sprites);
   }
@@ -625,7 +593,9 @@ async function sendChatResponse(username, message) {
             if (!userSkinCache.has(username.toLowerCase())) {
               fetchUserSkin(username, userSkinCache).then(() => {});
             }
-            if (!tags?.skipSpawn) {
+            // In server mode, sprites are created server-side and broadcast via physicsState.
+            // Only spawn locally in non-server mode.
+            if (!USE_SERVER && !tags?.skipSpawn) {
               spawnSprite(username);
             }
             if (tags?.isCommand && tags?.commandResult) {

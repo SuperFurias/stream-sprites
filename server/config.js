@@ -6,7 +6,7 @@ const DEFAULT_OVERLAY = {
   // Canvas
   canvasWidth: 1920,
   canvasHeight: 1080,
-  groundY: 920,
+  groundY: 1080,
   // Physics
   gravity: 0.6,
   airResistance: 0.992,
@@ -31,6 +31,7 @@ const DEFAULT_OVERLAY = {
   // Collision
   collisionPersonalSpaceThreshold: 0.1,
   collisionForceMultiplier: 0.02,
+  angularVelocityFromCollision: 0.0001,
   collisionProbabilityScaling: 1,
   collisionProbabilityLow: 0.0,
   collisionProbabilityMedium: 0.5,

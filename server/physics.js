@@ -2,6 +2,8 @@
 // All sprites' physics (position, velocity, size, angle) are computed here
 // and broadcast to all clients for synchronized rendering
 
+const { DEFAULT_OVERLAY } = require('./config');
+
 // ── Spatial Hash ──────────────────────────────────────────────────────────
 
 class SpatialHash {
@@ -63,66 +65,68 @@ class SpatialHash {
   }
 }
 
-// ── Constants (mirror overlay config.js defaults) ─────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────
 
-const SPATIAL_HASH_CELL_SIZE = 64;
-const NUM_ZONES = 5;
-const AVOIDANCE_RADIUS_MULTIPLIER = 2.0;
-const SIZE_SIMILARITY_THRESHOLD = 0.85;
-const EXPANDED_RADIUS_MULTIPLIER = 4.0;
-const ZONE_SELECTION_BIAS = 0.7;
-const SIZE_DIFF_THRESHOLD_LOW = 0.7;
-const MIN_ATTRACTION_DISTANCE = 20;
-const SIZE_DIFF_FACTOR = 2.0;
-const ATTRACTION_FORCE_BASE = 0.08;
-const LARGER_REPULSION_FACTOR = 0.3;
-const MODERATE_REPULSION_FORCE = 0.08;
-const CENTER_PUSH_RADIUS = 150;
-const CENTER_PUSH_FORCE = 0.02;
-const GROUND_Y_CENTER_OFFSET = 0.8;
-const DIRECTION_CHANGE_THRESHOLD = 0.3;
-const ANGULAR_VELOCITY_DECAY = 0.98;
-const ANGLE_DECAY = 0.95;
-const TILT_ANGULAR_DECAY = 0.9;
-const TILT_ANGLE_THRESHOLD = 0.01;
-const TILT_RETURN_TIME = 1000;
-const ROAM_ZONE_Y_OFFSET = 30;
-const ROAM_DURATION_BASE = 3000;
-const ROAM_DURATION_VAR = 4000;
-const ROAM_DISTANCE_THRESHOLD = 5;
-const ROAM_WALK_FORCE_MULTIPLIER = 0.2;
-const ROAM_WALK_VERTICAL_FACTOR = 0.3;
-const ROAM_STEER_FORCE_MULTIPLIER = 0.1;
-const ROAM_STEER_VERTICAL_FACTOR = 0.2;
-const ROAM_ARRIVAL_THRESHOLD = 10;
-const ROAM_RANDOM_MOVE_CHANCE = 0.03;
-const ROAM_RANDOM_MOVE_FORCE = 0.3;
-const ROAM_RANDOM_MOVE_VERTICAL = 0.1;
-const COLLISION_FORCE_MULTIPLIER = 0.02;
-const COLLISION_PERSONAL_SPACE_THRESHOLD = 0.1;
-const ANGULAR_VELOCITY_FROM_COLLISION = 0.0001;
-const DANCE_GRAVITY_FACTOR = -0.2;
-const DANCE_ANGULAR_VELOCITY = 0.1;
-const DANCE_FREQUENCY = 200;
-const TEXT_WIDTH_PADDING = 4;
-const WIGGLE_RANGE = 1000;
-const MASS_DIVISOR = 1000;
-const MOMENT_OF_INERTIA_FACTOR = 0.5;
-const HEIGHT_SCALE_SIT = 0.75;
-const HEIGHT_SCALE_IDLE = 1.0;
-const DT_CAP = 0.05;
-const SPAWN_BOUNDS_PADDING = 60;
-const SPAWN_SIZE_PADDING = 120;
-const SPAWN_Y_OFFSET = 40;
-const SPAWN_JITTER = 6;
-const VELOCITY_BUMP = 3;
-const COLLISION_PROBABILITY_LOW = 0.0;
-const COLLISION_PROBABILITY_MEDIUM = 0.5;
-const COLLISION_PROBABILITY_HIGH = 1.0;
-const COLLISION_COUNT_THRESHOLD_LOW = 5;
-const COLLISION_COUNT_THRESHOLD_HIGH = 15;
-const FLIP_ANGULAR_VELOCITY = Math.PI / 2;
-const JUMP_VELOCITY = -16;
+const D = DEFAULT_OVERLAY;
+const SPATIAL_HASH_CELL_SIZE = D.spatialHashCellSize;
+const NUM_ZONES = D.numZones;
+const AVOIDANCE_RADIUS_MULTIPLIER = D.avoidanceRadiusMultiplier;
+const SIZE_SIMILARITY_THRESHOLD = D.sizeSimilarityThreshold;
+const EXPANDED_RADIUS_MULTIPLIER = D.expandedRadiusMultiplier;
+const ZONE_SELECTION_BIAS = D.zoneSelectionBias;
+const SIZE_DIFF_THRESHOLD_LOW = D.sizeDiffThresholdLow;
+const MIN_ATTRACTION_DISTANCE = D.minAttractionDistance;
+const SIZE_DIFF_FACTOR = D.sizeDiffFactor;
+const ATTRACTION_FORCE_BASE = D.attractionForceBase;
+const LARGER_REPULSION_FACTOR = D.largerRepulsionFactor;
+const MODERATE_REPULSION_FORCE = D.moderateRepulsionForce;
+const CENTER_PUSH_RADIUS = D.centerPushRadius;
+const CENTER_PUSH_FORCE = D.centerPushForce;
+const GROUND_Y_CENTER_OFFSET = D.groundYCenterOffset;
+const DIRECTION_CHANGE_THRESHOLD = D.directionChangeThreshold;
+const ANGULAR_VELOCITY_DECAY = D.angularVelocityDecay;
+const ANGLE_DECAY = D.angleDecay;
+const TILT_ANGULAR_DECAY = D.tiltAngularDecay;
+const TILT_ANGLE_THRESHOLD = D.tiltAngleThreshold;
+const TILT_RETURN_TIME = D.tiltReturnTime;
+const ROAM_ZONE_Y_OFFSET = D.roamZoneYOffset;
+const ROAM_DURATION_BASE = D.roamDurationBase;
+const ROAM_DURATION_VAR = D.roamDurationVar;
+const ROAM_DISTANCE_THRESHOLD = D.roamDistanceThreshold;
+const ROAM_WALK_FORCE_MULTIPLIER = D.roamWalkForceMultiplier;
+const ROAM_WALK_VERTICAL_FACTOR = D.roamWalkVerticalFactor;
+const ROAM_STEER_FORCE_MULTIPLIER = D.roamSteerForceMultiplier;
+const ROAM_STEER_VERTICAL_FACTOR = D.roamSteerVerticalFactor;
+const ROAM_ARRIVAL_THRESHOLD = D.roamArrivalThreshold;
+const ROAM_RANDOM_MOVE_CHANCE = D.roamRandomMoveChance;
+const ROAM_RANDOM_MOVE_FORCE = D.roamRandomMoveForce;
+const ROAM_RANDOM_MOVE_VERTICAL = D.roamRandomMoveVertical;
+const COLLISION_FORCE_MULTIPLIER = D.collisionForceMultiplier;
+const COLLISION_PERSONAL_SPACE_THRESHOLD = D.collisionPersonalSpaceThreshold;
+const ANGULAR_VELOCITY_FROM_COLLISION = D.angularVelocityFromCollision;
+const DANCE_GRAVITY_FACTOR = D.danceGravityFactor;
+const DANCE_ANGULAR_VELOCITY = D.danceAngularVelocity;
+const DANCE_FREQUENCY = D.danceFrequency;
+const TEXT_WIDTH_PADDING = D.textWidthPadding;
+const WIGGLE_RANGE = D.wiggleRange;
+const MASS_DIVISOR = D.massDivisor;
+const MOMENT_OF_INERTIA_FACTOR = D.momentOfInertiaFactor;
+const HEIGHT_SCALE_SIT = D.heightScaleSit;
+const HEIGHT_SCALE_IDLE = D.heightScaleIdle;
+const DT_CAP = D.dtCap;
+const SPAWN_BOUNDS_PADDING = D.spawnBoundsPadding;
+const SPAWN_SIZE_PADDING = D.spawnSizePadding;
+const SPAWN_Y_OFFSET = D.spawnYOffset;
+const SPAWN_JITTER = D.spawnJitter;
+const VELOCITY_BUMP = D.velocityBump;
+const COLLISION_PROBABILITY_LOW = D.collisionProbabilityLow;
+const COLLISION_PROBABILITY_MEDIUM = D.collisionProbabilityMedium;
+const COLLISION_PROBABILITY_HIGH = D.collisionProbabilityHigh;
+const COLLISION_COUNT_THRESHOLD_LOW = D.collisionCountThresholdLow;
+const COLLISION_COUNT_THRESHOLD_HIGH = D.collisionCountThresholdHigh;
+const FLIP_ANGULAR_VELOCITY = D.flipAngularVelocity;
+const JUMP_VELOCITY = D.jumpVelocity;
+const COLLISION_PROBABILITY_SCALING = D.collisionProbabilityScaling;
 
 // ── Utility ───────────────────────────────────────────────────────────────
 
@@ -179,16 +183,15 @@ function createServerSprite(username, W, GROUND_Y, SPRITE_SIZE_MIN, SPRITE_SIZE_
   const mass = Math.PI * Math.pow(size / 2, 2) / MASS_DIVISOR;
   const momentOfInertia = MOMENT_OF_INERTIA_FACTOR * mass * Math.pow(size / 2, 2);
 
-  // Deterministic spawn position
+  // Deterministic spawn position (X is randomized, Y snapped to ground)
   const posHash = hashString(username + '_pos');
   const posRatio = (posHash % 10000) / 10000;
   const jitterHash = hashString(username + '_jitter');
   const jitterRatio = ((jitterHash % 10000) / 10000 - 0.5);
 
   let x = posRatio * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
-  let y = GROUND_Y - ((hashString(username + '_y') % 10000) / 10000) * SPAWN_Y_OFFSET - size / 2;
+  let y = GROUND_Y - collisionRadius; // Snap to ground immediately
   x += jitterRatio * SPAWN_JITTER;
-  y += ((hashString(username + '_yj') % 10000) / 10000 - 0.5) * SPAWN_JITTER;
 
   // Deterministic initial velocity
   const vxHash = hashString(username + '_vx');

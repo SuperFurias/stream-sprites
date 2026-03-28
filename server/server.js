@@ -89,7 +89,7 @@ const server = app.listen(port, () => {
 
   // Auto-open browser
   if (cfg.autoOpenBrowser !== false) {
-    // Wait for dashboard presence ping (it pings every 2s, so check after 3s)
+    // Wait for dashboard presence ping (it pings every 100ms, so check after 500ms)
     setTimeout(async () => {
       try {
         const axios = require('axios');
@@ -101,6 +101,7 @@ const server = app.listen(port, () => {
 
         if (isOpen) {
           console.log('✓ Dashboard already open, skipping browser launch');
+          routes.setDashboardConfirmedOpen(true);
           return;
         }
 
@@ -123,7 +124,7 @@ const server = app.listen(port, () => {
       } catch (e) {
         console.log('✓ Open browser manually:', `http://localhost:${port}/`);
       }
-    }, 3000);
+    }, 500);
   } else {
     console.log('✓ Auto-open browser disabled. Open manually:', `http://localhost:${port}/`);
   }

@@ -5,25 +5,27 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.1] - 2026-03-28
-
-### Fixed
-- **Canvas scaling**: Sprites now scale automatically to fit any browser window size. Server includes its canvas dimensions in every physics broadcast; client computes scale factors and applies them to all sprite positions, sizes, and collision radii. Drag coordinates are converted back to server space before transmission.
-- **Rendering lag**: Added linear interpolation between server physics state updates for smooth 60fps rendering. Client stores previous and current server positions and interpolates between them on each render frame.
-- **Broadcast rate**: Increased physics state broadcast from 20Hz (50ms) to 30Hz (33ms) for reduced latency.
-
-## [1.2.0] - 2026-03-28
+## [2.0.0] - 2026-03-28 (Pre-release)
 
 ### Changed
-- **Server-authoritative physics**: The server now runs the complete physics simulation and is the single source of truth for all sprite state (position, velocity, size, angle, opacity). Clients no longer run independent physics — they render the state broadcast by the server at 20Hz. This ensures sprites appear identically across all browser tabs and windows.
-- **Deterministic sprite creation**: Sprite size and spawn position are now derived from a hash of the username, ensuring every client and the server agree on sprite dimensions and initial placement.
-- **Server game loop**: Added a 60fps server-side game loop (`server/physics.js`) that updates physics, handles collisions, manages lifetime, and resolves fight outcomes. Broadcasts authoritative state to all connected clients.
-- **Command physics handled server-side**: Jump, boom, flip, and fight commands now apply physics effects on the server. Clients only render the resulting state and display explosion visual effects.
-- **Drag interactions via WebSocket**: Client drag operations (start, move, end with throw velocity) are sent to the server, which updates the authoritative sprite position and applies the throw.
+- **Server-authoritative physics**: The server now runs the complete physics simulation and is the single source of truth for all sprite state (position, velocity, size, angle, opacity). Clients render the state broadcast by the server. This ensures sprites appear identically across all browser tabs and windows.
+- **Deterministic sprite creation**: Sprite size and spawn position are derived from a hash of the username, so every client and the server agree on sprite dimensions and initial placement. Sprites spawn directly at ground level.
+- **Server game loop**: A 60fps accumulator-based game loop in `server/websocket.js` runs physics, handles collisions, manages lifetime, and resolves fight outcomes. State is broadcast to all clients at 20Hz.
+- **Command physics server-side**: Jump, boom, flip, and fight commands apply physics on the server. Clients render the resulting state and show explosion visual effects.
+- **Drag interactions via WebSocket**: Client drag operations (start, move, end with throw velocity) are sent to the server, which updates the authoritative sprite position.
+- **Default config values from DEFAULT_OVERLAY**: `getOverlayConfig()` and `server/physics.js` import defaults from `config.js` instead of hardcoding fallback values.
+- **Dashboard ping at 100ms with stopPinging**: Dashboard pings every 100ms on startup. Server returns `stopPinging: true` after confirming the dashboard is open, so the dashboard stops pinging. Browser-open check reduced to 500ms.
 
 ### Performance
-- **Server-side physics engine**: Ported the complete overlay physics engine to Node.js (`server/physics.js`) including spatial hash, collision detection, avoidance forces, roaming behavior, and lifetime management.
-- **20Hz physics broadcast**: Server broadcasts full sprite physics state at 20Hz (every 50ms) instead of per-event, reducing message frequency while maintaining smooth rendering.
+- **Server-side physics engine**: Ported the overlay physics engine to Node.js (`server/physics.js`) with spatial hash, collision detection, avoidance forces, roaming behavior, and lifetime management.
+- **20Hz physics broadcast**: Server broadcasts full sprite physics state every 50ms instead of per-event.
+- **Client-side interpolation**: Sprites are interpolated between 20Hz server updates for smooth 60fps rendering.
+- **Cached server sprite array**: Array only rebuilds when sprites change, not every frame.
+
+### Fixed
+- **Cross-tab sprite synchronization**: Sprites appear at the same position, size, and state across all browser tabs.
+- **Canvas coordinate scaling**: Sprites are rendered using non-uniform scaling from server coordinates to screen space, maintaining correct ground level on any window size.
+- **Sprite spawn flash**: Client no longer creates local sprites on chat messages in server mode, preventing the brief mid-air appearance before server state arrives.
 
 ## [1.0.19] - 2026-03-28
 

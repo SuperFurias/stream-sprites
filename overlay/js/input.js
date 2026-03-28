@@ -1,5 +1,6 @@
 // Input handling module for mouse drag — tracks velocity for throw-on-release
-export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onDragEnd) {
+// When serverW/serverH are provided, mouse coords are mapped to server coordinate space
+export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onDragEnd, serverW, serverH) {
   let isDragging = false;
   let draggedSprite = null;
   let dragOffset = { x: 0, y: 0 };
@@ -32,6 +33,14 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
 
   function toCanvasCoords(e) {
     const rect = cachedRect;
+    if (serverW && serverH) {
+      // Server mode: map viewport coords to server coordinate space
+      return {
+        x: (e.clientX - rect.left) / rect.width * serverW,
+        y: (e.clientY - rect.top) / rect.height * serverH
+      };
+    }
+    // Local mode: map to canvas pixel coords
     return {
       x: (e.clientX - rect.left) * (canvas.width / rect.width),
       y: (e.clientY - rect.top) * (canvas.height / rect.height)
@@ -101,9 +110,8 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
       draggedSprite.vx = throwVx;
       draggedSprite.vy = throwVy;
 
-      const dpr = window.devicePixelRatio || 1;
-      const W = canvas.width / dpr;
-      const H = canvas.height / dpr;
+      const W = serverW || (canvas.width / (window.devicePixelRatio || 1));
+      const H = serverH || (canvas.height / (window.devicePixelRatio || 1));
       const r = draggedSprite.collisionRadius || draggedSprite.size / 2;
       if (draggedSprite.x < r) draggedSprite.x = r;
       if (draggedSprite.x > W - r) draggedSprite.x = W - r;
