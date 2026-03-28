@@ -5,6 +5,28 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.19] - 2026-03-28
+
+### Performance
+- **Cached overlay config**: `getOverlayConfig()` now returns a cached object invalidated only on config change (save, apply, disk reload), eliminating per-command object allocation.
+- **Skins cache TTL increased**: Cache duration raised from 5s to 60s with `fs.watch()` on the skins directory for instant invalidation on file changes.
+- **Explosion physics sprite array**: `applyExplosionPhysics()` accepts a pre-built sprite array, using an indexed loop instead of `Map.values()` iterator. Also uses squared distance to avoid unnecessary `Math.hypot`.
+- **Animated sprite sort caching**: `animatedMediaRenderer` only re-sorts the animated sprite list when the animated sprite count changes, not every frame.
+- **Pre-computed coordinate scale factors**: Screen coordinate scale (`innerWidth/W`, `innerHeight/H`) computed once per frame instead of per-sprite division.
+- **Skip shadows for airborne sprites**: Ground shadows only rendered for sprites within 20px of the ground surface.
+- **O(1) sprite ID resolution**: Secondary `loginUsernameIndex` Map replaces linear scan of all sprites for `resolveSpriteId()`.
+- **Server-side stats caching**: `/api/stats` endpoint now uses a 3-second TTL cache and the server broadcasts stats to WebSocket clients.
+- **Dashboard real-time stats**: Dashboard connects via WebSocket for live stats updates, falling back to 10s HTTP polling only when WebSocket is unavailable.
+
+### Fixed
+- **Token refresh interval leak**: `connectTwitchBot()` now stores and clears the token refresh interval ID before creating a new one, preventing interval accumulation on reconnects.
+- **`deepMerge` nested object corruption**: The merge utility now properly deep-copies nested objects and handles arrays, preventing shared reference mutations.
+- **Consistent physics timing**: `manageLifetime()` receives the same `now` timestamp from `updatePhysics()` instead of calling `Date.now()` independently.
+- **Unconditional debug logging**: `console.log('[UPDATE]')` calls gated behind `cfg.debug.serverDebug` flag.
+
+### Changed
+- **Server modularized**: `server.js` (2310 lines) split into 8 focused modules: `lib/logger.js`, `lib/util.js`, `config.js`, `db.js`, `websocket.js`, `twitch.js`, `routes.js`, with `server.js` reduced to a slim ~110-line entry point.
+
 ## [1.0.18] - 2026-03-28
 
 ### Fixed

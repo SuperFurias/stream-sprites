@@ -103,7 +103,7 @@ export function updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
   // Apply avoidance forces to prevent clustering
   applyAvoidance(arr, spatialHash, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
 
-  return arr;
+  return { arr, now };
 }
 
 function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
@@ -467,10 +467,10 @@ function handleCollisions(arr, grid, now) {
   }
 }
 
-export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, prebuiltArray) {
+export function manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, prebuiltArray, now) {
   // Use prebuilt array if provided to avoid Map-to-Array conversion overhead
   const arr = prebuiltArray || Array.from(sprites.values());
-  const now = Date.now();
+  now = now || Date.now();
   
   // Update opacity based on age
   for (const sprite of arr) {

@@ -219,23 +219,74 @@
       await refreshStats();
     })();
 
-    // Auto-refresh stats every 5 seconds
-    async function refreshStats(){
-      try{
+    // Auto-refresh stats: prefer WebSocket, fall back to HTTP polling
+    let statsWs = null;
+    let statsPollInterval = null;
+
+    function updateStatsUI(stats) {
+      document.getElementById('totalUsers').textContent = stats.total_users || 0;
+      document.getElementById('customSkins').textContent = stats.custom_skins || 0;
+      document.getElementById('defaultSkins').textContent = stats.default_skins || 0;
+      document.getElementById('serverStatus').textContent = 'Online';
+      document.getElementById('serverStatus').style.background = '#0f0';
+    }
+
+    function startStatsPolling() {
+      if (statsPollInterval) return;
+      statsPollInterval = setInterval(refreshStatsHTTP, 10000); // Fallback: poll every 10s
+    }
+
+    function stopStatsPolling() {
+      if (statsPollInterval) {
+        clearInterval(statsPollInterval);
+        statsPollInterval = null;
+      }
+    }
+
+    async function refreshStatsHTTP() {
+      try {
         const res = await fetch('/api/stats');
         const stats = await res.json();
-        document.getElementById('totalUsers').textContent = stats.total_users || 0;
-        document.getElementById('customSkins').textContent = stats.custom_skins || 0;
-        document.getElementById('defaultSkins').textContent = stats.default_skins || 0;
-        document.getElementById('serverStatus').textContent = 'Online';
-        document.getElementById('serverStatus').style.background = '#0f0';
-      }catch(e){
+        updateStatsUI(stats);
+      } catch (e) {
         document.getElementById('serverStatus').textContent = 'Offline';
         document.getElementById('serverStatus').style.background = '#f44';
       }
     }
 
-    setInterval(refreshStats, 5000);
+    // Try WebSocket for real-time stats
+    function connectStatsWebSocket() {
+      try {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        statsWs = new WebSocket(`${protocol}//${location.host}`);
+        statsWs.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'stats') {
+              updateStatsUI(data.data);
+              stopStatsPolling(); // WebSocket is working, stop HTTP polling
+            }
+          } catch (e) { /* ignore non-JSON messages */ }
+        };
+        statsWs.onopen = () => {
+          refreshStatsHTTP(); // Get initial stats immediately
+        };
+        statsWs.onclose = () => {
+          startStatsPolling(); // WebSocket closed, fall back to polling
+          // Try to reconnect after 5s
+          setTimeout(connectStatsWebSocket, 5000);
+        };
+        statsWs.onerror = () => {
+          startStatsPolling();
+        };
+      } catch (e) {
+        startStatsPolling();
+      }
+    }
+
+    // Initialize: try WebSocket first, start polling as fallback
+    connectStatsWebSocket();
+    startStatsPolling(); // Start polling immediately; stops when WS connects
 
     // Announce dashboard presence to prevent duplicate browser opens
     let pingInterval;

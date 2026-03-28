@@ -395,10 +395,11 @@ async function sendChatResponse(username, message) {
   let spriteArrayCache = null;
 
   function updatePhysicsWrapper(dt) {
-    spriteArrayCache = updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
+    const result = updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                       GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
                       BOUNCE_DAMPING, MIN_VELOCITY);
-    manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, spriteArrayCache);
+    spriteArrayCache = result.arr;
+    manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, spriteArrayCache, result.now);
 
     // Check active fights for collision
     for (const fightId of activeFights) {
@@ -491,7 +492,7 @@ async function sendChatResponse(username, message) {
               createExplosionEffect(epicenterX, GROUND_Y, explosionRadius, explosionParticles);
               applyExplosionPhysics(sprites, epicenterX, GROUND_Y, explosionRadius,
                 EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR,
-                RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD);
+                RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD, spriteArrayCache);
             } else if (cmd === 'jump' && data?.username) {
               const userId = data.username.toLowerCase();
               const sprite = sprites.get(userId);

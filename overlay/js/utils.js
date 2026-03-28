@@ -17,15 +17,20 @@ export function getCollisionProbability(count) {
 }
 
 // Shared explosion physics — applies force to all sprites within radius of epicenter
+// Accepts optional spriteArray for faster iteration (avoids Map.values() overhead)
 export function applyExplosionPhysics(sprites, epicenterX, epicenterY, explosionRadius,
                                        forceMultiplier, upwardBias, spinStrengthFactor, randomJitterFactor,
-                                       collisionPersonalSpaceThreshold) {
-  for (const sprite of sprites.values()) {
+                                       collisionPersonalSpaceThreshold, spriteArray) {
+  const arr = spriteArray || Array.from(sprites.values());
+  for (let i = 0; i < arr.length; i++) {
+    const sprite = arr[i];
     const dx = sprite.x - epicenterX;
     const dy = sprite.y - epicenterY;
-    const dist = Math.hypot(dx, dy);
+    const distSq = dx * dx + dy * dy;
+    const thresholdSq = collisionPersonalSpaceThreshold * collisionPersonalSpaceThreshold;
 
-    if (dist < explosionRadius && dist > collisionPersonalSpaceThreshold) {
+    if (distSq < explosionRadius * explosionRadius && distSq > thresholdSq) {
+      const dist = Math.sqrt(distSq);
       const nx = dx / dist;
       const ny = dy / dist;
       const falloff = Math.pow(1 - dist / explosionRadius, 2);
@@ -36,7 +41,6 @@ export function applyExplosionPhysics(sprites, epicenterX, epicenterY, explosion
 
       const spinStrength = force * spinStrengthFactor;
       sprite.angularVelocity += (Math.random() - 0.5) * spinStrength;
-      // Only set lastTiltTime if not already tilting (don't restart the return timer)
       if (!sprite.lastTiltTime) sprite.lastTiltTime = Date.now();
 
       sprite.vx += (Math.random() - 0.5) * force * randomJitterFactor;

@@ -58,13 +58,17 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles) {
 function drawSprite(ctx, sprite, skins, GROUND_Y) {
   ctx.globalAlpha = sprite.opacity || 1;
 
-  // Draw shadow
-  ctx.beginPath();
-  ctx.fillStyle = 'rgba(0,0,0,0.16)';
-  const shadowWidth = sprite.size * 0.5;
-  const shadowHeight = sprite.size * 0.15;
-  ctx.ellipse(sprite.x, GROUND_Y + 2, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Only draw shadow for sprites near the ground (saves draw calls for airborne sprites)
+  const collisionRadius = sprite.collisionRadius || sprite.size / 2;
+  const onGround = sprite.y >= GROUND_Y - collisionRadius - 20;
+  if (onGround) {
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    const shadowWidth = sprite.size * 0.5;
+    const shadowHeight = sprite.size * 0.15;
+    ctx.ellipse(sprite.x, GROUND_Y + 2, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Draw skin with rotation and flip (skip for GIF skins - handled by DOM)
   const s = skins.get(sprite.skin);

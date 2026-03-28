@@ -29,6 +29,10 @@ export function createAnimatedMediaRenderer() {
   const imgPool = [];
   const videoPool = [];
 
+  // Cached sorted animated sprite list (rebuild only when animated sprites change)
+  let cachedAnimatedSprites = [];
+  let cachedAnimatedSpriteCount = -1;
+
   function acquireElement(type) {
     const pool = type === 'video' ? videoPool : imgPool;
     if (pool.length > 0) {
@@ -54,17 +58,34 @@ export function createAnimatedMediaRenderer() {
       // Build animated sprite list and determine z-order by size
       this._skinGeneration++;
       animatedSpriteIds.clear();
-      const animatedSprites = [];
+      let animatedCount = 0;
+
+      // Count animated sprites first to detect changes
       for (const sprite of sprites.values()) {
         const skin = skins.get(sprite.skin);
         if (skin && (skin.isGif || skin.isWebm)) {
           animatedSpriteIds.add(sprite.id);
-          animatedSprites.push(sprite);
+          animatedCount++;
         }
       }
 
-      // Sort by size descending: largest first (z-index 1 = back), smallest last (z-index N = front)
-      animatedSprites.sort((a, b) => b.size - a.size);
+      // Only rebuild and re-sort the list when animated sprite count changes
+      if (animatedCount !== cachedAnimatedSpriteCount) {
+        cachedAnimatedSprites.length = 0;
+        for (const sprite of sprites.values()) {
+          const skin = skins.get(sprite.skin);
+          if (skin && (skin.isGif || skin.isWebm)) {
+            cachedAnimatedSprites.push(sprite);
+          }
+        }
+        cachedAnimatedSprites.sort((a, b) => b.size - a.size);
+        cachedAnimatedSpriteCount = animatedCount;
+      }
+
+      // Pre-compute coordinate scale factors once per frame
+      const scaleX = window.innerWidth / W;
+      const scaleY = window.innerHeight / H;
+      const radToDeg = 180 / Math.PI;
 
       // Remove entries for sprites that no longer have animated media
       for (const [id, entry] of mediaElements) {
@@ -75,8 +96,8 @@ export function createAnimatedMediaRenderer() {
       }
 
       // Update or create elements for animated sprites (in sorted order)
-      for (let i = 0; i < animatedSprites.length; i++) {
-        const sprite = animatedSprites[i];
+      for (let i = 0; i < cachedAnimatedSprites.length; i++) {
+        const sprite = cachedAnimatedSprites[i];
         const skin = skins.get(sprite.skin);
         if (!skin || (!skin.isGif && !skin.isWebm)) continue;
 
@@ -111,14 +132,14 @@ export function createAnimatedMediaRenderer() {
         const scaledHeight = sprite.size * heightScale;
         const yOffset = (sprite.size - scaledHeight) / 2;
 
-        const screenX = (sprite.x / W) * window.innerWidth;
-        const screenY = (sprite.y + yOffset) / H * window.innerHeight;
-        const screenWidth = (sprite.size / W) * window.innerWidth;
-        const screenHeight = scaledHeight / H * window.innerHeight;
-        const rotate = (sprite.angle || 0) * (180 / Math.PI);
-        const scaleX = sprite.facingRight ? 1 : -1;
+        const screenX = sprite.x * scaleX;
+        const screenY = (sprite.y + yOffset) * scaleY;
+        const screenWidth = sprite.size * scaleX;
+        const screenHeight = scaledHeight * scaleY;
+        const rotate = (sprite.angle || 0) * radToDeg;
+        const scaleXDir = sprite.facingRight ? 1 : -1;
 
-        el.style.transform = `translate(${screenX}px,${screenY}px) translate(-50%,-50%) rotate(${rotate}deg) scale(${scaleX},1)`;
+        el.style.transform = `translate(${screenX}px,${screenY}px) translate(-50%,-50%) rotate(${rotate}deg) scale(${scaleXDir},1)`;
         el.style.width = `${screenWidth}px`;
         el.style.height = `${screenHeight}px`;
         el.style.opacity = sprite.opacity !== undefined ? sprite.opacity : 1;
