@@ -159,9 +159,6 @@ export function handleWebSocketMessage(data, onChat, onCommand, onSpriteState, o
     if (handler) {
       handler(onCommand, data);
     }
-  } else if (data.type === 'physicsState' && onSpriteState) {
-    // Server-authoritative physics state — treat same as spriteState
-    onSpriteState(data);
   } else if (data.type === 'spriteState' && onSpriteState) {
     onSpriteState(data);
   } else if (data.type === 'spriteDelta' && onSpriteDelta) {

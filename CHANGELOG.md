@@ -5,19 +5,6 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-03-28
-
-### Changed
-- **Server-authoritative physics**: The server now runs the complete physics simulation and is the single source of truth for all sprite state (position, velocity, size, angle, opacity). Clients no longer run independent physics — they render the state broadcast by the server at 20Hz. This ensures sprites appear identically across all browser tabs and windows.
-- **Deterministic sprite creation**: Sprite size and spawn position are now derived from a hash of the username, ensuring every client and the server agree on sprite dimensions and initial placement.
-- **Server game loop**: Added a 60fps server-side game loop (`server/physics.js`) that updates physics, handles collisions, manages lifetime, and resolves fight outcomes. Broadcasts authoritative state to all connected clients.
-- **Command physics handled server-side**: Jump, boom, flip, and fight commands now apply physics effects on the server. Clients only render the resulting state and display explosion visual effects.
-- **Drag interactions via WebSocket**: Client drag operations (start, move, end with throw velocity) are sent to the server, which updates the authoritative sprite position and applies the throw.
-
-### Performance
-- **Server-side physics engine**: Ported the complete overlay physics engine to Node.js (`server/physics.js`) including spatial hash, collision detection, avoidance forces, roaming behavior, and lifetime management.
-- **20Hz physics broadcast**: Server broadcasts full sprite physics state at 20Hz (every 50ms) instead of per-event, reducing message frequency while maintaining smooth rendering.
-
 ## [1.0.19] - 2026-03-28
 
 ### Performance

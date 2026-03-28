@@ -1,18 +1,15 @@
 const WebSocket = require('ws');
 const { getUserSkinFromDB } = require('./db');
-const physics = require('./physics');
 
 // Shared state (set by server.js via initWebSocket)
 let _cfg, _db, _dbg, _wss;
 let _loginUsernameIndex;
 
-// In-memory authoritative sprite state with FULL physics data
-const serverSprites = new Map(); // id -> sprite with physics state
+// In-memory authoritative sprite state
+const serverSprites = new Map();
 const serverSpawnTimes = new Map();
 let serverStartTime = Date.now();
 let cleanupIntervalId = null;
-let gameLoopIntervalId = null;
-let broadcastIntervalId = null;
 
 // Delta tracking for efficient sprite state broadcasts
 let spriteSnapshot = new Map();
@@ -36,23 +33,6 @@ function getOverlayConfig() {
       SPAWN_THROTTLE_MS: ov.spawnThrottleMs || 700,
       GROUND_Y: ov.groundY || 920,
       W: ov.canvasWidth || 1920,
-      H: ov.canvasHeight || 1080,
-      GRAVITY: ov.gravity || 0.6,
-      AIR_RESISTANCE: ov.airResistance || 0.992,
-      GROUND_FRICTION: ov.groundFriction || 0.92,
-      BOUNCE_DAMPING: ov.bounceDamping || 0.65,
-      MIN_VELOCITY: ov.minVelocity || 0.15,
-      SPRITE_SIZE_MIN: ov.spriteSizeMin || 30,
-      SPRITE_SIZE_MAX: ov.spriteSizeMax || 80,
-      SPRITE_LIFETIME_MS: ov.spriteLifetimeMs || 30 * 60 * 1000,
-      FADE_WARNING_MS: ov.fadeWarningMs || 5 * 60 * 1000,
-      COLLISION_PERSONAL_SPACE_THRESHOLD: ov.collisionPersonalSpaceThreshold || 0.1,
-      EXPLOSION_FORCE_MULTIPLIER: ov.explosionForceMultiplier || 60,
-      EXPLOSION_RADIUS_BASE: ov.explosionRadiusBase || 400,
-      EXPLOSION_RADIUS_VAR: ov.explosionRadiusVar || 300,
-      EXPLOSION_UPWARD_BIAS: ov.explosionUpwardBias || 0.7,
-      SPIN_STRENGTH_FACTOR: ov.spinStrengthFactor || 0.05,
-      RANDOM_JITTER_FACTOR: ov.randomJitterFactor || 0.2,
       flipDurationMs: ov.flipDurationMs || 5000,
       fightDurationMs: ov.fightDurationMs || 10000
     };
@@ -64,21 +44,67 @@ function invalidateOverlayConfigCache() {
   _overlayConfigCache = null;
 }
 
+// Serialize a sprite for comparison/transmission
+function serializeSprite(sprite) {
+  return {
+    id: sprite.id,
+    username: sprite.username,
+    skin: sprite.skin,
+    state: sprite.state || 'idle',
+    createdAt: sprite.createdAt,
+    lastActivity: sprite.lastActivity
+  };
+}
+
 function broadcast(obj) {
   const s = JSON.stringify(obj);
   _wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// Broadcast full physics state to all clients (~20Hz)
-function broadcastPhysicsState() {
-  const sprites = [];
-  for (const sprite of serverSprites.values()) {
-    sprites.push(physics.serializeSpritePhysics(sprite));
+// Broadcast delta sprite state (only changes) to all connected clients
+function broadcastSpriteState() {
+  if (!spriteDirty) return;
+  spriteDirty = false;
+
+  const currentIds = new Set();
+  const added = [];
+  const updated = [];
+  const toRemoveFromSnapshot = [];
+
+  for (const [id, sprite] of serverSprites) {
+    currentIds.add(id);
+    const serialized = serializeSprite(sprite);
+    const prev = spriteSnapshot.get(id);
+    if (!prev) {
+      added.push(serialized);
+      spriteSnapshot.set(id, serialized);
+    } else if (prev.skin !== serialized.skin || prev.state !== serialized.state || prev.lastActivity !== serialized.lastActivity) {
+      updated.push(serialized);
+      prev.skin = serialized.skin;
+      prev.state = serialized.state;
+      prev.lastActivity = serialized.lastActivity;
+    }
   }
 
+  const removed = [];
+  for (const id of spriteSnapshot.keys()) {
+    if (!currentIds.has(id)) {
+      removed.push(id);
+      toRemoveFromSnapshot.push(id);
+    }
+  }
+
+  for (const id of toRemoveFromSnapshot) {
+    spriteSnapshot.delete(id);
+  }
+
+  if (added.length === 0 && updated.length === 0 && removed.length === 0) return;
+
   const msg = JSON.stringify({
-    type: 'physicsState',
-    sprites,
+    type: 'spriteDelta',
+    added,
+    updated,
+    removed,
     timestamp: Date.now()
   });
 
@@ -87,16 +113,13 @@ function broadcastPhysicsState() {
   });
 }
 
-// Send full state to a specific client (for initial sync)
-function sendFullStateToClient(ws) {
+// Send full sprite state to a specific client (for initial sync)
+function sendSpriteStateToClient(ws) {
   if (ws.readyState !== WebSocket.OPEN) return;
-  const sprites = [];
-  for (const sprite of serverSprites.values()) {
-    sprites.push(physics.serializeSpritePhysics(sprite));
-  }
+  const spriteArray = Array.from(serverSprites.values()).map(serializeSprite);
   ws.send(JSON.stringify({
-    type: 'physicsState',
-    sprites,
+    type: 'spriteState',
+    sprites: spriteArray,
     timestamp: Date.now()
   }));
 }
@@ -106,12 +129,12 @@ function clearServerSprites() {
   serverSprites.clear();
   serverSpawnTimes.clear();
   spriteSnapshot.clear();
-  if (_loginUsernameIndex) _loginUsernameIndex.clear();
+  _loginUsernameIndex.clear();
   spriteDirty = true;
-  broadcastPhysicsState();
+  broadcastSpriteState();
 }
 
-// Spawn a sprite on the server with full physics state
+// Spawn helper for server commands
 function spawnServerSprite(name, skinId, now, stateChangedRef) {
   const uniqueId = name.toLowerCase();
   const ov = getOverlayConfig();
@@ -123,7 +146,6 @@ function spawnServerSprite(name, skinId, now, stateChangedRef) {
     return sprite;
   }
 
-  // Evict oldest if at limit
   if (serverSprites.size >= ov.MAX_SPRITES) {
     let oldestId = null;
     let oldestTime = Infinity;
@@ -145,13 +167,16 @@ function spawnServerSprite(name, skinId, now, stateChangedRef) {
     return null;
   }
 
-  // Create sprite with deterministic physics properties
-  const newSprite = physics.createServerSprite(name, ov.W, ov.GROUND_Y, ov.SPRITE_SIZE_MIN, ov.SPRITE_SIZE_MAX);
-  newSprite.skin = skinId;
-  newSprite.lastActivity = now;
+  const newSprite = {
+    id: uniqueId,
+    username: name,
+    skin: skinId,
+    state: 'idle',
+    createdAt: now,
+    lastActivity: now
+  };
   serverSprites.set(uniqueId, newSprite);
-  if (stateChangedRef) stateChangedRef.value = true;
-  spriteDirty = true;
+  stateChangedRef.value = true;
   return newSprite;
 }
 
@@ -160,30 +185,34 @@ function updateServerSprite(username, tags) {
   const userId = username.toLowerCase();
   const skin = getUserSkinFromDB(userId);
   const loginUsername = tags && tags['username'] ? tags['username'].toLowerCase() : null;
-  const now = Date.now();
-  const ov = getOverlayConfig();
 
   if (serverSprites.has(userId)) {
     const sprite = serverSprites.get(userId);
-    sprite.lastActivity = now;
+    sprite.lastActivity = Date.now();
     if (sprite.skin !== skin) sprite.skin = skin;
     if (loginUsername !== null) {
       sprite.loginUsername = loginUsername;
       _loginUsernameIndex.set(loginUsername, userId);
+      _dbg('Set loginUsername for', userId, ':', loginUsername);
     }
   } else {
-    // Create new sprite with full physics
-    const newSprite = physics.createServerSprite(username, ov.W, ov.GROUND_Y, ov.SPRITE_SIZE_MIN, ov.SPRITE_SIZE_MAX);
-    newSprite.skin = skin;
-    newSprite.lastActivity = now;
-    newSprite.loginUsername = loginUsername;
-    serverSprites.set(userId, newSprite);
+    serverSprites.set(userId, {
+      id: userId,
+      username: username,
+      skin: skin,
+      state: 'idle',
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+      loginUsername: loginUsername
+    });
     if (loginUsername !== null) {
       _loginUsernameIndex.set(loginUsername, userId);
+      _dbg('Created sprite with loginUsername:', userId, ':', loginUsername);
     }
   }
 
   spriteDirty = true;
+  broadcastSpriteState();
 }
 
 // Resolve a username to the actual sprite ID (O(1) lookup)
@@ -199,77 +228,7 @@ function setBroadcastStatsFn(fn) {
   _broadcastStatsFn = fn;
 }
 
-// ── Server Game Loop ──────────────────────────────────────────────────────
-
-function startGameLoop() {
-  const TARGET_FPS = 60;
-  const FRAME_MS = 1000 / TARGET_FPS;
-  let lastTime = Date.now();
-
-  gameLoopIntervalId = setInterval(() => {
-    const now = Date.now();
-    const rawDt = (now - lastTime) / 1000;
-    const dt = Math.min(0.05, rawDt); // DT_CAP
-    lastTime = now;
-
-    const ov = getOverlayConfig();
-    const spriteArray = Array.from(serverSprites.values());
-
-    if (spriteArray.length > 0) {
-      physics.updatePhysics(dt, spriteArray, ov.W, ov.H, ov.GROUND_Y,
-        ov.GRAVITY, ov.AIR_RESISTANCE, ov.GROUND_FRICTION,
-        ov.BOUNCE_DAMPING, ov.MIN_VELOCITY);
-
-      physics.manageLifetime(serverSprites, spriteArray, ov.SPRITE_LIFETIME_MS, ov.FADE_WARNING_MS, now);
-
-      // Check fight collisions
-      for (const sprite of spriteArray) {
-        if (sprite._fightTarget) {
-          const target = serverSprites.get(sprite._fightTarget);
-          if (target) {
-            const dx = sprite.x - target.x;
-            const dy = sprite.y - target.y;
-            const distSq = dx * dx + dy * dy;
-            const collisionDist = (sprite.collisionRadius || sprite.size / 2) + (target.collisionRadius || target.size / 2);
-            if (distSq < collisionDist * collisionDist) {
-              // Fight collision resolved
-              const loser = sprite.id < target._fightTarget ? target : sprite;
-              const winner = sprite.id < target._fightTarget ? sprite : target;
-              loser.flipUntil = now + (ov.fightDurationMs || 10000);
-              loser.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * physics.FLIP_ANGULAR_VELOCITY;
-              loser.lastTiltTime = null;
-              loser.vx = 0;
-              loser.vy = 0;
-              loser.isExhausted = true;
-              loser.isFighting = false;
-              delete loser._fightTarget;
-
-              winner.vx += (Math.random() - 0.5) * 8;
-              winner.vy -= 4;
-              winner.isFighting = false;
-              delete winner._fightTarget;
-
-              // Broadcast explosion effect for clients
-              const midX = (sprite.x + target.x) / 2;
-              broadcast({ type: 'cmd', cmd: 'boom', x: midX, radius: 200 + Math.random() * 100 });
-            }
-          } else {
-            sprite.isFighting = false;
-            delete sprite._fightTarget;
-          }
-        }
-      }
-    }
-  }, FRAME_MS);
-
-  // Broadcast physics state at 20Hz (every 50ms)
-  broadcastIntervalId = setInterval(() => {
-    broadcastPhysicsState();
-  }, 50);
-}
-
-// ── Initialize WebSocket ──────────────────────────────────────────────────
-
+// Initialize WebSocket server and handlers
 function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
   _cfg = cfg;
   _db = db;
@@ -281,22 +240,87 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
 
   _wss.on('connection', (ws) => {
     dbg('WebSocket client connected');
-    sendFullStateToClient(ws);
+    sendSpriteStateToClient(ws);
     ws.send(JSON.stringify({ type: 'config', data: cfg }));
 
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data);
-
         if (msg.type === 'cmd' && msg.cmd === 'clearSprites') {
           dbg('clearSprites command received from client');
           clearServerSprites();
-        } else if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
-          // Handle drag interactions from client
-          handleDragMessage(msg);
+        } else if (msg.type === 'spriteUpdate') {
+          dbg('spriteUpdate received from client:', msg);
+          const spriteId = msg.id;
+          const username = msg.username;
+          const skin = msg.skin || 'default';
+          const state = msg.state || 'idle';
+          const now = Date.now();
+          const clientCreatedAt = msg.createdAt || now;
+
+          if (clientCreatedAt < serverStartTime) {
+            dbg('Ignoring stale spriteUpdate from client:', spriteId);
+            broadcastSpriteState();
+            return;
+          }
+
+          if (serverSprites.has(spriteId)) {
+            const sprite = serverSprites.get(spriteId);
+            sprite.lastActivity = now;
+            if (sprite.skin !== skin) sprite.skin = skin;
+            if (sprite.state !== state) sprite.state = state;
+          } else {
+            serverSprites.set(spriteId, {
+              id: spriteId,
+              username: username,
+              skin: skin,
+              state: state,
+              createdAt: clientCreatedAt,
+              lastActivity: now
+            });
+          }
+
+          spriteDirty = true;
+          broadcastSpriteState();
         } else if (msg.type === 'fullState') {
-          // Client sends full current state — but server is authoritative, just acknowledge
-          dbg('fullState received from client (server is authoritative, ignoring physics data)');
+          const spritesArray = msg.sprites || [];
+          dbg('fullState received from client:', spritesArray.length, 'sprites');
+          const now = Date.now();
+          let changed = false;
+
+          for (const clientSprite of spritesArray) {
+            const spriteId = clientSprite.id;
+            const skin = clientSprite.skin || 'default';
+            const state = clientSprite.state || 'idle';
+            const clientCreatedAt = clientSprite.createdAt || now;
+
+            if (clientCreatedAt < serverStartTime) {
+              dbg('Ignoring stale sprite from client:', spriteId);
+              continue;
+            }
+
+            if (serverSprites.has(spriteId)) {
+              const sprite = serverSprites.get(spriteId);
+              sprite.lastActivity = now;
+              if (sprite.skin !== skin) { sprite.skin = skin; changed = true; }
+              if (sprite.state !== state) { sprite.state = state; changed = true; }
+            } else {
+              serverSprites.set(spriteId, {
+                id: spriteId,
+                username: clientSprite.username,
+                skin: skin,
+                state: state,
+                createdAt: clientCreatedAt,
+                lastActivity: now
+              });
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            spriteDirty = true;
+            broadcastSpriteState();
+          }
         }
       } catch (e) {
         dbg('WebSocket message parse error:', e);
@@ -316,7 +340,11 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
         changed = true;
       }
     }
-    if (changed) spriteDirty = true;
+    if (changed) {
+      dbg('Cleaned up old sprites');
+      spriteDirty = true;
+      broadcastSpriteState();
+    }
 
     // Prune expired command cooldowns
     const cooldownMs = (_cfg.overlay && _cfg.overlay.commandCooldownMs) || 5000;
@@ -343,83 +371,7 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
     if (_broadcastStatsFn) _broadcastStatsFn();
   }, 60 * 1000);
 
-  // Start the server game loop
-  startGameLoop();
-
   return _wss;
-}
-
-// Handle drag messages from clients
-function handleDragMessage(msg) {
-  const sprite = serverSprites.get(msg.spriteId);
-  if (!sprite) return;
-
-  if (msg.type === 'dragMove') {
-    sprite.x = msg.x;
-    sprite.y = msg.y;
-    sprite.vx = 0;
-    sprite.vy = 0;
-  } else if (msg.type === 'dragEnd') {
-    sprite.x = msg.x;
-    sprite.y = msg.y;
-    sprite.vx = msg.vx || 0;
-    sprite.vy = msg.vy || 0;
-  }
-}
-
-// Handle command effects on server sprites (jump, boom, flip, fight)
-function handleServerCommand(cmd, data) {
-  const ov = getOverlayConfig();
-
-  if (cmd === 'jump' && data?.username) {
-    const sprite = serverSprites.get(data.username.toLowerCase());
-    if (sprite) {
-      sprite.vy = physics.JUMP_VELOCITY;
-      sprite.state = 'idle';
-    }
-  } else if (cmd === 'boom') {
-    const epicenterX = Math.random() * (ov.W - ov.EXPLOSION_RADIUS_BASE) + (ov.EXPLOSION_RADIUS_BASE / 2);
-    const explosionRadius = ov.EXPLOSION_RADIUS_BASE + Math.random() * ov.EXPLOSION_RADIUS_VAR;
-    const spriteArray = Array.from(serverSprites.values());
-    physics.applyExplosionPhysics(spriteArray, epicenterX, ov.GROUND_Y, explosionRadius,
-      ov.EXPLOSION_FORCE_MULTIPLIER, ov.EXPLOSION_UPWARD_BIAS, ov.SPIN_STRENGTH_FACTOR,
-      ov.RANDOM_JITTER_FACTOR, ov.COLLISION_PERSONAL_SPACE_THRESHOLD);
-  } else if (cmd === 'flip' && data?.username) {
-    const sprite = serverSprites.get(data.username.toLowerCase());
-    if (sprite) {
-      sprite.flipUntil = Date.now() + (data.duration || ov.flipDurationMs);
-      sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * physics.FLIP_ANGULAR_VELOCITY;
-      sprite.lastTiltTime = null;
-    }
-  } else if (cmd === 'fight' && data?.loser && data?.winner) {
-    const winnerId = data.winner.toLowerCase();
-    const loserId = data.loser.toLowerCase();
-    const winnerSprite = serverSprites.get(winnerId);
-    const loserSprite = serverSprites.get(loserId);
-
-    if (winnerSprite && loserSprite) {
-      // Set sprites to walk toward each other
-      winnerSprite.roamTargetX = loserSprite.x;
-      winnerSprite.roamTargetY = ov.GROUND_Y - 50;
-      winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
-      winnerSprite.roamTimer = ov.fightDurationMs;
-      winnerSprite.state = 'idle';
-      winnerSprite.isFighting = true;
-
-      loserSprite.roamTargetX = winnerSprite.x;
-      loserSprite.roamTargetY = ov.GROUND_Y - 50;
-      loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
-      loserSprite.roamTimer = ov.fightDurationMs;
-      loserSprite.state = 'idle';
-      loserSprite.isFighting = true;
-
-      // Check for collision resolution on each tick (handled in game loop via fight check)
-      const fightId = `${winnerId}|${loserId}`;
-      // Store fight state for resolution
-      winnerSprite._fightTarget = loserId;
-      loserSprite._fightTarget = winnerId;
-    }
-  }
 }
 
 function getWss() {
@@ -427,22 +379,22 @@ function getWss() {
 }
 
 function cleanup() {
-  if (cleanupIntervalId) { clearInterval(cleanupIntervalId); cleanupIntervalId = null; }
-  if (gameLoopIntervalId) { clearInterval(gameLoopIntervalId); gameLoopIntervalId = null; }
-  if (broadcastIntervalId) { clearInterval(broadcastIntervalId); broadcastIntervalId = null; }
+  if (cleanupIntervalId) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+  }
 }
 
 module.exports = {
   initWebSocket,
   getWss,
   broadcast,
-  broadcastPhysicsState,
-  sendFullStateToClient,
+  broadcastSpriteState,
+  sendSpriteStateToClient,
   clearServerSprites,
   spawnServerSprite,
   updateServerSprite,
   resolveSpriteId,
-  handleServerCommand,
   getOverlayConfig,
   invalidateOverlayConfigCache,
   setBroadcastStatsFn,

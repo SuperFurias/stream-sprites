@@ -180,43 +180,9 @@ async function sendChatResponse(username, message) {
   // Input handling
   let draggedSprite = null;
   setupInputHandlers(canvas, sprites,
-    (sprite) => {
-      draggedSprite = sprite;
-      // Notify server of drag start
-      if (USE_SERVER && window._SA?.connection) {
-        window._SA.connection.send(JSON.stringify({
-          type: 'dragStart',
-          spriteId: sprite.id,
-          x: sprite.x,
-          y: sprite.y
-        }));
-      }
-    },
-    (sprite, mx, my) => {
-      // Notify server of drag move
-      if (USE_SERVER && window._SA?.connection) {
-        window._SA.connection.send(JSON.stringify({
-          type: 'dragMove',
-          spriteId: sprite.id,
-          x: sprite.x,
-          y: sprite.y
-        }));
-      }
-    },
-    (sprite) => {
-      // Notify server of drag end with throw velocity
-      if (USE_SERVER && window._SA?.connection) {
-        window._SA.connection.send(JSON.stringify({
-          type: 'dragEnd',
-          spriteId: sprite.id,
-          x: sprite.x,
-          y: sprite.y,
-          vx: sprite.vx,
-          vy: sprite.vy
-        }));
-      }
-      draggedSprite = null;
-    }
+    (sprite) => { draggedSprite = sprite; },
+    (sprite, mx, my) => { /* drag move */ },
+    (sprite) => { draggedSprite = null; }
   );
 
   // Create sprite factory bound to current context
@@ -224,11 +190,27 @@ async function sendChatResponse(username, message) {
     return createSprite(username, W, GROUND_Y, ctx, userSkinCache, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX);
   }
 
-  // Send sprite update to server (for local mode only)
+  // Send sprite update to server
   function sendSpriteUpdateToServer(sprite) {
-    if (!USE_SERVER) return;
-    // Server is authoritative — sprite creation is handled server-side
-    // This function is kept for compatibility but does nothing in server mode
+    if (USE_SERVER && window._SA && window._SA.connection) {
+      const ws = window._SA.connection.getWebSocket();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        window._SA.connection.send(JSON.stringify({
+          type: 'spriteUpdate',
+          id: sprite.id,
+          username: sprite.username,
+          skin: sprite.skin,
+          state: sprite.state || 'idle',
+          lastActivity: Date.now(),
+          createdAt: sprite.createdAt,
+          action: 'spawn'
+        }));
+      } else {
+        dbg('WebSocket not open (state:', ws?.readyState, '), skipping spriteUpdate for', sprite.username);
+      }
+    } else if (USE_SERVER) {
+      dbg('WebSocket not connected, skipping spriteUpdate for', sprite.username);
+    }
   }
 
   // Spawn wrapper
@@ -334,10 +316,29 @@ async function sendChatResponse(username, message) {
     }
   }
 
-  // Send full current sprite state to server (for local mode sync only)
+  // Send full current sprite state to server
   function sendFullStateToServer() {
-    if (!USE_SERVER) return;
-    // Server is authoritative — no need to send client state
+    if (!USE_SERVER || !window._SA || !window._SA.connection || !window._SA.connection.isConnected()) {
+      dbg('Cannot send full state: WebSocket not connected');
+      return;
+    }
+
+    const spriteList = Array.from(sprites.values()).map(sprite => ({
+      id: sprite.id,
+      username: sprite.username,
+      skin: sprite.skin,
+      state: sprite.state || 'idle',
+      createdAt: sprite.createdAt,
+      lastActivity: Date.now()
+    }));
+
+    window._SA.connection.send(JSON.stringify({
+      type: 'fullState',
+      sprites: spriteList,
+      timestamp: Date.now()
+    }));
+
+    dbg('Sent full state to server:', spriteList.length, 'sprites');
   }
 
   // Command handler wrapper
@@ -390,97 +391,17 @@ async function sendChatResponse(username, message) {
     }
   }
 
-  // Sync physics state from server — replaces local physics simulation
-  function syncPhysicsFromServer(serverSprites) {
-    const serverIds = new Set(serverSprites.map(s => s.id));
-    let changed = false;
-
-    // Remove sprites that are no longer on the server
-    for (const [id, sprite] of sprites) {
-      if (!serverIds.has(id)) {
-        sprites.delete(id);
-        changed = true;
-      }
-    }
-
-    // Apply server-authoritative physics state
-    for (const ss of serverSprites) {
-      let sprite = sprites.get(ss.id);
-      if (!sprite) {
-        // Create local sprite shell with server's physics state
-        sprite = {
-          id: ss.id,
-          username: ss.username,
-          x: ss.x, y: ss.y,
-          vx: ss.vx, vy: ss.vy,
-          size: ss.size,
-          collisionRadius: ss.collisionRadius,
-          boundaryRadius: ss.boundaryRadius,
-          angle: ss.angle,
-          angularVelocity: ss.angularVelocity || 0,
-          facingRight: ss.facingRight,
-          skin: ss.skin,
-          color: '#888',
-          state: ss.state,
-          opacity: ss.opacity,
-          heightScale: ss.heightScale,
-          createdAt: ss.createdAt,
-          lastActivity: ss.lastActivity,
-          wiggle: Math.random() * 1000,
-          mass: 1,
-          lastTiltTime: null,
-          flipUntil: null,
-          isExhausted: false,
-          roamTargetX: null, roamTargetY: null,
-          roamSpeed: 1, roamTimer: 0, roamDuration: 0,
-          textWidth: 0
-        };
-        sprites.set(ss.id, sprite);
-        changed = true;
-      } else {
-        // Update existing sprite with server state
-        sprite.x = ss.x;
-        sprite.y = ss.y;
-        sprite.vx = ss.vx;
-        sprite.vy = ss.vy;
-        sprite.size = ss.size;
-        sprite.angle = ss.angle;
-        sprite.angularVelocity = ss.angularVelocity || 0;
-        sprite.facingRight = ss.facingRight;
-        sprite.opacity = ss.opacity;
-        sprite.heightScale = ss.heightScale;
-        sprite.state = ss.state;
-        sprite.skin = ss.skin;
-        sprite.lastActivity = ss.lastActivity;
-        sprite.collisionRadius = ss.collisionRadius;
-        sprite.boundaryRadius = ss.boundaryRadius;
-      }
-    }
-
-    if (changed) {
-      markSpritesDirty();
-      markSpriteArrayDirty();
-    }
-  }
-
-  // Physics update: server mode just renders, local mode runs physics
+  // Physics update wrapper - reuses array from physics to minimize GC
   let spriteArrayCache = null;
 
   function updatePhysicsWrapper(dt) {
-    if (USE_SERVER) {
-      // Server is authoritative — physics runs on server, just update array cache
-      spriteArrayCache = Array.from(sprites.values());
-      return;
-    }
-
-    // Local mode: run physics client-side
     const result = updatePhysics(dt, sprites, W, H, GROUND_Y, draggedSprite,
                       GRAVITY, AIR_RESISTANCE, GROUND_FRICTION,
                       BOUNCE_DAMPING, MIN_VELOCITY);
     spriteArrayCache = result.arr;
     manageLifetime(sprites, SPRITE_LIFETIME_MS, FADE_WARNING_MS, spriteArrayCache, result.now);
 
-    // Check active fights for collision (local mode only)
+    // Check active fights for collision
     for (const fightId of activeFights) {
       const [winnerId, loserId] = fightId.split('|');
       const winnerSprite = sprites.get(winnerId);
@@ -566,26 +487,56 @@ async function sendChatResponse(username, message) {
               markSpriteArrayDirty();
               animatedMediaRenderer.clear();
             } else if (cmd === 'boom') {
-              // Server handles physics, client just renders explosion effect
-              const epicenterX = data?.x || Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
-              const explosionRadius = data?.radius || EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
+              const epicenterX = Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
+              const explosionRadius = EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
               createExplosionEffect(epicenterX, GROUND_Y, explosionRadius, explosionParticles);
+              applyExplosionPhysics(sprites, epicenterX, GROUND_Y, explosionRadius,
+                EXPLOSION_FORCE_MULTIPLIER, EXPLOSION_UPWARD_BIAS, SPIN_STRENGTH_FACTOR,
+                RANDOM_JITTER_FACTOR, COLLISION_PERSONAL_SPACE_THRESHOLD, spriteArrayCache);
+            } else if (cmd === 'jump' && data?.username) {
+              const userId = data.username.toLowerCase();
+              const sprite = sprites.get(userId);
+              if (sprite) {
+                sprite.vy = JUMP_VELOCITY;
+                sprite.state = 'idle';
+              }
+            } else if (cmd === 'flip' && data?.username) {
+              const userId = data.username.toLowerCase();
+              const sprite = sprites.get(userId);
+              if (sprite) {
+                sprite.flipUntil = Date.now() + (data.duration || FLIP_DURATION_MS);
+                sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * FLIP_ANGULAR_VELOCITY;
+                sprite.lastTiltTime = null;
+              }
+            } else if (cmd === 'fight' && data?.loser && data?.winner) {
+              const winnerId = data.winner.toLowerCase();
+              const loserId = data.loser.toLowerCase();
+              const winnerSprite = sprites.get(winnerId);
+              const loserSprite = sprites.get(loserId);
+              if (winnerSprite && loserSprite) {
+                winnerSprite.roamTargetX = loserSprite.x;
+                winnerSprite.roamTargetY = GROUND_Y - 50;
+                winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+                winnerSprite.roamTimer = FIGHT_DURATION_MS;
+                winnerSprite.state = 'idle';
+                winnerSprite.isFighting = true;
+
+                loserSprite.roamTargetX = winnerSprite.x;
+                loserSprite.roamTargetY = GROUND_Y - 50;
+                loserSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+                loserSprite.roamTimer = FIGHT_DURATION_MS;
+                loserSprite.state = 'idle';
+                loserSprite.isFighting = true;
+
+                activeFights.add(`${winnerId}|${loserId}`);
+              }
             }
-            // jump, flip, fight are handled server-side via physicsState updates
           },
           (spriteState) => {
-            if (USE_SERVER) {
-              syncPhysicsFromServer(spriteState.sprites);
-            } else {
-              syncSpritesFromServer(spriteState.sprites);
-            }
+            syncSpritesFromServer(spriteState.sprites);
           },
           (spriteDelta) => {
-            if (USE_SERVER) {
-              syncPhysicsFromServer(spriteDelta.sprites);
-            } else {
-              syncSpritesDelta(spriteDelta);
-            }
+            syncSpritesDelta(spriteDelta);
           }
         );
       },

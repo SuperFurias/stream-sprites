@@ -103,6 +103,7 @@ const server = app.listen(port, () => {
 
         if (isOpen) {
           console.log('✓ Dashboard already open, skipping browser launch');
+          routes.setDashboardConfirmedOpen(true);
           return;
         }
 
