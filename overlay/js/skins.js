@@ -1,4 +1,6 @@
 // Skin management module
+import { getServerBaseUrl } from './config.js';
+
 function dbg(...args) {
   console.log('[SKINS]', ...args);
 }
@@ -23,7 +25,8 @@ export function loadSkinsFromConfig(skins, cfg) {
 export async function fetchAutoSkins(skins) {
   dbg('Fetching auto-detected skins...');
   try {
-    const autoRes = await fetch('/api/skins/auto');
+    const baseUrl = getServerBaseUrl();
+    const autoRes = await fetch(baseUrl + '/api/skins/auto');
     if (autoRes.ok) {
       const autoSkins = await autoRes.json();
       dbg('Auto-detected skins:', autoSkins.map(s => s.id));
@@ -60,6 +63,7 @@ export async function fetchAutoSkins(skins) {
 
 export async function preloadSkins(skins) {
   dbg('Preloading', skins.size, 'skins...');
+  const baseUrl = getServerBaseUrl();
   await Promise.all(Array.from(skins.values()).map(async s => {
     // Skip preloading for WebM videos - they'll be loaded by video elements directly
     if (s.isWebm) {
@@ -69,7 +73,8 @@ export async function preloadSkins(skins) {
     }
     try {
       const img = new Image();
-      img.src = s.file;
+      // Prepend server base URL for remote hosting (e.g. Cloudflare tunnel)
+      img.src = baseUrl + s.file;
       await new Promise(r => { img.onload = r; img.onerror = r; });
       s.img = img;
       dbg('Preloaded skin:', s.id);

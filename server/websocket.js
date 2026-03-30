@@ -256,9 +256,13 @@ function startGameLoop() {
       const spriteArray = getServerSpriteArray();
 
       if (spriteArray.length > 0) {
-        physics.updatePhysics(dt, spriteArray, ov.W, ov.H, ov.GROUND_Y,
-          ov.GRAVITY, ov.AIR_RESISTANCE, ov.GROUND_FRICTION,
-          ov.BOUNCE_DAMPING, ov.MIN_VELOCITY);
+        // Filter out dragged sprites — they're positioned by the client, not physics
+        const physicsSprites = spriteArray.filter(s => !draggedSprites.has(s.id));
+        if (physicsSprites.length > 0) {
+          physics.updatePhysics(dt, physicsSprites, ov.W, ov.H, ov.GROUND_Y,
+            ov.GRAVITY, ov.AIR_RESISTANCE, ov.GROUND_FRICTION,
+            ov.BOUNCE_DAMPING, ov.MIN_VELOCITY);
+        }
 
         physics.manageLifetime(serverSprites, spriteArray, ov.SPRITE_LIFETIME_MS, ov.FADE_WARNING_MS, now);
 
@@ -307,10 +311,10 @@ function startGameLoop() {
 
   gameLoopIntervalId = setTimeout(tick, FRAME_MS);
 
-  // Broadcast physics state at 20Hz (every 50ms)
+  // Broadcast physics state at 60Hz (every ~16ms)
   broadcastIntervalId = setInterval(() => {
     broadcastPhysicsState();
-  }, 50);
+  }, 16);
 }
 
 // ── Initialize WebSocket ──────────────────────────────────────────────────
@@ -338,13 +342,25 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
           clearServerSprites();
         } else if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
           // Handle drag interactions from client
-          handleDragMessage(msg);
+          handleDragMessage(msg, ws);
         } else if (msg.type === 'fullState') {
           // Client sends full current state — but server is authoritative, just acknowledge
           dbg('fullState received from client (server is authoritative, ignoring physics data)');
         }
       } catch (e) {
         dbg('WebSocket message parse error:', e);
+      }
+    });
+
+    ws.on('close', () => {
+      // Release only sprites this client was dragging
+      const toRelease = [];
+      for (const [spriteId, owner] of dragOwners) {
+        if (owner === ws) toRelease.push(spriteId);
+      }
+      for (const id of toRelease) {
+        draggedSprites.delete(id);
+        dragOwners.delete(id);
       }
     });
   });
@@ -398,16 +414,26 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
 }
 
 // Handle drag messages from clients
-function handleDragMessage(msg) {
+const draggedSprites = new Set(); // track which sprite IDs are being dragged
+const dragOwners = new Map(); // spriteId -> ws connection
+
+function handleDragMessage(msg, ws) {
   const sprite = serverSprites.get(msg.spriteId);
   if (!sprite) return;
 
-  if (msg.type === 'dragMove') {
+  if (msg.type === 'dragStart') {
+    draggedSprites.add(msg.spriteId);
+    dragOwners.set(msg.spriteId, ws);
+  } else if (msg.type === 'dragMove') {
     sprite.x = msg.x;
     sprite.y = msg.y;
     sprite.vx = 0;
     sprite.vy = 0;
+    draggedSprites.add(msg.spriteId);
+    dragOwners.set(msg.spriteId, ws);
   } else if (msg.type === 'dragEnd') {
+    draggedSprites.delete(msg.spriteId);
+    dragOwners.delete(msg.spriteId);
     sprite.x = msg.x;
     sprite.y = msg.y;
     sprite.vx = msg.vx || 0;

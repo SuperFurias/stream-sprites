@@ -5,6 +5,33 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-03-30
+
+### Added
+- **Dashboard chat panel**: Send messages and commands directly from the dashboard. Messages appear in Twitch chat and the overlay. Twitch chat messages are displayed in real-time via WebSocket.
+- **Cloudflare tunnel management**: Start/stop Cloudflare tunnels from the Deploy tab. Tunnel URL is automatically detected and used for the overlay preview.
+- **Deploy tab**: New dashboard tab for Cloudflare tunnel controls.
+- **Remote overlay hosting**: Overlay can be accessed via Cloudflare tunnel URL (`?server=` query param). All API calls, WebSocket, and asset URLs adapt to the remote server.
+- **Adaptive refresh rate**: Monitor refresh rate is detected via `requestAnimationFrame` and interpolation adapts to native FPS (supports 30, 60, 75, 90, 120, 144, 165, 240Hz).
+- **Mod/broadcaster command targeting**: `!jump`, `!sit`, `!unsit` now accept a sprite name argument for mods/broadcasters (e.g. `!jump spritename`).
+
+### Performance
+- **Server broadcast rate**: Physics state broadcast increased from 20Hz (50ms) to 60Hz (~16ms) for smoother sprite rendering.
+- **Dragged sprite physics skip**: Server skips physics simulation for sprites being dragged, preventing gravity from interfering with drag positioning.
+- **Console log reduction**: `physicsState` messages no longer logged individually, reducing console spam from 60+ messages/second.
+
+### Fixed
+- **Drag sprite falling**: Sprites no longer fall while being dragged. Server tracks which sprites are being dragged and skips physics for them.
+- **Dragged sprite cleanup**: Dragged sprites are properly released when the client disconnects, preventing stuck sprites.
+- **Dashboard chat double message**: Messages sent from the dashboard no longer appear twice in the chat log.
+
+### Changed
+- **Overlay preview**: Preview uses `window.location.origin` instead of hardcoded `localhost:PORT`. Works with tunnel URLs automatically.
+- **Overlay preview sizing**: Preview dimensions are derived from `canvasWidth`/`canvasHeight` in config via CSS custom properties, with dynamic aspect ratio.
+- **CORS policy**: Server now accepts all origins (was restricted to localhost) to support remote overlay access.
+- **Server binding**: Server binds to `0.0.0.0` to allow access from tunnel URLs.
+- **Dashboard commands**: Commands sent from the dashboard (e.g. `!jump`) are not forwarded to Twitch chat, only to the overlay.
+
 ## [2.0.1] - 2026-03-28
 
 ### Fixed

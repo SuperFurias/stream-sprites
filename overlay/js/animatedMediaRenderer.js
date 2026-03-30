@@ -7,6 +7,8 @@
 // small sprites appear on top of big ones. The container z-index (5001) must be
 // ABOVE the canvas (5000) so animated elements are visible.
 
+import { getServerBaseUrl } from './config.js';
+
 const CSS_BASE = 'position:absolute;transform-origin:center center;pointer-events:none;will-change:transform,opacity;';
 
 function createPooledElement(type) {
@@ -170,11 +172,12 @@ export function createAnimatedMediaRenderer() {
 }
 
 function setupElement(el, skin, username) {
+  const baseUrl = getServerBaseUrl();
   el.dataset.skinFile = skin.file;
   el.alt = `${username}'s ${skin.isWebm ? 'WebM' : 'GIF'}`;
 
   if (skin.isWebm) {
-    el.src = skin.file;
+    el.src = baseUrl + skin.file;
     el.loop = true;
     el.muted = true;
     el.playsInline = true;
@@ -182,6 +185,6 @@ function setupElement(el, skin, username) {
     el.style.objectFit = 'fill';
     el.play().catch(() => {});
   } else {
-    el.src = skin.file;
+    el.src = baseUrl + skin.file;
   }
 }

@@ -85,39 +85,58 @@ const getNameLengthLimit = () => (_cfg.overlay && _cfg.overlay.nameLengthLimit) 
 
 // Command handlers
 function handleJump(username, userId, args, tags, now, ctx) {
-  if (ws.serverSprites.has(userId)) {
-    const sprite = ws.serverSprites.get(userId);
+  // Mods/broadcasters can target another sprite: !jump spritename
+  let targetId = userId;
+  if (args[0] && hasModPermission(tags, username, _cfg)) {
+    const targetArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
+    const resolved = ws.resolveSpriteId(targetArg);
+    targetId = resolved || targetArg;
+  }
+  if (ws.serverSprites.has(targetId)) {
+    const sprite = ws.serverSprites.get(targetId);
     sprite.lastActivity = now;
     sprite.vy = -16; // JUMP_VELOCITY
     sprite.state = 'idle';
     ctx.stateChanged = true;
     return null;
   }
-  return 'You need to appear first!';
+  return targetId === userId ? 'You need to appear first!' : `Sprite '${targetId}' not found.`;
 }
 
 function handleSit(username, userId, args, tags, now, ctx) {
-  if (ws.serverSprites.has(userId)) {
-    const sprite = ws.serverSprites.get(userId);
+  let targetId = userId;
+  if (args[0] && hasModPermission(tags, username, _cfg)) {
+    const targetArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
+    const resolved = ws.resolveSpriteId(targetArg);
+    targetId = resolved || targetArg;
+  }
+  if (ws.serverSprites.has(targetId)) {
+    const sprite = ws.serverSprites.get(targetId);
     sprite.state = 'sit';
     sprite.heightScale = 0.75;
     sprite.lastActivity = now;
     ctx.stateChanged = true;
     return null;
   }
-  return 'You need to appear first!';
+  return targetId === userId ? 'You need to appear first!' : `Sprite '${targetId}' not found.`;
 }
 
 function handleUnsit(username, userId, args, tags, now, ctx) {
-  if (ws.serverSprites.has(userId)) {
-    const sprite = ws.serverSprites.get(userId);
+  let targetId = userId;
+  if (args[0] && hasModPermission(tags, username, _cfg)) {
+    const targetArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
+    const resolved = ws.resolveSpriteId(targetArg);
+    targetId = resolved || targetArg;
+  }
+  if (ws.serverSprites.has(targetId)) {
+    const sprite = ws.serverSprites.get(targetId);
     sprite.state = 'idle';
     sprite.heightScale = 1.0;
     sprite.lastActivity = now;
     ctx.stateChanged = true;
     return null;
   }
-  return 'You need to appear first!';
+  return targetId === userId ? 'You need to appear first!' : `Sprite '${targetId}' not found.`;
 }
 
 function handleBoom() {

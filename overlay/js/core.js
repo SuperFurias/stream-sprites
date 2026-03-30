@@ -1,5 +1,7 @@
 // Core utilities — consolidated from loop.js, spatialHash.js, and userSkinCache.js
 
+import { getServerBaseUrl } from './config.js';
+
 // ── Game loop (from loop.js) ────────────────────────────────────────────────
 
 import { DT_CAP } from './config.js';
@@ -89,7 +91,8 @@ export function createUserSkinCache() {
 
 export async function fetchUserSkin(username, userSkinCache) {
   try {
-    const res = await fetch(`/api/user/${encodeURIComponent(username)}`);
+    const baseUrl = getServerBaseUrl();
+    const res = await fetch(baseUrl + `/api/user/${encodeURIComponent(username)}`);
     if (res.ok) {
       const data = await res.json();
       userSkinCache.set(username.toLowerCase(), data.assigned_skin || 'default');

@@ -1,6 +1,43 @@
 // Configuration and constants module
+
+// Parse ?server= query param for remote overlay hosting (e.g. Cloudflare tunnel)
+const _urlParams = new URLSearchParams(window.location.search);
+const _serverParam = _urlParams.get('server');
+
+// Returns the base URL for API/asset calls. Empty string for local (same-origin).
+export function getServerBaseUrl() {
+  if (!_serverParam) return '';
+  // Ensure protocol is present
+  if (_serverParam.startsWith('http://') || _serverParam.startsWith('https://')) {
+    return _serverParam.replace(/\/$/, '');
+  }
+  // Use HTTPS for remote servers (tunnel services require it)
+  return 'https://' + _serverParam;
+}
+
+// Returns the WebSocket URL, connecting to the configured server
+export function getWebSocketUrl(cfg) {
+  if (_serverParam) {
+    if (_serverParam.startsWith('https://') || _serverParam.startsWith('wss://')) {
+      return 'wss://' + _serverParam.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    }
+    if (_serverParam.startsWith('http://') || _serverParam.startsWith('ws://')) {
+      return 'ws://' + _serverParam.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    }
+    return 'wss://' + _serverParam;
+  }
+  // When accessed via a tunnel or remote host (non-localhost HTTPS), connect to same origin without port
+  // because the tunnel/proxy handles port routing internally
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    return (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host;
+  }
+  // Direct localhost access — use configured port
+  return (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (location.hostname || 'localhost') + ':' + (cfg.serverPort || 8080);
+}
+
 export async function loadConfig() {
-  const cfgResp = await fetch('/env').catch(() => null);
+  const baseUrl = getServerBaseUrl();
+  const cfgResp = await fetch(baseUrl + '/env').catch(() => null);
   const cfg = cfgResp ? await cfgResp.json() : null;
   if (!cfg) {
     document.body.innerHTML = '<div style="color:#fff;padding:20px">Missing /env endpoint. Copy server/.env to server/.env and edit it, then run server.</div>';
@@ -18,7 +55,7 @@ export function getConfigConstants(cfg, overlay) {
   
   return {
     USE_SERVER: !!cfg.useServer,
-    WS_URL: (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (location.hostname || 'localhost') + ':' + (cfg.serverPort || 8080),
+    WS_URL: getWebSocketUrl(cfg),
     CHANNEL: cfg.channel || '--',
     BOT_USERNAME: cfg.botUsername,
     OAUTH: cfg.oauth,

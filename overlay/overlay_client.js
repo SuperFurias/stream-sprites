@@ -1,5 +1,5 @@
 // overlay_client.js - Modular skin assignment overlay
-import { loadConfig, getConfigConstants } from './js/config.js';
+import { loadConfig, getConfigConstants, getServerBaseUrl } from './js/config.js';
 import { setupCanvas, resizeCanvas, initializeCanvasDisplay } from './js/canvas.js';
 import { setupInputHandlers } from './js/input.js';
 import { createSkinsMap, loadSkinsFromConfig, fetchAutoSkins, preloadSkins } from './js/skins.js';
@@ -50,7 +50,7 @@ function applySpriteState(sprite, serverSprite) {
 // Shared helper: send chat response via server API
 async function sendChatResponse(username, message) {
   try {
-    const res = await fetch('/api/chat/respond', {
+    const res = await fetch(getServerBaseUrl() + '/api/chat/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, message })
@@ -406,11 +406,36 @@ async function sendChatResponse(username, message) {
   }
 
   // Sync physics state from server — replaces local physics simulation
-  // With interpolation for smooth rendering between 20Hz server updates
+  // With interpolation for smooth rendering at native refresh rate
   let prevServerState = new Map(); // id -> snapshot
   let nextServerState = new Map(); // id -> snapshot
   let lastServerUpdateTime = 0;
-  const SERVER_UPDATE_INTERVAL = 50; // 20Hz
+  let serverUpdateInterval = 16; // detected from actual server broadcast timing
+
+  // Detect monitor refresh rate
+  let detectedHz = 60;
+  (function detectRefreshRate() {
+    let last = performance.now();
+    let count = 0;
+    const samples = [];
+    function measure(now) {
+      if (count > 0) samples.push(now - last);
+      last = now;
+      count++;
+      if (count <= 60) requestAnimationFrame(measure);
+      else {
+        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+        detectedHz = Math.round(1000 / avg);
+        // Snap to common refresh rates
+        const common = [30, 60, 75, 90, 120, 144, 165, 240];
+        detectedHz = common.reduce((prev, curr) =>
+          Math.abs(curr - detectedHz) < Math.abs(prev - detectedHz) ? curr : prev
+        );
+        dbg('Detected refresh rate:', detectedHz + 'Hz');
+      }
+    }
+    requestAnimationFrame(measure);
+  })();
 
   function syncPhysicsFromServer(serverState) {
     const serverIds = new Set(serverState.map(s => s.id));
@@ -429,7 +454,13 @@ async function sendChatResponse(username, message) {
     // Store previous state for interpolation
     prevServerState = new Map(nextServerState);
     nextServerState.clear();
-    lastServerUpdateTime = performance.now();
+    const now = performance.now();
+    const actualInterval = now - lastServerUpdateTime;
+    if (actualInterval > 5 && actualInterval < 200) {
+      // Smooth the interval measurement
+      serverUpdateInterval = serverUpdateInterval * 0.9 + actualInterval * 0.1;
+    }
+    lastServerUpdateTime = now;
 
     // Apply server-authoritative physics state
     for (const ss of serverState) {
@@ -483,7 +514,7 @@ async function sendChatResponse(username, message) {
 
     const now = performance.now();
     const elapsed = now - lastServerUpdateTime;
-    const t = Math.min(1, elapsed / SERVER_UPDATE_INTERVAL);
+    const t = Math.min(1, elapsed / serverUpdateInterval);
 
     for (const [id, sprite] of sprites) {
       const prev = prevServerState.get(id);
@@ -569,7 +600,7 @@ async function sendChatResponse(username, message) {
 
   // Render wrapper
   function renderWrapper() {
-    // Interpolate sprite positions for smooth 60fps rendering between 20Hz server updates
+    // Interpolate sprite positions for smooth rendering at native refresh rate
     if (USE_SERVER) interpolateSprites();
     // In server mode, renderScaleX/Y map server coords (1920x1080) to screen coords
     render(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles, USE_SERVER ? renderScaleX : 1, USE_SERVER ? renderScaleY : 1);
@@ -586,7 +617,7 @@ async function sendChatResponse(username, message) {
     dbg('Setting up WebSocket connection to:', WS_URL);
     const connection = setupWebSocket(WS_URL,
       (data) => {
-        dbg('WebSocket message received:', data);
+        if (data.type !== 'physicsState') dbg('WebSocket message received:', data.type || data);
         handleWebSocketMessage(data,
           (username, message, tags) => {
             dbg('Chat message from:', username, ':', message);

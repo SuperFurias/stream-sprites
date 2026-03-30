@@ -438,6 +438,138 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     }
   });
 
+  // Dashboard chat — sends messages/commands from the dashboard to the overlay and Twitch
+  app.post('/api/local/sendChat', (req, res) => {
+    const { username, message } = req.body;
+    if (!username || !message || typeof username !== 'string' || typeof message !== 'string' ||
+        username.length > 25 || message.length > 500) {
+      return res.status(400).json({ error: 'Invalid username or message' });
+    }
+
+    const sanitizedUsername = username.replace(/[^\p{L}\p{N}_]/gu, '_');
+    const text = message.trim();
+    const isCommand = text.startsWith('!');
+
+    let commandResult = null;
+    if (isCommand) {
+      commandResult = twitch.processServerCommand(sanitizedUsername, text, { badges: { broadcaster: true, moderator: true } });
+    }
+
+    // Broadcast chat message to all overlay clients
+    ws.broadcast({
+      type: 'chat',
+      username: sanitizedUsername,
+      message: text,
+      tags: { badges: { broadcaster: true } },
+      commandResult: commandResult
+    });
+
+    // Send to Twitch chat (only non-command messages)
+    if (!isCommand) {
+      const twitchClient = twitch.getTwitchClient();
+      try {
+        const state = twitchClient && twitchClient.readyState ? twitchClient.readyState() : null;
+        if (twitchClient && state && (state === 1 || state === 'OPEN')) {
+          twitchClient.say(_cfg.channel, text).catch(() => {});
+        }
+      } catch (e) { /* Twitch not connected, skip */ }
+    }
+
+    res.json({ ok: true, commandResult: commandResult ? commandResult.result : null });
+  });
+
+  // ── Cloudflare Tunnel Management ────────────────────────────────────────
+  let tunnelProcess = null;
+  let tunnelUrl = null;
+  let tunnelStatus = 'stopped'; // stopped | starting | running | error
+  let tunnelError = null;
+
+  app.get('/api/local/tunnelStatus', (req, res) => {
+    res.json({ status: tunnelStatus, url: tunnelUrl, error: tunnelError });
+  });
+
+  app.post('/api/local/startTunnel', (req, res) => {
+    if (tunnelProcess) {
+      return res.json({ ok: true, message: 'Tunnel already running', url: tunnelUrl, status: tunnelStatus });
+    }
+
+    tunnelStatus = 'starting';
+    tunnelError = null;
+    tunnelUrl = null;
+
+    try {
+      const { spawn } = require('child_process');
+      tunnelProcess = spawn('npx', ['cloudflared', 'tunnel', '--url', `http://localhost:${_cfg.serverPort || 8080}`], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true
+      });
+
+      let outputBuffer = '';
+
+      function processOutput(data) {
+        outputBuffer += data.toString();
+        const match = outputBuffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+        if (match && !tunnelUrl) {
+          tunnelUrl = match[0];
+          tunnelStatus = 'running';
+          _dbg('Cloudflare tunnel URL:', tunnelUrl);
+        }
+      }
+
+      tunnelProcess.stdout.on('data', processOutput);
+      tunnelProcess.stderr.on('data', processOutput);
+
+      tunnelProcess.on('close', (code) => {
+        _dbg('Cloudflare tunnel closed with code:', code);
+        tunnelProcess = null;
+        tunnelUrl = null;
+        tunnelStatus = 'stopped';
+      });
+
+      tunnelProcess.on('error', (err) => {
+        _dbg('Cloudflare tunnel error:', err.message);
+        tunnelProcess = null;
+        tunnelStatus = 'error';
+        tunnelError = err.message;
+      });
+
+      // Wait up to 15 seconds for the URL to appear
+      const startTime = Date.now();
+      const checkInterval = setInterval(() => {
+        if (tunnelUrl || tunnelStatus === 'error' || Date.now() - startTime > 15000) {
+          clearInterval(checkInterval);
+          if (!tunnelUrl && tunnelStatus !== 'error') {
+            tunnelStatus = 'error';
+            tunnelError = 'Timed out waiting for tunnel URL. Check server console for details.';
+          }
+        }
+      }, 500);
+
+      res.json({ ok: true, message: 'Tunnel starting...', status: 'starting' });
+    } catch (err) {
+      tunnelStatus = 'error';
+      tunnelError = err.message;
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/local/stopTunnel', (req, res) => {
+    if (!tunnelProcess) {
+      tunnelStatus = 'stopped';
+      tunnelUrl = null;
+      return res.json({ ok: true, message: 'Tunnel was not running' });
+    }
+    try {
+      tunnelProcess.kill();
+      tunnelProcess = null;
+      tunnelUrl = null;
+      tunnelStatus = 'stopped';
+      res.json({ ok: true, message: 'Tunnel stopped' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Error handler
   app.use((err, req, res, next) => {
     const isDevelopment = _cfg.debug?.serverDebug === true;

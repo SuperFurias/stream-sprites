@@ -136,6 +136,7 @@
     <div class="tab" data-tab="users" onclick="switchTab('users')">👥 Users</div>
     <div class="tab" data-tab="skins" onclick="switchTab('skins')">🎨 Skins</div>
     <div class="tab" data-tab="config" onclick="switchTab('config')">🔑 Configuration</div>
+    <div class="tab" data-tab="deploy" onclick="switchTab('deploy')">🚀 Deploy</div>
     <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Settings</div>
     <div class="tab" data-tab="help" onclick="switchTab('help')">📝 Help</div>
   </div>
@@ -216,7 +217,7 @@
       console.log('Page loaded, starting initial tab load...');
       await switchTab('dashboard');
       console.log('Dashboard tab loaded, refreshing stats...');
-      await refreshStats();
+      await refreshStatsHTTP();
     })();
 
     // Auto-refresh stats: prefer WebSocket, fall back to HTTP polling
@@ -265,6 +266,10 @@
             if (data.type === 'stats') {
               updateStatsUI(data.data);
               stopStatsPolling(); // WebSocket is working, stop HTTP polling
+            } else if (data.type === 'chat') {
+              if (typeof window.onTwitchChat === 'function') {
+                window.onTwitchChat(data.username, data.message);
+              }
             }
           } catch (e) { /* ignore non-JSON messages */ }
         };

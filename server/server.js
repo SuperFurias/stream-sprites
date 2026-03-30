@@ -69,7 +69,15 @@ twitch.initTwitch(cfg, cfgPath, dbg, db);
 
 // Express app
 const app = express();
-app.use(cors({ origin: ['http://localhost', 'http://127.0.0.1'], credentials: true }));
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (local files, same-origin, curl, etc.)
+    if (!origin) return callback(null, true);
+    // Allow all origins — server has no sensitive auth-protected endpoints
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(bodyParser.json());
 
 const port = cfg.serverPort || 8080;
@@ -78,7 +86,7 @@ const port = cfg.serverPort || 8080;
 routes.initRoutes(app, cfg, cfgPath, db, dbg);
 
 // Start server
-const server = app.listen(port, () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log(`✓ Server running on http://localhost:${port}`);
   console.log(`✓ Dashboard: http://localhost:${port}/`);
   console.log(`✓ Overlay: http://localhost:${port}/overlay/overlay.html`);
