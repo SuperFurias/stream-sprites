@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stream Sprites — Login</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, Arial;
+    background: #111;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .login-box {
+    background: #222;
+    padding: 32px;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    width: 100%;
+    max-width: 360px;
+  }
+  h1 {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+  p {
+    color: #a0aec0;
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  input {
+    width: 100%;
+    padding: 10px 14px;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  input:focus {
+    outline: none;
+    border-color: #0af;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    background: #0af;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: #0dc; }
+  button:disabled { background: #555; cursor: not-allowed; }
+  .error {
+    color: #f44;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <h1>Stream Sprites</h1>
+  <p>Enter the dashboard password to continue.</p>
+  <div class="error" id="error"></div>
+  <input type="password" id="password" placeholder="Password" autofocus>
+  <button id="btn" onclick="login()">Login</button>
+</div>
+<script>
+  const errorEl = document.getElementById('error');
+  const passwordEl = document.getElementById('password');
+  const btnEl = document.getElementById('btn');
+
+  passwordEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') login();
+  });
+
+  async function login() {
+    const password = passwordEl.value;
+    if (!password) return;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Logging in...';
+    errorEl.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/dashboard/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = '/';
+      } else {
+        errorEl.textContent = data.error || 'Login failed';
+        errorEl.style.display = 'block';
+        btnEl.disabled = false;
+        btnEl.textContent = 'Login';
+        passwordEl.value = '';
+        passwordEl.focus();
+      }
+    } catch (e) {
+      errorEl.textContent = 'Connection error';
+      errorEl.style.display = 'block';
+      btnEl.disabled = false;
+      btnEl.textContent = 'Login';
+    }
+  }
+</script>
+</body>
+</html>

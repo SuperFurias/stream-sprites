@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stream Sprites — Setup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, Arial;
+    background: #111;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  .login-box {
+    background: #222;
+    padding: 32px;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    width: 100%;
+    max-width: 400px;
+  }
+  h1 {
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+  p {
+    color: #a0aec0;
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  input {
+    width: 100%;
+    padding: 10px 14px;
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  input:focus {
+    outline: none;
+    border-color: #0af;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    background: #0af;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: #0dc; }
+  button:disabled { background: #555; cursor: not-allowed; }
+  .error {
+    color: #f44;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .hint {
+    color: #718096;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <h1>Stream Sprites</h1>
+  <p>No dashboard password is configured yet. Set one to protect remote access.</p>
+  <div class="error" id="error"></div>
+  <input type="password" id="password" placeholder="Choose a password" autofocus>
+  <input type="password" id="confirm" placeholder="Confirm password">
+  <p class="hint">Minimum 4 characters. You'll need this to access the dashboard remotely.</p>
+  <button id="btn" onclick="setup()">Set Password</button>
+</div>
+<script>
+  const errorEl = document.getElementById('error');
+  const passwordEl = document.getElementById('password');
+  const confirmEl = document.getElementById('confirm');
+  const btnEl = document.getElementById('btn');
+
+  confirmEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') setup();
+  });
+  passwordEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmEl.focus();
+  });
+
+  async function setup() {
+    const password = passwordEl.value;
+    const confirm = confirmEl.value;
+
+    if (password.length < 4) {
+      errorEl.textContent = 'Password must be at least 4 characters';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if (password !== confirm) {
+      errorEl.textContent = 'Passwords do not match';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    btnEl.disabled = true;
+    btnEl.textContent = 'Saving...';
+    errorEl.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/dashboard/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = '/';
+      } else {
+        errorEl.textContent = data.error || 'Setup failed';
+        errorEl.style.display = 'block';
+        btnEl.disabled = false;
+        btnEl.textContent = 'Set Password';
+      }
+    } catch (e) {
+      errorEl.textContent = 'Connection error';
+      errorEl.style.display = 'block';
+      btnEl.disabled = false;
+      btnEl.textContent = 'Set Password';
+    }
+  }
+</script>
+</body>
+</html>

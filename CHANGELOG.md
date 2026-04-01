@@ -5,6 +5,21 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-04-01
+
+### Added
+- **Dashboard password protection**: Remote access (tunnel) to the dashboard now requires a password. First-time remote access shows a setup page to choose a password. Localhost access remains open. Password is stored in `.env` and shown as `***` in settings.
+- **Dashboard setup page**: New `setup.html` for first-time password creation with confirm field and validation (min 4 chars).
+- **Dashboard login page**: New `login.html` with password field and session-based auth (24-hour cookie).
+
+### Fixed
+- **Cloudflare tunnel stop**: Stop tunnel now uses `taskkill /F /T /PID` on Windows to kill the entire process tree (shell + cloudflared child). Previously `kill()` only killed the shell wrapper, leaving cloudflared running.
+- **Cloudflare tunnel restart**: Start tunnel now checks if a previous process is actually alive before refusing to start. Stale state is cleaned up automatically.
+- **Missing `cloudflared` dependency**: Added `cloudflared` to `package.json` so `npx cloudflared` works without global install.
+
+### Security
+- **`/env` endpoint masks dashboard password**: The `/env` API no longer exposes the `dashboardPassword` — returns `***` instead of the real value. The save endpoint preserves the real password if `***` is sent back.
+
 ## [2.0.2] - 2026-03-30
 
 ### Added

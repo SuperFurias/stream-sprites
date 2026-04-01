@@ -310,6 +310,9 @@ async function loadSettings() {
     if(el('verboseMessages')) el('verboseMessages').checked = debugSettings.verboseMessages || false;
     if(el('logToFile')) el('logToFile').checked = debugSettings.logToFile || false;
     
+    // Load dashboard password
+    if(el('dashboardPassword')) el('dashboardPassword').value = config.dashboardPassword || '';
+
     // Load overlay settings
     const overlay = config.overlay || {};
     for (const [fieldId, configKey] of Object.entries(overlayFieldMap)) {
@@ -369,7 +372,8 @@ async function saveSettings() {
     const updatedConfig = {
       ...currentConfig,
       debug: debugSettings,
-      overlay: overlaySettings
+      overlay: overlaySettings,
+      dashboardPassword: el('dashboardPassword')?.value || ''
     };
     
      // Save via local control API

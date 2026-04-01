@@ -156,7 +156,8 @@ function loadConfig(cfgPath) {
     channel: "",
     autoGenerateOAuth: false,
     autoConnect: false,
-    autoOpenBrowser: true
+    autoOpenBrowser: true,
+    dashboardPassword: ""
   };
 
   if (!cfg) {

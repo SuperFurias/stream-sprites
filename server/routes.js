@@ -74,6 +74,92 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
   // Rate limiter
   app.use('/api/', rateLimiter);
 
+  // ── Dashboard auth (remote access only) ──────────────────────────────────
+  const crypto = require('crypto');
+  const activeSessions = new Map(); // token -> { expires }
+  const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const SESSION_CLEANUP_MS = 60 * 60 * 1000; // clean up every hour
+
+  // Clean expired sessions periodically
+  setInterval(() => {
+    const now = Date.now();
+    for (const [token, session] of activeSessions) {
+      if (session.expires < now) activeSessions.delete(token);
+    }
+  }, SESSION_CLEANUP_MS);
+
+  function isLocalhost(req) {
+    const host = req.hostname || req.headers.host || '';
+    return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
+  }
+
+  function isAuthenticated(req) {
+    const cookie = req.headers.cookie || '';
+    const match = cookie.match(/dash_session=([^;]+)/);
+    if (!match) return false;
+    const session = activeSessions.get(match[1]);
+    return session && session.expires > Date.now();
+  }
+
+  // Auth middleware: protect dashboard and dashboard API for remote access
+  app.use((req, res, next) => {
+    if (isLocalhost(req)) return next(); // localhost always allowed
+    // Public paths: overlay, env, skins, static assets needed by overlay
+    const publicPaths = ['/overlay', '/env', '/favicon.ico'];
+    if (publicPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) return next();
+    if (req.path === '/api/skins' || req.path === '/api/skins/auto') return next();
+    // Auth check for everything else (dashboard, dashboard API, assets)
+    if (isAuthenticated(req)) return next();
+    // Unauthenticated remote access to dashboard
+    if (req.path === '/api/dashboard/login' || req.path === '/api/dashboard/setup') return next(); // auth endpoints
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+    // If no password configured yet, show setup page
+    if (!_cfg.dashboardPassword || _cfg.dashboardPassword.trim() === '') {
+      return res.sendFile(path.join(__dirname, '..', 'dashboard', 'setup.html'));
+    }
+    // Serve login page
+    res.sendFile(path.join(__dirname, '..', 'dashboard', 'login.html'));
+  });
+
+  // Setup endpoint (first-time password creation)
+  app.post('/api/dashboard/setup', (req, res) => {
+    if (_cfg.dashboardPassword && _cfg.dashboardPassword.trim() !== '') {
+      return res.status(403).json({ error: 'Password already configured' });
+    }
+    const { password: input } = req.body;
+    if (!input || typeof input !== 'string' || input.length < 4) {
+      return res.status(400).json({ error: 'Password must be at least 4 characters' });
+    }
+    // Save password to config
+    _cfg.dashboardPassword = input;
+    try {
+      const fs = require('fs');
+      const current = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
+      current.dashboardPassword = input;
+      fs.writeFileSync(_cfgPath, JSON.stringify(current, null, 2));
+    } catch (e) {
+      return res.status(500).json({ error: 'Failed to save password' });
+    }
+    // Create session and log in immediately
+    const token = crypto.randomBytes(32).toString('hex');
+    activeSessions.set(token, { expires: Date.now() + SESSION_TTL_MS });
+    res.setHeader('Set-Cookie', `dash_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}`);
+    res.json({ ok: true });
+  });
+
+  // Login endpoint
+  app.post('/api/dashboard/login', (req, res) => {
+    const password = _cfg.dashboardPassword;
+    if (!password || password.trim() === '') return res.status(403).json({ error: 'Password not configured yet' });
+    const { password: input } = req.body;
+    if (!input || typeof input !== 'string') return res.status(400).json({ error: 'Password required' });
+    if (input !== password) return res.status(401).json({ error: 'Wrong password' });
+    const token = crypto.randomBytes(32).toString('hex');
+    activeSessions.set(token, { expires: Date.now() + SESSION_TTL_MS });
+    res.setHeader('Set-Cookie', `dash_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}`);
+    res.json({ ok: true });
+  });
+
   app.use(express.static(path.join(__dirname, '..')));
   app.use('/overlay', express.static(path.join(__dirname, '..', 'overlay')));
 
@@ -113,7 +199,8 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     const mergedCfg = {
       ..._cfg,
       overlay: overlayConfig,
-      defaultOverlay: DEFAULT_OVERLAY
+      defaultOverlay: DEFAULT_OVERLAY,
+      dashboardPassword: _cfg.dashboardPassword ? '***' : ''
     };
 
     const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
@@ -233,6 +320,11 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       if (merged.twitch) {
         merged.twitch.botOAuthToken = tokenForMemory;
         merged.twitch.refreshToken = refreshTokenForMemory;
+      }
+
+      // Preserve real dashboard password if masked value was sent back
+      if (merged.dashboardPassword === '***') {
+        merged.dashboardPassword = _cfg.dashboardPassword || '';
       }
 
       fs.writeFileSync(_cfgPath, JSON.stringify(merged, null, 2));
@@ -490,6 +582,17 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
 
   app.post('/api/local/startTunnel', (req, res) => {
     if (tunnelProcess) {
+      // Check if process is actually still alive
+      try {
+        process.kill(tunnelProcess.pid, 0); // signal 0 checks if process exists
+      } catch (e) {
+        // Process is dead, clean up stale state
+        tunnelProcess = null;
+        tunnelStatus = 'stopped';
+        tunnelUrl = null;
+      }
+    }
+    if (tunnelProcess) {
       return res.json({ ok: true, message: 'Tunnel already running', url: tunnelUrl, status: tunnelStatus });
     }
 
@@ -560,13 +663,24 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       return res.json({ ok: true, message: 'Tunnel was not running' });
     }
     try {
-      tunnelProcess.kill();
+      const pid = tunnelProcess.pid;
+      if (process.platform === 'win32') {
+        // Windows: kill entire process tree (shell + cloudflared child)
+        require('child_process').execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+      } else {
+        tunnelProcess.kill('SIGTERM');
+      }
       tunnelProcess = null;
       tunnelUrl = null;
       tunnelStatus = 'stopped';
+      tunnelError = null;
       res.json({ ok: true, message: 'Tunnel stopped' });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      tunnelProcess = null;
+      tunnelUrl = null;
+      tunnelStatus = 'stopped';
+      tunnelError = null;
+      res.json({ ok: true, message: 'Tunnel stopped' });
     }
   });
 
