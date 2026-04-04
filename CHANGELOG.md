@@ -5,6 +5,46 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2026-04-04
+
+### Fixed
+- **`!boom` explosion position**: Server now broadcasts the `y` coordinate with boom commands so all overlays render the explosion at the exact `groundY`. Previously the client calculated its own Y value which could differ from the server's.
+- **Dashboard groundY fallback**: Corrected from `920` to `1080` to match server default. Removed `groundY` from settings overlay field map so it's not duplicated.
+- **Jump velocity**: Now uses `physics.JUMP_VELOCITY` constant instead of hardcoded `-16`.
+- **Server restart**: Now performs graceful shutdown — closes database, cleans up WebSocket and Twitch connections before terminating.
+- **Chat message sanitization**: IRC control characters and newlines are now stripped from messages sent via the dashboard chat endpoint.
+- **Cloudflare tunnel stop (Windows)**: Uses async `exec` instead of `execSync` for `taskkill`, preventing blocking.
+- **OAuth redirect with tunnels**: Redirect URL now uses the actual request host and `x-forwarded-proto` header so OAuth works through Cloudflare tunnels.
+- **Broadcast method name**: Fixed `broadcastSpriteState` → `broadcastPhysicsState` in twitch.js.
+
+### Changed
+- **`start.ps1` dependency management**: Added `Install-Dependencies` function with smart detection (skips install if node_modules is up-to-date). Added `SkipDeps` and `AuditFix` parameters.
+- **`start.ps1` port conflict check**: Extracted into `Test-PortConflict` function with detailed process info and automatic kill.
+- **Removed `jsonwebtoken` dependency**: No longer used, removed from package.json.
+- **Updated `cloudflared`**: Bumped from `0.6.1` to `0.7.1`.
+- **Stats cache invalidation**: Added `invalidateStatsCache()` called on user assignment/reset operations to keep stats accurate.
+- **CSRF token management**: Added infrastructure for CSRF token generation and validation.
+
+## [2.0.4] - 2026-04-04
+
+### Fixed
+- **`!boom` explosion position**: Server now broadcasts the `y` coordinate with boom commands so all overlays render the explosion at the exact `groundY`. Previously the client calculated its own Y value which could differ from the server's.
+- **Dashboard groundY fallback**: Corrected from `920` to `1080` to match server default. Removed `groundY` from settings overlay field map so it's not duplicated.
+- **Jump velocity**: Now uses `physics.JUMP_VELOCITY` constant instead of hardcoded `-16`.
+- **Server restart**: Now performs graceful shutdown — closes database, cleans up WebSocket and Twitch connections before terminating.
+- **Chat message sanitization**: IRC control characters and newlines are now stripped from messages sent via the dashboard chat endpoint.
+- **Cloudflare tunnel stop (Windows)**: Uses async `exec` instead of `execSync` for `taskkill`, preventing blocking.
+- **OAuth redirect with tunnels**: Redirect URL now uses the actual request host and `x-forwarded-proto` header so OAuth works through Cloudflare tunnels.
+- **Broadcast method name**: Fixed `broadcastSpriteState` → `broadcastPhysicsState` in twitch.js.
+
+### Changed
+- **`start.ps1` dependency management**: Added `Install-Dependencies` function with smart detection (skips install if node_modules is up-to-date). Added `SkipDeps` and `AuditFix` parameters.
+- **`start.ps1` port conflict check**: Extracted into `Test-PortConflict` function with detailed process info and automatic kill.
+- **Removed `jsonwebtoken` dependency**: No longer used, removed from package.json.
+- **Updated `cloudflared`**: Bumped from `0.6.1` to `0.7.1`.
+- **Stats cache invalidation**: Added `invalidateStatsCache()` called on user assignment/reset operations to keep stats accurate.
+- **CSRF token management**: Added infrastructure for CSRF token generation and validation.
+
 ## [2.0.3] - 2026-04-01
 
 ### Added

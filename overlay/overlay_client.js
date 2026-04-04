@@ -120,10 +120,9 @@ async function sendChatResponse(username, message) {
   const { canvas, ctx, DPR } = setupCanvas();
   const SERVER_W = overlay.canvasWidth || 1920;
   const SERVER_H = overlay.canvasHeight || 1080;
-  const SERVER_GROUND_Y = SERVER_H * GROUND_Y_MULTIPLIER;
   let W = SERVER_W;
   let H = SERVER_H;
-  let GROUND_Y = SERVER_GROUND_Y;
+  let GROUND_Y = overlay.groundY ?? SERVER_H * GROUND_Y_MULTIPLIER;
   let renderScaleX = 1;
   let renderScaleY = 1;
 
@@ -645,8 +644,9 @@ async function sendChatResponse(username, message) {
             } else if (cmd === 'boom') {
               // Server handles physics, client just renders explosion effect
               const epicenterX = data?.x || Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
+              const epicenterY = data?.y ?? GROUND_Y;
               const explosionRadius = data?.radius || EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
-              createExplosionEffect(epicenterX, GROUND_Y, explosionRadius, explosionParticles);
+              createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
             }
             // jump, flip, fight are handled server-side via physicsState updates
           },

@@ -5,6 +5,7 @@ const { FilteredLogger } = require('./lib/logger');
 const { hasModPermission } = require('./lib/util');
 const { getUserSkinFromDB } = require('./db');
 const ws = require('./websocket');
+const physics = require('./physics');
 
 // Shared state
 let _cfg, _cfgPath, _dbg, _db;
@@ -95,7 +96,7 @@ function handleJump(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(targetId)) {
     const sprite = ws.serverSprites.get(targetId);
     sprite.lastActivity = now;
-    sprite.vy = -16; // JUMP_VELOCITY
+    sprite.vy = physics.JUMP_VELOCITY;
     sprite.state = 'idle';
     ctx.stateChanged = true;
     return null;
@@ -151,7 +152,7 @@ function handleBoom() {
     ov.SPIN_STRENGTH_FACTOR || 0.05, ov.RANDOM_JITTER_FACTOR || 0.2,
     ov.COLLISION_PERSONAL_SPACE_THRESHOLD || 0.1);
   // Also broadcast for explosion visual effect on clients
-  ws.broadcast({ type: 'cmd', cmd: 'boom', x: epicenterX, radius: explosionRadius });
+  ws.broadcast({ type: 'cmd', cmd: 'boom', x: epicenterX, y: ov.GROUND_Y, radius: explosionRadius });
   return null;
 }
 
@@ -463,7 +464,7 @@ async function connectTwitchBot() {
 
       if (stateChanged) {
         ws.setSpriteDirty(true);
-        ws.broadcastSpriteState();
+        ws.broadcastPhysicsState();
         _dbg('Sprite state broadcasted');
       }
     } catch (err) {

@@ -17,6 +17,30 @@ let statsCache = null;
 let statsCacheTime = 0;
 const STATS_CACHE_TTL_MS = 3000;
 
+function invalidateStatsCache() {
+  statsCache = null;
+  statsCacheTime = 0;
+}
+
+function refreshStatsCache() {
+  try {
+    const row = _db.prepare(`SELECT
+      COUNT(*) as total,
+      SUM(CASE WHEN assigned_skin != 'default' AND assigned_skin IS NOT NULL THEN 1 ELSE 0 END) as custom
+      FROM users`).get();
+    const result = row || { total: 0, custom: 0 };
+    statsCache = {
+      total_users: result.total || 0,
+      custom_skins: result.custom || 0,
+      default_skins: (result.total || 0) - (result.custom || 0)
+    };
+    statsCacheTime = Date.now();
+  } catch (err) {
+    _dbg('Error refreshing stats cache:', err.message);
+  }
+  return statsCache;
+}
+
 function refreshStatsCache() {
   try {
     const row = _db.prepare(`SELECT
@@ -87,6 +111,35 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       if (session.expires < now) activeSessions.delete(token);
     }
   }, SESSION_CLEANUP_MS);
+
+  // CSRF token management
+  const csrfTokens = new Map();
+  const CSRF_TTL_MS = 60 * 60 * 1000;
+
+  function generateCsrfToken() {
+    const token = crypto.randomBytes(32).toString('hex');
+    csrfTokens.set(token, Date.now());
+    return token;
+  }
+
+  function validateCsrfToken(req) {
+    const cookie = req.headers.cookie || '';
+    const cookieMatch = cookie.match(/csrf_token=([^;]+)/);
+    if (!cookieMatch) return false;
+    const cookieToken = cookieMatch[1];
+    const bodyToken = req.body?._csrf || req.headers['x-csrf-token'];
+    if (!bodyToken || bodyToken !== cookieToken) return false;
+    if (!csrfTokens.has(cookieToken)) return false;
+    return true;
+  }
+
+  // Clean expired CSRF tokens every 10 minutes
+  setInterval(() => {
+    const now = Date.now();
+    for (const [token, ts] of csrfTokens) {
+      if (now - ts > CSRF_TTL_MS) csrfTokens.delete(token);
+    }
+  }, 10 * 60 * 1000);
 
   function isLocalhost(req) {
     const host = req.hostname || req.headers.host || '';
@@ -260,6 +313,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     try {
       _db.prepare('INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,?)')
         .run(userLower, userLower, skinId);
+      invalidateStatsCache();
       res.json({ ok: true, assigned_skin: skinId });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -399,6 +453,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     if (!isValidUsername(id)) return res.status(400).json({ error: 'Invalid username' });
     try {
       _db.prepare('DELETE FROM users WHERE id=?').run(id.toLowerCase());
+      invalidateStatsCache();
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -408,6 +463,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
   app.post('/api/local/resetAll', (req, res) => {
     try {
       _db.prepare('DELETE FROM users').run();
+      invalidateStatsCache();
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -483,7 +539,22 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
   // Restart server
   app.post('/api/local/restartServer', (req, res) => {
     res.json({ ok: true, message: 'Server restarting...' });
-    process.exit(0);
+    // Graceful shutdown: close database, cleanup, then restart
+    setTimeout(() => {
+      try {
+        const { cleanup: wsCleanup } = require('./websocket');
+        wsCleanup();
+      } catch (e) {}
+      try {
+        const { cleanup: twitchCleanup } = require('./twitch');
+        twitchCleanup();
+      } catch (e) {}
+      try {
+        if (_db) _db.close();
+      } catch (e) {}
+      // Use SIGTERM so the startup script's restart loop picks it up
+      process.kill(process.pid, 'SIGTERM');
+    }, 500);
   });
 
   // Health check
@@ -510,13 +581,20 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       return res.status(400).json({ error: 'Invalid username or message' });
     }
 
+    // Sanitize username and message to prevent IRC injection
     const sanitizedUsername = username.replace(/[^\p{L}\p{N}_]/gu, '_');
+    // Strip IRC control characters and newlines from message
+    const sanitizedMessage = message.replace(/[\x00-\x1F\x7F]/g, '').replace(/\r?\n/g, ' ').trim();
+    if (!sanitizedMessage) {
+      return res.status(400).json({ error: 'Message is empty after sanitization' });
+    }
+
     const twitchClient = twitch.getTwitchClient();
 
     try {
       const state = twitchClient && twitchClient.readyState ? twitchClient.readyState() : null;
       if (twitchClient && state && (state === 1 || state === 'OPEN')) {
-        const fullMessage = `@${sanitizedUsername}, ${message}`;
+        const fullMessage = `@${sanitizedUsername}, ${sanitizedMessage}`;
         twitchClient.say(_cfg.channel, fullMessage).then(() => {
           res.json({ ok: true });
         }).catch(err => {
@@ -665,12 +743,19 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     try {
       const pid = tunnelProcess.pid;
       if (process.platform === 'win32') {
-        // Windows: kill entire process tree (shell + cloudflared child)
-        require('child_process').execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+        // Windows: kill entire process tree asynchronously (non-blocking)
+        const { exec } = require('child_process');
+        exec(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' }, (err) => {
+          // Ignore errors — process may already be dead
+          tunnelProcess = null;
+          tunnelUrl = null;
+          tunnelStatus = 'stopped';
+          tunnelError = null;
+        });
       } else {
         tunnelProcess.kill('SIGTERM');
+        tunnelProcess = null;
       }
-      tunnelProcess = null;
       tunnelUrl = null;
       tunnelStatus = 'stopped';
       tunnelError = null;
@@ -710,7 +795,11 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     console.log('→ GET /auth/twitch - redirecting to Twitch OAuth');
     const state = crypto.randomBytes(16).toString('hex');
     pendingOAuthStates.set(state, Date.now());
-    const oauthRedirectUrl = `http://localhost:${_cfg.serverPort || 8080}/auth/callback`;
+    // Use the actual request host so OAuth works with tunnels too
+    const host = req.headers.host || `localhost:${_cfg.serverPort || 8080}`;
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    const baseUrl = `${protocol}://${host}`;
+    const oauthRedirectUrl = `${baseUrl}/auth/callback`;
     const url = `https://id.twitch.tv/oauth2/authorize?client_id=${_cfg.twitch.clientId}&redirect_uri=${encodeURIComponent(oauthRedirectUrl)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
     console.log('→ Redirecting to:', url.substring(0, 80) + '...');
     res.redirect(url);
@@ -724,7 +813,10 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     }
     pendingOAuthStates.delete(state);
     try {
-      const oauthRedirectUrl = `http://localhost:${_cfg.serverPort || 8080}/auth/callback`;
+      const host = req.headers.host || `localhost:${_cfg.serverPort || 8080}`;
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const baseUrl = `${protocol}://${host}`;
+      const oauthRedirectUrl = `${baseUrl}/auth/callback`;
       const params = new URLSearchParams({
         client_id: _cfg.twitch.clientId,
         client_secret: _cfg.twitch.clientSecret,
@@ -749,7 +841,7 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
         }
       }
 
-      const dashboardUrl = `http://localhost:${_cfg.serverPort || 8080}/`;
+      const dashboardUrl = `${baseUrl}/`;
       res.send(`
         <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
           <h2>✓ OAuth Token Generated</h2>
@@ -780,5 +872,6 @@ module.exports = {
   initRoutes,
   broadcastStats,
   refreshStatsCache,
+  invalidateStatsCache,
   setDashboardConfirmedOpen
 };

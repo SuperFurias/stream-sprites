@@ -27,6 +27,11 @@ const MAX_SERVER_SPRITES_HARD_LIMIT = 2000;
 
 // Cached overlay config
 let _overlayConfigCache = null;
+let cachedOv = null;
+
+// Drag tracking (declared early so game loop can reference)
+const draggedSprites = new Set();
+const dragOwners = new Map();
 
 function getOverlayConfig() {
   if (!_overlayConfigCache) {
@@ -226,9 +231,6 @@ function getServerSpriteArray() {
   return cachedSpriteArray;
 }
 
-// Cache overlay config for the game loop
-let cachedOv = null;
-
 function getGameLoopConfig() {
   if (!cachedOv) cachedOv = getOverlayConfig();
   return cachedOv;
@@ -240,7 +242,6 @@ function startGameLoop() {
   let lastTime = Date.now();
   let accumulator = 0;
 
-  // Use setImmediate with throttling for more precise timing
   function tick() {
     const now = Date.now();
     const elapsed = now - lastTime;
@@ -293,7 +294,7 @@ function startGameLoop() {
                 delete winner._fightTarget;
 
                 const midX = (sprite.x + target.x) / 2;
-                broadcast({ type: 'cmd', cmd: 'boom', x: midX, radius: 200 + Math.random() * 100 });
+                broadcast({ type: 'cmd', cmd: 'boom', x: midX, y: ov.GROUND_Y, radius: 200 + Math.random() * 100 });
               }
             } else {
               sprite.isFighting = false;
@@ -341,10 +342,8 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
           dbg('clearSprites command received from client');
           clearServerSprites();
         } else if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
-          // Handle drag interactions from client
           handleDragMessage(msg, ws);
         } else if (msg.type === 'fullState') {
-          // Client sends full current state — but server is authoritative, just acknowledge
           dbg('fullState received from client (server is authoritative, ignoring physics data)');
         }
       } catch (e) {
@@ -353,7 +352,6 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
     });
 
     ws.on('close', () => {
-      // Release only sprites this client was dragging
       const toRelease = [];
       for (const [spriteId, owner] of dragOwners) {
         if (owner === ws) toRelease.push(spriteId);
@@ -414,9 +412,6 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
 }
 
 // Handle drag messages from clients
-const draggedSprites = new Set(); // track which sprite IDs are being dragged
-const dragOwners = new Map(); // spriteId -> ws connection
-
 function handleDragMessage(msg, ws) {
   const sprite = serverSprites.get(msg.spriteId);
   if (!sprite) return;
@@ -472,7 +467,6 @@ function handleServerCommand(cmd, data) {
     const loserSprite = serverSprites.get(loserId);
 
     if (winnerSprite && loserSprite) {
-      // Set sprites to walk toward each other
       winnerSprite.roamTargetX = loserSprite.x;
       winnerSprite.roamTargetY = ov.GROUND_Y - 50;
       winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
@@ -487,9 +481,6 @@ function handleServerCommand(cmd, data) {
       loserSprite.state = 'idle';
       loserSprite.isFighting = true;
 
-      // Check for collision resolution on each tick (handled in game loop via fight check)
-      const fightId = `${winnerId}|${loserId}`;
-      // Store fight state for resolution
       winnerSprite._fightTarget = loserId;
       loserSprite._fightTarget = winnerId;
     }

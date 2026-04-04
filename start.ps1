@@ -1,13 +1,15 @@
 # Enhanced Stream Sprites Server Startup Script (PowerShell)
 
 param(
-    [switch]$NoPrompt
+    [switch]$NoPrompt,
+    [switch]$SkipDeps,
+    [switch]$AuditFix
 )
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $projectRoot
 
-# Read server port from .env file
+# ── Read server port from .env file ────────────────────────────────────────
 $envFile = Join-Path $projectRoot "server\.env"
 $serverPort = 8080  # default fallback
 if (Test-Path $envFile) {
@@ -26,7 +28,7 @@ if (Test-Path $envFile) {
     Write-Host ".env file not found, using default port 8080" -ForegroundColor Yellow
 }
 
-# Check if Node.js is installed
+# ── Check if Node.js is installed ──────────────────────────────────────────
 Write-Host "Checking for Node.js installation..." -ForegroundColor Cyan
 $nodeJustInstalled = $false
 try {
@@ -105,7 +107,6 @@ try {
 # If Node.js was just installed, refresh PATH to pick up the new installation
 if ($nodeJustInstalled) {
     Write-Host "Refreshing PATH to load Node.js..." -ForegroundColor Cyan
-    # Refresh PATH from registry to pick up newly installed Node.js
     $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
     $env:Path = "$machinePath;$userPath"
@@ -113,45 +114,165 @@ if ($nodeJustInstalled) {
     Start-Sleep -Seconds 2
 }
 
-# Main server loop
+# ── Dependency management function ─────────────────────────────────────────
+function Install-Dependencies {
+    Set-Location (Join-Path $projectRoot "server")
+    
+    $packageJson = Join-Path $projectRoot "server\package.json"
+    $lockFile = Join-Path $projectRoot "server\package-lock.json"
+    $nodeModules = Join-Path $projectRoot "server\node_modules"
+    
+    $needsInstall = $false
+    
+    if (-not (Test-Path $nodeModules)) {
+        Write-Host "node_modules not found. Full install required." -ForegroundColor Yellow
+        $needsInstall = $true
+    }
+    elseif (Test-Path $lockFile) {
+        # Check if package.json is newer than node_modules
+        $packageTime = (Get-Item $packageJson).LastWriteTime
+        $modulesTime = (Get-Item $nodeModules).LastWriteTime
+        if ($packageTime -gt $modulesTime) {
+            Write-Host "package.json changed since last install. Updating dependencies..." -ForegroundColor Yellow
+            $needsInstall = $true
+        }
+    }
+    else {
+        # No lock file — do a fresh install
+        Write-Host "No package-lock.json found. Doing fresh install..." -ForegroundColor Yellow
+        $needsInstall = $true
+    }
+    
+    if (-not $needsInstall) {
+        Write-Host "Dependencies are up to date." -ForegroundColor Green
+        return $true
+    }
+    
+    Write-Host "Installing dependencies..." -ForegroundColor Cyan
+    $npmProcess = Start-Process -FilePath "npm" -ArgumentList "install" -Wait -PassThru -NoNewWindow
+    
+    if ($npmProcess.ExitCode -ne 0) {
+        Write-Host "npm install failed with exit code $($npmProcess.ExitCode)" -ForegroundColor Red
+        Write-Host "Check server/package.json for invalid version ranges." -ForegroundColor Yellow
+        return $false
+    }
+    
+    Write-Host "Dependencies installed successfully." -ForegroundColor Green
+    
+    # Optional: run audit fix
+    if ($AuditFix) {
+        Write-Host "Running npm audit fix..." -ForegroundColor Cyan
+        $auditProcess = Start-Process -FilePath "npm" -ArgumentList "audit", "fix", "--force" -Wait -PassThru -NoNewWindow
+        if ($auditProcess.ExitCode -eq 0) {
+            Write-Host "Vulnerabilities patched." -ForegroundColor Green
+        } else {
+            Write-Host "Some vulnerabilities could not be auto-fixed." -ForegroundColor Yellow
+        }
+    }
+    
+    return $true
+}
+
+# ── Port conflict check with detailed info ─────────────────────────────────
+function Test-PortConflict {
+    param([int]$Port)
+    
+    $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }
+    
+    if ($connections) {
+        $conflictingProcesses = @()
+        foreach ($conn in $connections) {
+            try {
+                $proc = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
+                if ($proc) {
+                    $conflictingProcesses += "$($proc.ProcessName) (PID: $($conn.OwningProcess))"
+                } else {
+                    $conflictingProcesses += "Unknown (PID: $($conn.OwningProcess))"
+                }
+            } catch {
+                $conflictingProcesses += "Unknown (PID: $($conn.OwningProcess))"
+            }
+        }
+        
+        Write-Host "Port $Port is already in use by: $($conflictingProcesses -join ', ')" -ForegroundColor Red
+        Write-Host "Attempting to free port..." -ForegroundColor Yellow
+        
+        $connections | ForEach-Object {
+            try {
+                Stop-Process -Id $_.OwningProcess -Force -ErrorAction Stop
+                Write-Host "  Killed PID $($_.OwningProcess)" -ForegroundColor Yellow
+            } catch {
+                Write-Host "  Failed to kill PID $($_.OwningProcess): $_" -ForegroundColor Red
+            }
+        }
+        
+        # Wait for port to be released
+        $waited = 0
+        while ($waited -lt 10) {
+            $stillInUse = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }
+            if (-not $stillInUse) {
+                Write-Host "Port $Port is now free." -ForegroundColor Green
+                return $true
+            }
+            Start-Sleep -Seconds 1
+            $waited++
+        }
+        
+        Write-Host "Port $Port could not be freed. Server will fail to start." -ForegroundColor Red
+        return $false
+    }
+    
+    Write-Host "Port $Port is available." -ForegroundColor Green
+    return $true
+}
+
+# ── Main server loop ──────────────────────────────────────────────────────
+$depsOk = $false
 while ($true) {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "Starting Enhanced Stream Sprites Server" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
 
-    # Kill any existing node processes on the configured port
-    Write-Host "Checking for existing server processes on port $serverPort..." -ForegroundColor Yellow
-    $connections = Get-NetTCPConnection -LocalPort $serverPort -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' }
-    if ($connections) {
-        $connections | ForEach-Object {
-            Write-Host "Killing process $($_.OwningProcess)" -ForegroundColor Yellow
-            Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    # Check and free port
+    $portOk = Test-PortConflict -Port $serverPort
+    if (-not $portOk) {
+        Write-Host "Cannot proceed — port $serverPort is still in use." -ForegroundColor Red
+        if ($NoPrompt) {
+            Start-Sleep -Seconds 5
+            continue
         }
-    } else {
-        Write-Host "No processes found on port $serverPort" -ForegroundColor Gray
+        Write-Host "Press any key to exit..." -ForegroundColor Gray
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        break
     }
 
     # Wait a moment for ports to release
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 1
 
-    # Navigate to server directory from project root
-    Set-Location $projectRoot
-    Set-Location "server"
-
-    # Check if node_modules exists, if not install dependencies
-    if (-not (Test-Path "node_modules")) {
-        Write-Host "Dependencies not found. Installing..." -ForegroundColor Yellow
-        npm install
+    # Install dependencies if needed (only once per session unless package.json changes)
+    if (-not $depsOk -and -not $SkipDeps) {
+        $depsOk = Install-Dependencies
+        if (-not $depsOk) {
+            Write-Host "Dependency installation failed. Fix package.json and try again." -ForegroundColor Red
+            if ($NoPrompt) {
+                Start-Sleep -Seconds 5
+                continue
+            }
+            Write-Host "Press any key to exit..." -ForegroundColor Gray
+            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+            break
+        }
     }
 
-    Write-Host "Starting server..." -ForegroundColor Green
+    # Start server
+    Set-Location (Join-Path $projectRoot "server")
+    Write-Host "Starting server on port $serverPort..." -ForegroundColor Green
     npm start
-
-    # Server has stopped - either crashed or was stopped via admin command
-    Write-Host "Server stopped." -ForegroundColor Yellow
+    
+    # Reset deps check on restart so we re-evaluate
+    $depsOk = $false
     
     if ($NoPrompt) {
-        # In no-prompt mode, restart immediately after 2 seconds
         Write-Host "Auto-restarting in 2 seconds..." -ForegroundColor Cyan
         Start-Sleep -Seconds 2
         continue

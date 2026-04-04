@@ -58,7 +58,7 @@ function getFallbackDefaults() {
   return {
     canvasWidth: 1920,
     canvasHeight: 1080,
-    groundY: 920,
+    groundY: 1080,
     gravity: 0.6,
     airResistance: 0.992,
     groundFriction: 0.92,
@@ -163,7 +163,6 @@ const overlayFieldMap = {
   // Canvas
   canvasWidth: 'canvasWidth',
   canvasHeight: 'canvasHeight',
-  groundY: 'groundY',
   
   // Physics
   gravity: 'gravity',

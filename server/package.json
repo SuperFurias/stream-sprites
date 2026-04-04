@@ -1,6 +1,6 @@
 {
   "name": "streamsprites-enhanced-server",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,10 +11,9 @@
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
     "tmi.js": "^1.9.0-pre.1",
     "ws": "^8.18.0",
-    "cloudflared": "^0.6.1"
+    "cloudflared": "^0.7.1"
   },
   "devDependencies": {
     "patch-package": "^8.0.1",
