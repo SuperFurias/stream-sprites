@@ -54,7 +54,7 @@ export function getConfigConstants(cfg, overlay) {
   const overlayConfig = { ...serverDefaults, ...overlay };
   
   return {
-    USE_SERVER: !!cfg.useServer,
+    USE_SERVER: true,
     WS_URL: getWebSocketUrl(cfg),
     CHANNEL: cfg.channel || '--',
     BOT_USERNAME: cfg.botUsername,

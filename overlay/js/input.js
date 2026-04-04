@@ -1,5 +1,5 @@
 // Input handling module for mouse drag — tracks velocity for throw-on-release
-// When serverW/serverH are provided, mouse coords are mapped to server coordinate space
+// Mouse coords are mapped to server coordinate space
 export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onDragEnd, serverW, serverH) {
   let isDragging = false;
   let draggedSprite = null;

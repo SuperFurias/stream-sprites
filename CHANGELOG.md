@@ -5,25 +5,21 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.4] - 2026-04-04
+## [2.0.5] - 2026-04-04
 
-### Fixed
-- **`!boom` explosion position**: Server now broadcasts the `y` coordinate with boom commands so all overlays render the explosion at the exact `groundY`. Previously the client calculated its own Y value which could differ from the server's.
-- **Dashboard groundY fallback**: Corrected from `920` to `1080` to match server default. Removed `groundY` from settings overlay field map so it's not duplicated.
-- **Jump velocity**: Now uses `physics.JUMP_VELOCITY` constant instead of hardcoded `-16`.
-- **Server restart**: Now performs graceful shutdown — closes database, cleans up WebSocket and Twitch connections before terminating.
-- **Chat message sanitization**: IRC control characters and newlines are now stripped from messages sent via the dashboard chat endpoint.
-- **Cloudflare tunnel stop (Windows)**: Uses async `exec` instead of `execSync` for `taskkill`, preventing blocking.
-- **OAuth redirect with tunnels**: Redirect URL now uses the actual request host and `x-forwarded-proto` header so OAuth works through Cloudflare tunnels.
-- **Broadcast method name**: Fixed `broadcastSpriteState` → `broadcastPhysicsState` in twitch.js.
+### Removed
+- **Client-side physics engine**: Deleted `overlay/js/physics.js` — physics is now exclusively server-authoritative.
+- **Client-side command handlers**: Deleted `overlay/js/commands.js` — all commands are processed server-side.
+- **TMI.js fallback**: Removed `setupTmiFallback` from `connection.js` — overlay no longer connects directly to Twitch.
+- **Dual-mode code paths**: Removed all `USE_SERVER`/`useServer` conditionals, local mode spawning, local cooldowns, and client-side fight collision detection.
 
 ### Changed
-- **`start.ps1` dependency management**: Added `Install-Dependencies` function with smart detection (skips install if node_modules is up-to-date). Added `SkipDeps` and `AuditFix` parameters.
-- **`start.ps1` port conflict check**: Extracted into `Test-PortConflict` function with detailed process info and automatic kill.
-- **Removed `jsonwebtoken` dependency**: No longer used, removed from package.json.
-- **Updated `cloudflared`**: Bumped from `0.6.1` to `0.7.1`.
-- **Stats cache invalidation**: Added `invalidateStatsCache()` called on user assignment/reset operations to keep stats accurate.
-- **CSRF token management**: Added infrastructure for CSRF token generation and validation.
+- **Overlay client rewritten**: `overlay_client.js` reduced from 698 to 363 lines — now only connects to server via WebSocket, receives physics state, interpolates, and renders.
+- **Canvas module simplified**: Removed `USE_SERVER` parameter from `canvas.js` — always uses server coordinate mode.
+- **Config always server mode**: `USE_SERVER` in `config.js` now always returns `true`.
+
+### Fixed
+- **`start.ps1` npm install failure**: Fixed `%1 is not a valid Win32 application` error by using `cmd.exe /c npm install` instead of `Start-Process -FilePath "npm"`.
 
 ## [2.0.4] - 2026-04-04
 

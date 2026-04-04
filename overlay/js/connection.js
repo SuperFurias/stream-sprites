@@ -1,4 +1,4 @@
-// Connection handling module (WebSocket and tmi.js fallback)
+// Connection handling module (WebSocket only)
 function dbg(...args) {
   console.log('[CONNECTION]', ...args);
 }
@@ -95,41 +95,6 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
   });
 
   return connection;
-}
-
-export function setupTmiFallback(cfg, onMessage) {
-  dbg('Setting up TMI fallback');
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/tmi.js@1.8.5/dist/tmi.min.js';
-  script.crossOrigin = 'anonymous';
-  script.onload = () => {
-    dbg('TMI script loaded, connecting...');
-    const opts = {
-      options: { debug: false, tags: true },
-      connection: { reconnect: true, secure: true },
-      channels: [cfg.channel]
-    };
-    if (cfg.oauth && cfg.botUsername) {
-      opts.identity = { username: cfg.botUsername, password: cfg.oauth };
-    }
-    const client = new tmi.Client(opts);
-    client.on('message', (channel, tags, message, self) => {
-      if (self) return;
-      const name = tags['display-name'] || tags['username'];
-      onMessage(name, message, tags, 'chat');
-    });
-    client.on('connected', (addr) => {
-      dbg('TMI connected to:', addr);
-    });
-    client.on('disconnected', () => {
-      dbg('TMI disconnected');
-    });
-    client.on('error', (err) => {
-      dbg('TMI error:', err);
-    });
-    client.connect().catch(e => dbg('TMI connection error:', e));
-  };
-  document.head.appendChild(script);
 }
 
 // Command dispatch map (replaces if-else chain)

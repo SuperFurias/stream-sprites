@@ -149,7 +149,7 @@ function Install-Dependencies {
     }
     
     Write-Host "Installing dependencies..." -ForegroundColor Cyan
-    $npmProcess = Start-Process -FilePath "npm" -ArgumentList "install" -Wait -PassThru -NoNewWindow
+    $npmProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm install" -Wait -PassThru -NoNewWindow
     
     if ($npmProcess.ExitCode -ne 0) {
         Write-Host "npm install failed with exit code $($npmProcess.ExitCode)" -ForegroundColor Red
@@ -162,7 +162,7 @@ function Install-Dependencies {
     # Optional: run audit fix
     if ($AuditFix) {
         Write-Host "Running npm audit fix..." -ForegroundColor Cyan
-        $auditProcess = Start-Process -FilePath "npm" -ArgumentList "audit", "fix", "--force" -Wait -PassThru -NoNewWindow
+        $auditProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm audit fix --force" -Wait -PassThru -NoNewWindow
         if ($auditProcess.ExitCode -eq 0) {
             Write-Host "Vulnerabilities patched." -ForegroundColor Green
         } else {
