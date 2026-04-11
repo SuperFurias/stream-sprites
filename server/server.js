@@ -168,10 +168,13 @@ async function shutdown(signal) {
       dbg('Error disconnecting Twitch client:', e.message);
     }
   }
-  db.close(() => {
+  try {
+    db.close();
     dbg('Database closed');
-    process.exit(0);
-  });
+  } catch (e) {
+    dbg('Error closing database:', e.message);
+  }
+  process.exit(0);
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));

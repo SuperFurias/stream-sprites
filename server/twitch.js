@@ -1,6 +1,7 @@
 const tmi = require('tmi.js');
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 const { FilteredLogger } = require('./lib/logger');
 const { hasModPermission } = require('./lib/util');
 const { getUserSkinFromDB } = require('./db');
@@ -30,7 +31,6 @@ function detectSkinsFromAssets() {
     return skinsCache;
   }
 
-  const path = require('path');
   const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
   const detected = [];
   try {
@@ -67,7 +67,6 @@ function detectSkinsFromAssets() {
 // Watch skins directory for changes
 function watchSkinsDir() {
   try {
-    const path = require('path');
     const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
     if (fs.existsSync(skinsDir)) {
       fs.watch(skinsDir, { persistent: false }, (eventType) => {

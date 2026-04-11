@@ -3,8 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
-const { exec } = require('child_process');
-const { isValidUsername, isValidSkinId, validateRequired, rateLimiter, rateLimitMap, RATE_LIMIT_WINDOW_MS } = require('./lib/util');
+const { isValidUsername, isValidSkinId, rateLimiter } = require('./lib/util');
 const twitch = require('./twitch');
 const ws = require('./websocket');
 const { DEFAULT_OVERLAY } = require('./config');
@@ -20,25 +19,6 @@ const STATS_CACHE_TTL_MS = 3000;
 function invalidateStatsCache() {
   statsCache = null;
   statsCacheTime = 0;
-}
-
-function refreshStatsCache() {
-  try {
-    const row = _db.prepare(`SELECT
-      COUNT(*) as total,
-      SUM(CASE WHEN assigned_skin != 'default' AND assigned_skin IS NOT NULL THEN 1 ELSE 0 END) as custom
-      FROM users`).get();
-    const result = row || { total: 0, custom: 0 };
-    statsCache = {
-      total_users: result.total || 0,
-      custom_skins: result.custom || 0,
-      default_skins: (result.total || 0) - (result.custom || 0)
-    };
-    statsCacheTime = Date.now();
-  } catch (err) {
-    _dbg('Error refreshing stats cache:', err.message);
-  }
-  return statsCache;
 }
 
 function refreshStatsCache() {
@@ -99,7 +79,6 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
   app.use('/api/', rateLimiter);
 
   // ── Dashboard auth (remote access only) ──────────────────────────────────
-  const crypto = require('crypto');
   const activeSessions = new Map(); // token -> { expires }
   const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
   const SESSION_CLEANUP_MS = 60 * 60 * 1000; // clean up every hour
@@ -186,7 +165,6 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     // Save password to config
     _cfg.dashboardPassword = input;
     try {
-      const fs = require('fs');
       const current = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
       current.dashboardPassword = input;
       fs.writeFileSync(_cfgPath, JSON.stringify(current, null, 2));
@@ -241,8 +219,8 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
       if (fs.existsSync(_cfgPath)) {
         const fileCfg = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
         Object.assign(_cfg, fileCfg);
-      ws.invalidateOverlayConfigCache();
-      envCache = null; // Invalidate /env cache
+        ws.invalidateOverlayConfigCache();
+        envCache = null; // Invalidate /env cache
       }
     } catch (e) {
       _dbg('Failed to reload config from disk:', e.message);

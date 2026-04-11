@@ -5,6 +5,16 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2026-04-11
+
+### Fixed
+- **Duplicate `refreshStatsCache` in `routes.js`**: Removed the second identical function definition (dead code).
+- **Graceful shutdown database close**: `better-sqlite3` closes synchronously; `server.js` now calls `db.close()` correctly and exits afterward instead of passing a callback that was never invoked.
+
+### Changed
+- **`routes.js` maintenance**: Dropped unused imports (`validateRequired`, `rateLimitMap`, `RATE_LIMIT_WINDOW_MS`, unused top-level `exec`); removed redundant inner `require('crypto')` and `require('fs')`; corrected `/env` handler indentation for overlay config invalidation.
+- **`twitch.js`**: Use a single top-level `path` require for skin directory scanning instead of requiring `path` inside functions.
+
 ## [2.0.5] - 2026-04-04
 
 ### Removed
