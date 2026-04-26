@@ -5,6 +5,12 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.10] - 2026-04-26
+
+### Changed
+- **Overlay Preview non-selectable**: Added `user-select: none` to the overlay preview section to prevent accidental text selection on misclick.
+- **Hide Deploy tab on remote access**: The Deploy tab is now hidden when accessing the dashboard from a non-localhost address (e.g. Render.com, tunnel URLs).
+
 ## [2.0.9] - 2026-04-26
 
 ### Fixed

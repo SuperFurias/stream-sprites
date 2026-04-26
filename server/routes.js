@@ -239,16 +239,19 @@ app.use((req, res, next) => {
       dashboardPassword: _cfg.dashboardPassword ? '***' : ''
     };
 
-    const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
-    if (safeCfg.twitch) {
-      safeCfg.hasOAuthToken = !!(_cfg.twitch?.botOAuthToken && _cfg.twitch.botOAuthToken.trim() !== '');
-      safeCfg.twitch.botOAuthToken = undefined;
-      safeCfg.twitch.refreshToken = undefined;
-    }
+const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
+  if (safeCfg.twitch) {
+    safeCfg.hasOAuthToken = !!(_cfg.twitch?.botOAuthToken && _cfg.twitch.botOAuthToken.trim() !== '');
+    safeCfg.twitch.botOAuthToken = undefined;
+    safeCfg.twitch.refreshToken = undefined;
+  }
 
-    envCache = safeCfg;
-    envCacheTime = now;
-    res.json(safeCfg);
+  // Expose localhost status to dashboard
+  safeCfg.isLocalhost = isLocalhost(req);
+
+  envCache = safeCfg;
+  envCacheTime = now;
+  res.json(safeCfg);
   });
 
   // User endpoints

@@ -213,13 +213,28 @@
       });
     }
 
-    // Load initial tab on page load
-    (async ()=>{
-      console.log('Page loaded, starting initial tab load...');
-      await switchTab('dashboard');
-      console.log('Dashboard tab loaded, refreshing stats...');
-      await refreshStatsHTTP();
-    })();
+// Load initial tab on page load
+(async ()=>{
+  console.log('Page loaded, starting initial tab load...');
+
+  // Check if localhost and hide Deploy tab if not
+  try {
+    const res = await fetch('/env');
+    if (res.ok) {
+      const cfg = await res.json();
+      if (!cfg.isLocalhost) {
+        const deployTab = document.querySelector('.tab[data-tab="deploy"]');
+        if (deployTab) deployTab.style.display = 'none';
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to check localhost status:', e);
+  }
+
+  await switchTab('dashboard');
+  console.log('Dashboard tab loaded, refreshing stats...');
+  await refreshStatsHTTP();
+})();
 
     // Auto-refresh stats: prefer WebSocket, fall back to HTTP polling
     let statsWs = null;

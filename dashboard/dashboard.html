@@ -10,15 +10,26 @@
     min-width: 0;
   }
 
-  .overlay-iframe {
-    width: 100%;
-    max-width: var(--preview-w);
-    aspect-ratio: var(--preview-ratio);
-    border: 2px solid #4a5568;
-    border-radius: 8px;
-    background-color: #1a202c;
-    flex-shrink: 0;
-  }
+.overlay-iframe {
+  width: 100%;
+  max-width: var(--preview-w);
+  aspect-ratio: var(--preview-ratio);
+  border: 2px solid #4a5568;
+  border-radius: 8px;
+  background-color: #1a202c;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.preview-section, .preview-left, .preview-controls {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
 
   .preview-controls {
     display: flex;
