@@ -133,12 +133,17 @@ function initRoutes(app, cfg, cfgPath, db, dbg) {
     return session && session.expires > Date.now();
   }
 
-  // Auth middleware: protect dashboard and dashboard API for remote access
-  app.use((req, res, next) => {
-    if (isLocalhost(req)) return next(); // localhost always allowed
-    // Public paths: overlay, env, skins, static assets needed by overlay
-    const publicPaths = ['/overlay', '/env', '/favicon.ico'];
-    if (publicPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) return next();
+// Explicit favicon route (before auth to avoid any issues)
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'favicon.ico'));
+});
+
+// Auth middleware: protect dashboard and dashboard API for remote access
+app.use((req, res, next) => {
+  if (isLocalhost(req)) return next(); // localhost always allowed
+  // Public paths: overlay, env, skins, static assets needed by overlay
+  const publicPaths = ['/overlay', '/env'];
+  if (publicPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) return next();
     if (req.path === '/api/skins' || req.path === '/api/skins/auto') return next();
     // Auth check for everything else (dashboard, dashboard API, assets)
     if (isAuthenticated(req)) return next();

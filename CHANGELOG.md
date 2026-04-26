@@ -5,6 +5,11 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] - 2026-04-26
+
+### Fixed
+- **Favicon on Render.com**: Added explicit `/favicon.ico` route before auth middleware to ensure the favicon loads correctly on remote deployments (Render.com, etc.).
+
 ## [2.0.8] - 2026-04-26
 
 ### Added
