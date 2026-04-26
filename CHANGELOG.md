@@ -5,6 +5,14 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] - 2026-04-26
+
+### Added
+- **`start.sh` for Linux/macOS**: Bash equivalent of `start.ps1` with full feature parity — CLI flags (`--no-prompt`, `--skip-deps`, `--audit-fix`), Node.js installation check (apt/dnf/brew), dependency staleness detection (package.json vs node_modules timestamp, missing lock file), port conflict detection and kill (ss/lsof), auto-restart loop with keypress timeout, and `npm audit fix` support.
+
+### Fixed
+- **`.env` port parsing**: The bash version correctly reads `.env` as `KEY=VALUE` lines instead of incorrectly parsing it as JSON (the PowerShell script had this bug).
+
 ## [2.0.6] - 2026-04-11
 
 ### Fixed
