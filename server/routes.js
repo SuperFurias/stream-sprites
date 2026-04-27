@@ -201,7 +201,7 @@ app.use((req, res, next) => {
 
   // Serve dashboard at root
   app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'dashboard', 'index.html'));
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
   });
 
   // Skin endpoints

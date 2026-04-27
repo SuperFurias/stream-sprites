@@ -5,6 +5,14 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-27
+
+### Changed
+- **Dashboard entry point moved**: The dashboard route (`/`) now serves `index.html` from the project root instead of `dashboard/index.html`, consolidating the entry point for static hosting and the authenticated dashboard route.
+
+### Added
+- **Repository layout documentation**: Added a "Repository layout" section to README explaining the project structure and entry points.
+
 ## [2.0.10] - 2026-04-26
 
 ### Changed
