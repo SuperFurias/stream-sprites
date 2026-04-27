@@ -6,7 +6,10 @@
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <title>Stream Sprites — Admin Dashboard</title>
 <style>
-  body{font-family:system-ui,Arial;background:#111;color:#fff;padding:20px;max-width:1400px;margin:0 auto}
+  body{font-family:system-ui,Arial;font-size:14px;background:#111;color:#fff;padding:20px;max-width:1400px;margin:0 auto}
+  h2{font-size:20px;margin-top:0;margin-bottom:12px}
+  p{font-size:14px;line-height:1.5}
+  small{font-size:12px;color:#a0aec0}
   .panel{background:#222;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
   input,button,select{padding:10px 14px;margin:4px;background:#333;color:#fff;border:1px solid #555;border-radius:6px;font-size:14px;box-sizing:border-box}
   input::placeholder{color:#888}
@@ -135,10 +138,11 @@
   <div class="tabs">
     <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
     <div class="tab" data-tab="users" onclick="switchTab('users')">👥 Users</div>
-    <div class="tab" data-tab="skins" onclick="switchTab('skins')">🎨 Skins</div>
-    <div class="tab" data-tab="config" onclick="switchTab('config')">🔑 Configuration</div>
-    <div class="tab" data-tab="deploy" onclick="switchTab('deploy')">🚀 Deploy</div>
-    <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Settings</div>
+    <div class="tab" data-tab="assets" onclick="switchTab('assets')">🎨 Assets</div>
+  <div class="tab" data-tab="config" onclick="switchTab('config')">🟣 Twitch</div>
+  <div class="tab" data-tab="deploy" onclick="switchTab('deploy')">🚀 Deploy</div>
+  <div class="tab" data-tab="storage" onclick="switchTab('storage')">🗄️ Database</div>
+  <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Configuration</div>
     <div class="tab" data-tab="help" onclick="switchTab('help')">📝 Help</div>
   </div>
 
@@ -250,7 +254,7 @@
 
     function startStatsPolling() {
       if (statsPollInterval) return;
-      statsPollInterval = setInterval(refreshStatsHTTP, 10000); // Fallback: poll every 10s
+      statsPollInterval = setInterval(refreshStatsHTTP, 30000); // Fallback: poll every 30s
     }
 
     function stopStatsPolling() {
@@ -289,9 +293,10 @@
             }
           } catch (e) { /* ignore non-JSON messages */ }
         };
-        statsWs.onopen = () => {
-          refreshStatsHTTP(); // Get initial stats immediately
-        };
+    statsWs.onopen = () => {
+      statsWs.send(JSON.stringify({ type: 'identify', clientType: 'dashboard' }));
+      refreshStatsHTTP(); // Get initial stats immediately
+    };
         statsWs.onclose = () => {
           startStatsPolling(); // WebSocket closed, fall back to polling
           // Try to reconnect after 5s
@@ -305,9 +310,8 @@
       }
     }
 
-    // Initialize: try WebSocket first, start polling as fallback
-    connectStatsWebSocket();
-    startStatsPolling(); // Start polling immediately; stops when WS connects
+// Initialize: try WebSocket first, only start polling if WS fails
+connectStatsWebSocket();
 
     // Announce dashboard presence to prevent duplicate browser opens
     let pingInterval;
@@ -319,14 +323,15 @@
         if(data.stopPinging){
           console.log('Dashboard already detected by server, stopping presence pings');
           clearInterval(pingInterval);
+          pingInterval = null;
         }
       }catch(e){
         // Silently fail - not critical
       }
     }
 
-    // Ping every 100ms until server detects us, then stop
-    pingInterval = setInterval(announceDashboard, 100);
+    // Ping every 2s until server detects us, then stop (reduced from 100ms to save bandwidth)
+    pingInterval = setInterval(announceDashboard, 2000);
     // Initial ping
     announceDashboard();
 

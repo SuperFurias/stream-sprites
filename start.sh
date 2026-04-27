@@ -31,6 +31,7 @@ done
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$PROJECT_ROOT/server"
 ENV_FILE="$SERVER_DIR/.env"
+PACKAGE_JSON="$PROJECT_ROOT/package.json"
 
 cd "$PROJECT_ROOT"
 
@@ -123,11 +124,11 @@ fi
 
 # ── Dependency management function ─────────────────────────────────────────
 install_dependencies() {
-    cd "$SERVER_DIR"
+    cd "$PROJECT_ROOT"
 
-    local package_json="$SERVER_DIR/package.json"
-    local lock_file="$SERVER_DIR/package-lock.json"
-    local node_modules="$SERVER_DIR/node_modules"
+    local package_json="$PACKAGE_JSON"
+    local lock_file="$PROJECT_ROOT/package-lock.json"
+    local node_modules="$PROJECT_ROOT/node_modules"
 
     local needs_install=false
 
@@ -152,7 +153,7 @@ install_dependencies() {
     log_cyan "Installing dependencies..."
     if ! npm install; then
         log_red "npm install failed"
-        log_yellow "Check server/package.json for invalid version ranges."
+        log_yellow "Check package.json for invalid version ranges."
         return 1
     fi
 
@@ -294,10 +295,10 @@ while true; do
     fi
 
     # Start server
-    cd "$SERVER_DIR"
+    cd "$PROJECT_ROOT"
     log_green "Starting server on port $SERVER_PORT..."
     export PORT="$SERVER_PORT"
-    npm start || true
+    node server/server.js || true
 
     # Reset deps check on restart so we re-evaluate
     DEPS_OK=false

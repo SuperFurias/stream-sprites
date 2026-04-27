@@ -118,9 +118,9 @@ if ($nodeJustInstalled) {
 function Install-Dependencies {
     Set-Location (Join-Path $projectRoot "server")
     
-    $packageJson = Join-Path $projectRoot "server\package.json"
-    $lockFile = Join-Path $projectRoot "server\package-lock.json"
-    $nodeModules = Join-Path $projectRoot "server\node_modules"
+    $packageJson = Join-Path $projectRoot "package.json"
+    $lockFile = Join-Path $projectRoot "package-lock.json"
+    $nodeModules = Join-Path $projectRoot "node_modules"
     
     $needsInstall = $false
     
@@ -265,9 +265,9 @@ while ($true) {
     }
 
     # Start server
-    Set-Location (Join-Path $projectRoot "server")
+    Set-Location $projectRoot
     Write-Host "Starting server on port $serverPort..." -ForegroundColor Green
-    npm start
+    node server/server.js
     
     # Reset deps check on restart so we re-evaluate
     $depsOk = $false

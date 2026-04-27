@@ -1,42 +1,27 @@
-const path = require('path');
-const fs = require('fs');
-const Database = require('better-sqlite3');
+const storage = require('./storage');
 
-let db = null;
+// Backward-compatible wrapper — delegates to the active storage driver
 
-function initDb(serverDir) {
-  const dbDir = path.join(serverDir, 'db');
-  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  const dbFile = path.join(dbDir, 'sa.db');
-  db = new Database(dbFile);
-  db.pragma('journal_mode = WAL');
-  console.log('✓ Database connected');
-
-  db.exec(`CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    display_name TEXT,
-    assigned_skin TEXT DEFAULT 'default'
-  )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS excluded_users (
-    id TEXT PRIMARY KEY,
-    reason TEXT
-  )`);
-
-  return db;
+async function initDb(serverDir) {
+  const driver = await storage.initStorage(serverDir);
+  return driver;
 }
 
 function getDb() {
-  return db;
+  return storage.getDriver();
 }
 
-// Get user's assigned skin from database
 function getUserSkinFromDB(userId) {
-  try {
-    const row = db.prepare('SELECT assigned_skin FROM users WHERE id = ?').get(userId.toLowerCase());
-    return row ? row.assigned_skin : 'default';
-  } catch (e) {
+  const driver = storage.getDriver();
+  if (!driver) return 'default';
+  // Both drivers support getUserSkin synchronously (SQLite) or return promise (Postgres)
+  const result = driver.getUserSkin(userId);
+  if (result && typeof result.then === 'function') {
+    // Async (Postgres) — return default for sync callers, actual value resolved elsewhere
+    result.catch(() => {});
     return 'default';
   }
+  return result;
 }
 
 module.exports = {

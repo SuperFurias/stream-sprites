@@ -4,12 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const { FilteredLogger } = require('./lib/logger');
 const { hasModPermission } = require('./lib/util');
-const { getUserSkinFromDB } = require('./db');
+const storage = require('./storage');
 const ws = require('./websocket');
 const physics = require('./physics');
 
 // Shared state
-let _cfg, _cfgPath, _dbg, _db;
+let _cfg, _cfgPath, _dbg, _driver;
 let twitchClient = null;
 let botTokenInfo = null;
 let reconnectTimeout = null;
@@ -39,7 +39,7 @@ function detectSkinsFromAssets() {
       const files = fs.readdirSync(skinsDir);
       files.forEach(file => {
         const ext = path.extname(file).toLowerCase();
-        if (['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm'].includes(ext)) {
+        if (['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'].includes(ext)) {
           const id = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_]/g, '_');
           const isGif = ['.gif'].includes(ext);
           const isWebm = ['.webm'].includes(ext);
@@ -161,7 +161,7 @@ function handleSkin(username, userId, args, tags, now, ctx) {
   const validSkin = allSkins.find(s => s.id === args[0]);
   if (!validSkin) return `Invalid skin: ${args[0]}`;
   try {
-    _db.prepare('UPDATE users SET assigned_skin = ? WHERE id = ?').run(args[0], userId);
+    _driver.assignSkin(userId, args[0]);
     if (ws.serverSprites.has(userId)) {
       const sprite = ws.serverSprites.get(userId);
       sprite.skin = args[0];
@@ -349,8 +349,8 @@ async function tryAutoRefreshToken() {
 
     _cfg.twitch.refreshToken = refresh_token;
     try {
-      fs.writeFileSync(_cfgPath, JSON.stringify(_cfg, null, 2));
-      _dbg('Refresh token updated in .env');
+      await _driver.saveConfig(_cfgPath, _cfg);
+      _dbg('Refresh token updated');
     } catch (e) {
       _dbg('Failed to save refreshed token to config:', e.message);
     }
@@ -361,7 +361,7 @@ async function tryAutoRefreshToken() {
     _dbg('Auto-refresh failed:', e.message);
     _cfg.twitch.refreshToken = '';
     try {
-      fs.writeFileSync(_cfgPath, JSON.stringify(_cfg, null, 2));
+      await _driver.saveConfig(_cfgPath, _cfg);
     } catch (writeErr) {
       _dbg('Failed to clear invalid refresh token:', writeErr.message);
     }
@@ -414,17 +414,13 @@ async function connectTwitchBot() {
     _dbg('Twitch message from:', username, ':', message);
 
     try {
-      const excluded = _db.prepare('SELECT id FROM excluded_users WHERE id = ?').get(username.toLowerCase());
+      const excluded = await _driver.getExcluded(username);
       if (excluded) {
         _dbg(`Excluded user ${username} ignored`);
         return;
       }
 
-      const stmt = _db.prepare(`
-        INSERT OR REPLACE INTO users (id, display_name, assigned_skin)
-        VALUES (?, ?, COALESCE((SELECT assigned_skin FROM users WHERE id = ?), 'default'))
-      `);
-      stmt.run(username.toLowerCase(), displayName, username.toLowerCase());
+      await _driver.upsertUser(username.toLowerCase(), displayName);
 
       ws.updateServerSprite(username, tags);
 
@@ -516,8 +512,8 @@ async function connectTwitchBot() {
 
         _cfg.twitch.refreshToken = refresh_token;
         try {
-          fs.writeFileSync(_cfgPath, JSON.stringify(_cfg, null, 2));
-          _dbg('Refresh token updated in .env');
+          await _driver.saveConfig(_cfgPath, _cfg);
+          _dbg('Refresh token updated');
         } catch (e) {
           _dbg('Failed to save refresh token:', e.message);
         }
@@ -624,11 +620,11 @@ function cleanup() {
   }
 }
 
-function initTwitch(cfg, cfgPath, dbg, db) {
+function initTwitch(cfg, cfgPath, dbg, driver) {
   _cfg = cfg;
   _cfgPath = cfgPath;
   _dbg = dbg;
-  _db = db;
+  _driver = driver;
   watchSkinsDir();
 }
 

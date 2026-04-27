@@ -238,7 +238,7 @@ const overlayFieldMap = {
   particleHueBase: 'particleHueBase',
   particleHueRange: 'particleHueRange',
   
-  // Other
+  // Movement & Animation
   nameLengthLimit: 'nameLengthLimit',
   velocityBump: 'velocityBump',
   draggedGravity: 'draggedGravity',
@@ -330,8 +330,6 @@ async function loadSettings() {
       }
     }
     
-    updateCurrentSettingsDisplay(config);
-    
     if(el('settingsStatus')) el('settingsStatus').textContent = '';
     if(el('settingsSuccess')) el('settingsSuccess').textContent = '';
   } catch (err) {
@@ -388,7 +386,6 @@ async function saveSettings() {
     }
     
     showSuccess('settingsSuccess', 'Settings saved successfully! Server will reload config.');
-    updateCurrentSettingsDisplay(updatedConfig);
     
     // Apply debug settings dynamically
     applySettings(debugSettings);
@@ -430,11 +427,6 @@ function resetSettings() {
   
   if(el('settingsStatus')) el('settingsStatus').textContent = '';
   if(el('settingsSuccess')) el('settingsSuccess').textContent = '';
-}
-
-function updateCurrentSettingsDisplay(settings) {
-  const display = document.getElementById('currentSettings');
-  if(display) display.textContent = JSON.stringify(settings, null, 2);
 }
 
 function applySettings(settings) {

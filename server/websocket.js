@@ -77,7 +77,7 @@ function broadcast(obj) {
   _wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// Broadcast full physics state to all clients (~20Hz)
+// Broadcast full physics state to all clients
 function broadcastPhysicsState() {
   const sprites = [];
   for (const sprite of serverSprites.values()) {

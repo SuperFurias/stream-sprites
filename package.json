@@ -1,6 +1,6 @@
 {
-  "name": "stream-sprites-fullstack",
-  "version": "2.0.10",
+  "name": "stream-sprites",
+  "version": "2.2.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,6 +11,8 @@
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.13.1",
     "tmi.js": "^1.9.0-pre.1",
     "ws": "^8.18.0",
     "cloudflared": "^0.7.1"

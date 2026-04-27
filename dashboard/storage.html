@@ -1,0 +1,46 @@
+<div class="panel">
+  <h2 style="margin-top:0">🗄️ Database</h2>
+  <p>Choose where your data is stored. SQLite is local and zero-config. PostgreSQL-compatible databases enable cloud hosting and better scalability.</p>
+
+  <div id="storageStatus" class="stat-card" style="margin-bottom:16px;border-left-color:#9146FF">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="color:#888;font-size:12px;text-transform:uppercase">Current Backend</div>
+        <div style="font-size:20px;font-weight:700" id="currentBackend">Loading...</div>
+      </div>
+      <div id="backendBadge" class="badge" style="background:#9146FF">--</div>
+    </div>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-group" style="grid-column:1/-1">
+      <label for="dbType">Database Type</label>
+      <select id="dbType" onchange="onDbTypeChange()" style="max-width:300px">
+        <option value="sqlite">SQLite (Local)</option>
+        <option value="postgres">PostgreSQL</option>
+        <option value="supabase">Supabase</option>
+        <option value="neon">Neon</option>
+        <option value="mysql">MySQL</option>
+        <option value="mongodb">MongoDB</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="grid-column:1/-1" id="connStrGroup">
+      <label id="connStrLabel">Connection String</label>
+      <div class="password-wrapper">
+        <input type="password" id="pgConnectionString" placeholder="" style="width:100%;font-family:monospace">
+        <button type="button" class="password-toggle" onclick="toggleStoragePassword('pgConnectionString', this)">&#128065;</button>
+      </div>
+      <div id="connStrExample" style="font-size:12px;color:#888;margin-top:4px"></div>
+    </div>
+  </div>
+
+  <div class="button-group">
+    <button onclick="testPgConnection()" id="testBtn">Test Connection</button>
+    <button class="primary" onclick="switchDatabase()" id="switchBtn">Switch Database</button>
+    <button class="danger" onclick="migrateToPostgres()" id="migrateBtn">Migrate Data</button>
+  </div>
+
+  <div id="connectionResult" class="hidden" style="margin-top:12px;padding:12px;border-radius:6px"></div>
+</div>
+

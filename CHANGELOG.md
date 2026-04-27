@@ -5,6 +5,24 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-27
+
+### Added
+- **Storage Management**: New dashboard "Storage" tab for managing database backends. Supports SQLite (default), PostgreSQL, Supabase, Neon, MySQL, and MongoDB with connection testing and migration tools.
+- **Assets Management**: New dashboard "Assets" tab for managing skin files and other assets. Upload files to organized folders, browse existing assets with previews.
+- **Storage Abstraction Layer**: New `server/storage/` module with pluggable database drivers. SQLite driver uses `better-sqlite3`, PostgreSQL driver uses `pg` with compatibility layer.
+- **Database Migration**: API endpoints for migrating data between storage backends (e.g., SQLite → PostgreSQL).
+
+### Changed
+- **Consolidated package.json**: Removed `server/package.json` and `server/package-lock.json` — all dependencies now managed in root `package.json`.
+- **Dashboard headings**: Updated section headings in dashboard for better clarity ("Quick Actions", "Overlay Preview").
+- **Routes refactored**: All database operations in `routes.js` now use the storage driver abstraction (`_driver`) instead of direct SQLite calls.
+
+### Removed
+- **server/package.json**: Deleted in favor of root-level dependency management.
+- **server/package-lock.json**: Deleted as dependencies are now managed at root level.
+- **Skins tab**: Replaced by the new Assets tab.
+
 ## [2.1.0] - 2026-04-27
 
 ### Changed

@@ -7,9 +7,10 @@ const { isValidUsername, isValidSkinId, rateLimiter } = require('./lib/util');
 const twitch = require('./twitch');
 const ws = require('./websocket');
 const { DEFAULT_OVERLAY } = require('./config');
+const storage = require('./storage');
 
 // Shared state (set by initRoutes)
-let _cfg, _cfgPath, _db, _dbg, _app;
+let _cfg, _cfgPath, _driver, _dbg, _app;
 
 // Stats cache
 let statsCache = null;
@@ -21,18 +22,10 @@ function invalidateStatsCache() {
   statsCacheTime = 0;
 }
 
-function refreshStatsCache() {
+async function refreshStatsCache() {
   try {
-    const row = _db.prepare(`SELECT
-      COUNT(*) as total,
-      SUM(CASE WHEN assigned_skin != 'default' AND assigned_skin IS NOT NULL THEN 1 ELSE 0 END) as custom
-      FROM users`).get();
-    const result = row || { total: 0, custom: 0 };
-    statsCache = {
-      total_users: result.total || 0,
-      custom_skins: result.custom || 0,
-      default_skins: (result.total || 0) - (result.custom || 0)
-    };
+    const stats = await _driver.getStats();
+    statsCache = stats;
     statsCacheTime = Date.now();
   } catch (err) {
     _dbg('Error refreshing stats cache:', err.message);
@@ -40,8 +33,8 @@ function refreshStatsCache() {
   return statsCache;
 }
 
-function broadcastStats() {
-  const stats = refreshStatsCache();
+async function broadcastStats() {
+  const stats = await refreshStatsCache();
   if (stats) {
     const msg = JSON.stringify({ type: 'stats', data: stats });
     const wss = ws.getWss();
@@ -68,11 +61,11 @@ function setDashboardConfirmedOpen(v) {
   dashboardConfirmedOpen = v;
 }
 
-function initRoutes(app, cfg, cfgPath, db, dbg) {
+function initRoutes(app, cfg, cfgPath, driver, dbg) {
   _app = app;
   _cfg = cfg;
   _cfgPath = cfgPath;
-  _db = db;
+  _driver = driver;
   _dbg = dbg;
 
   // Rate limiter
@@ -159,7 +152,7 @@ app.use((req, res, next) => {
   });
 
   // Setup endpoint (first-time password creation)
-  app.post('/api/dashboard/setup', (req, res) => {
+  app.post('/api/dashboard/setup', async (req, res) => {
     if (_cfg.dashboardPassword && _cfg.dashboardPassword.trim() !== '') {
       return res.status(403).json({ error: 'Password already configured' });
     }
@@ -170,9 +163,9 @@ app.use((req, res, next) => {
     // Save password to config
     _cfg.dashboardPassword = input;
     try {
-      const current = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
+      const current = await _driver.loadConfig(_cfgPath) || {};
       current.dashboardPassword = input;
-      fs.writeFileSync(_cfgPath, JSON.stringify(current, null, 2));
+      await _driver.saveConfig(_cfgPath, current);
     } catch (e) {
       return res.status(500).json({ error: 'Failed to save password' });
     }
@@ -214,21 +207,21 @@ app.use((req, res, next) => {
   });
 
   // Config endpoint
-  app.get('/env', (req, res) => {
+  app.get('/env', async (req, res) => {
     const now = Date.now();
     if (envCache && (now - envCacheTime) < ENV_CACHE_TTL_MS) {
       return res.json(envCache);
     }
 
     try {
-      if (fs.existsSync(_cfgPath)) {
-        const fileCfg = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
+      const fileCfg = await _driver.loadConfig(_cfgPath);
+      if (fileCfg) {
         Object.assign(_cfg, fileCfg);
         ws.invalidateOverlayConfigCache();
-        envCache = null; // Invalidate /env cache
+        envCache = null;
       }
     } catch (e) {
-      _dbg('Failed to reload config from disk:', e.message);
+      _dbg('Failed to reload config:', e.message);
     }
 
     const overlayConfig = { ...DEFAULT_OVERLAY, ...(_cfg.overlay || {}) };
@@ -255,10 +248,10 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // User endpoints
-  app.get('/api/user/:id', (req, res) => {
+  app.get('/api/user/:id', async (req, res) => {
     const id = req.params.id.toLowerCase();
     try {
-      const row = _db.prepare('SELECT id, display_name, assigned_skin FROM users WHERE id = ?').get(id);
+      const row = await _driver.getUser(id);
       if (!row) {
         return res.json({ id, display_name: id, assigned_skin: 'default' });
       }
@@ -291,14 +284,12 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Local control: Assign skin
-  app.post('/api/local/assignSkin', (req, res) => {
+  app.post('/api/local/assignSkin', async (req, res) => {
     const { userId, skinId } = req.body;
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
     if (!isValidSkinId(skinId)) return res.status(400).json({ error: 'Invalid skin ID' });
-    const userLower = userId.toLowerCase();
     try {
-      _db.prepare('INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,?)')
-        .run(userLower, userLower, skinId);
+      await _driver.assignSkin(userId, skinId);
       invalidateStatsCache();
       res.json({ ok: true, assigned_skin: skinId });
     } catch (err) {
@@ -307,9 +298,9 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Local control: List users
-  app.get('/api/local/users', (req, res) => {
+  app.get('/api/local/users', async (req, res) => {
     try {
-      const rows = _db.prepare('SELECT id, display_name, assigned_skin FROM users ORDER BY id LIMIT 100').all();
+      const rows = await _driver.listUsers(100);
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -347,7 +338,7 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Local control: Save config
-  app.post('/api/local/saveConfig', (req, res) => {
+  app.post('/api/local/saveConfig', async (req, res) => {
     try {
       const { deepMerge } = require('./lib/util');
       const newCfg = req.body;
@@ -367,10 +358,10 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
         merged.dashboardPassword = _cfg.dashboardPassword || '';
       }
 
-      fs.writeFileSync(_cfgPath, JSON.stringify(merged, null, 2));
+      await _driver.saveConfig(_cfgPath, merged);
       Object.assign(_cfg, merged);
       ws.invalidateOverlayConfigCache();
-      envCache = null; // Invalidate /env cache so loadConfig gets fresh data
+      envCache = null;
 
       res.json({ ok: true, message: 'Config saved' });
     } catch (e) {
@@ -379,7 +370,7 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Local control: Apply settings
-  app.post('/api/local/applySettings', (req, res) => {
+  app.post('/api/local/applySettings', async (req, res) => {
     try {
       const settings = req.body;
       if (typeof settings !== 'object' || settings === null) {
@@ -407,7 +398,7 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
       configToSave.twitch = { ...configToSave.twitch };
       configToSave.twitch.botOAuthToken = '';
       delete configToSave.skins;
-      fs.writeFileSync(_cfgPath, JSON.stringify(configToSave, null, 2));
+      await _driver.saveConfig(_cfgPath, configToSave);
 
       ws.invalidateOverlayConfigCache();
       res.json({ ok: true, message: 'Settings applied', settings: _cfg.debug });
@@ -434,11 +425,11 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Local control: Reset user
-  app.post('/api/local/resetUser', (req, res) => {
+  app.post('/api/local/resetUser', async (req, res) => {
     const { id } = req.body;
     if (!isValidUsername(id)) return res.status(400).json({ error: 'Invalid username' });
     try {
-      _db.prepare('DELETE FROM users WHERE id=?').run(id.toLowerCase());
+      await _driver.deleteUser(id);
       invalidateStatsCache();
       res.json({ ok: true });
     } catch (err) {
@@ -446,9 +437,9 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
     }
   });
 
-  app.post('/api/local/resetAll', (req, res) => {
+  app.post('/api/local/resetAll', async (req, res) => {
     try {
-      _db.prepare('DELETE FROM users').run();
+      await _driver.deleteAllUsers();
       invalidateStatsCache();
       res.json({ ok: true });
     } catch (err) {
@@ -457,44 +448,42 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Exclusion endpoints
-  app.get('/api/local/excluded', (req, res) => {
+  app.get('/api/local/excluded', async (req, res) => {
     try {
-      const rows = _db.prepare('SELECT id, reason FROM excluded_users ORDER BY id LIMIT 100').all();
+      const rows = await _driver.listExcluded(100);
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.post('/api/local/exclude', (req, res) => {
+  app.post('/api/local/exclude', async (req, res) => {
     const { userId, reason } = req.body;
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
     try {
-      _db.prepare('INSERT OR REPLACE INTO excluded_users (id, reason) VALUES (?,?)')
-        .run(userId.toLowerCase(), reason || '');
+      await _driver.excludeUser(userId, reason);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.post('/api/local/unexclude', (req, res) => {
+  app.post('/api/local/unexclude', async (req, res) => {
     const { userId } = req.body;
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
     try {
-      _db.prepare('DELETE FROM excluded_users WHERE id=?').run(userId.toLowerCase());
+      await _driver.unexcludeUser(userId);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  app.post('/api/local/updateExclusionReason', (req, res) => {
+  app.post('/api/local/updateExclusionReason', async (req, res) => {
     const { userId, reason } = req.body;
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
     try {
-      _db.prepare('UPDATE excluded_users SET reason = ? WHERE id = ?')
-        .run(reason || '', userId.toLowerCase());
+      await _driver.updateExclusionReason(userId, reason);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -502,12 +491,12 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Stats
-  app.get('/api/stats', (req, res) => {
+  app.get('/api/stats', async (req, res) => {
     const now = Date.now();
     if (statsCache && (now - statsCacheTime) < STATS_CACHE_TTL_MS) {
       return res.json(statsCache);
     }
-    res.json(refreshStatsCache() || { total_users: 0, custom_skins: 0, default_skins: 0 });
+    res.json(await refreshStatsCache() || { total_users: 0, custom_skins: 0, default_skins: 0 });
   });
 
   // Overlay refresh
@@ -525,7 +514,6 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   // Restart server
   app.post('/api/local/restartServer', (req, res) => {
     res.json({ ok: true, message: 'Server restarting...' });
-    // Graceful shutdown: close database, cleanup, then restart
     setTimeout(() => {
       try {
         const { cleanup: wsCleanup } = require('./websocket');
@@ -536,9 +524,8 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
         twitchCleanup();
       } catch (e) {}
       try {
-        if (_db) _db.close();
+        if (_driver) _driver.close();
       } catch (e) {}
-      // Use SIGTERM so the startup script's restart loop picks it up
       process.kill(process.pid, 'SIGTERM');
     }, 500);
   });
@@ -755,6 +742,220 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
     }
   });
 
+  // ── Storage Management Endpoints ──────────────────────────────────────
+
+  app.get('/api/storage/status', (req, res) => {
+    const storageConfig = storage.getStorageConfig();
+    res.json({
+      type: storage.getStorageType(),
+      config: storageConfig
+    });
+  });
+
+  app.post('/api/storage/testConnection', async (req, res) => {
+    const { connectionString } = req.body;
+    if (!connectionString || typeof connectionString !== 'string') {
+      return res.status(400).json({ error: 'Connection string required' });
+    }
+    try {
+      const result = await storage.testConnection(connectionString);
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ ok: false, message: e.message });
+    }
+  });
+
+  app.post('/api/storage/switch', async (req, res) => {
+    const { type, connectionString } = req.body;
+    if (type === 'postgres') {
+      if (!connectionString || typeof connectionString !== 'string') {
+        return res.status(400).json({ error: 'Connection string required for PostgreSQL' });
+      }
+      const result = await storage.switchToPostgres(connectionString, path.join(__dirname, '..'));
+      res.json(result);
+    } else if (type === 'sqlite') {
+      const result = await storage.switchToSqlite(path.join(__dirname, '..'));
+      _driver = storage.getDriver();
+      res.json(result);
+    } else {
+      res.status(400).json({ error: 'Invalid storage type. Use "sqlite" or "postgres".' });
+    }
+  });
+
+  app.post('/api/storage/migrate', async (req, res) => {
+    const { connectionString } = req.body;
+    if (!connectionString) {
+      return res.status(400).json({ error: 'Connection string required' });
+    }
+    try {
+      const SqliteDriver = require('./storage/sqlite-driver');
+      const PostgresDriver = require('./storage/postgres-driver');
+      const src = new SqliteDriver(path.join(__dirname, '..'));
+      await src.init();
+      const dst = new PostgresDriver(connectionString);
+      await dst.init();
+
+      const users = src.getRawDb().prepare('SELECT id, display_name, assigned_skin FROM users').all();
+      const excluded = src.getRawDb().prepare('SELECT id, reason FROM excluded_users').all();
+
+      for (const u of users) {
+        await dst.upsertUser(u.id, u.display_name, u.assigned_skin);
+        if (u.assigned_skin && u.assigned_skin !== 'default') {
+          await dst.assignSkin(u.id, u.assigned_skin);
+        }
+      }
+      for (const e of excluded) {
+        await dst.excludeUser(e.id, e.reason);
+      }
+
+      // Migrate config
+      const cfgData = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
+      await dst.saveConfig(_cfgPath, cfgData);
+
+      // Migrate assets (all subfolders)
+      const assetsBaseDir = path.join(__dirname, '..', 'assets');
+      if (fs.existsSync(assetsBaseDir)) {
+        const folders = fs.readdirSync(assetsBaseDir, { withFileTypes: true }).filter(e => e.isDirectory());
+        for (const folder of folders) {
+          const folderPath = path.join(assetsBaseDir, folder.name);
+          const assetFiles = fs.readdirSync(folderPath);
+          for (const file of assetFiles) {
+            const ext = path.extname(file).toLowerCase();
+            if (['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'].includes(ext)) {
+              const filePath = path.join(folderPath, file);
+              const data = fs.readFileSync(filePath);
+              const mimeMap = {
+                '.png': 'image/png', '.gif': 'image/gif', '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.avif': 'image/avif'
+              };
+              await dst.writeAsset(`${folder.name}/${file}`, data, mimeMap[ext] || 'application/octet-stream');
+            }
+          }
+        }
+      }
+
+      await src.close();
+      await dst.close();
+
+      res.json({ ok: true, users: users.length, excluded: excluded.length, message: 'Migration complete' });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Asset Management Endpoints ────────────────────────────────────────
+
+  const multer = require('multer');
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+  app.post('/api/assets/upload', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (!['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'].includes(ext)) {
+      return res.status(400).json({ error: 'Invalid file type. Supported: png, gif, jpg, jpeg, webp, webm, avif' });
+    }
+    const folder = (req.body.folder || 'skins').replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      if (_driver.getType() === 'postgres') {
+        const mimeMap = {
+          '.png': 'image/png', '.gif': 'image/gif', '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.avif': 'image/avif'
+        };
+        await _driver.writeAsset(`${folder}/${req.file.originalname}`, req.file.buffer, mimeMap[ext] || 'application/octet-stream');
+      } else {
+        const assetsDir = path.join(__dirname, '..', 'assets', folder);
+        if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+        fs.writeFileSync(path.join(assetsDir, req.file.originalname), req.file.buffer);
+      }
+      twitch.invalidateSkinsCache();
+      res.json({ ok: true, filename: req.file.originalname, folder });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/assets/list', async (req, res) => {
+    try {
+      if (_driver.getType() === 'postgres') {
+        const assets = await _driver.listAssets();
+        const result = {};
+        for (const p of assets) {
+          const parts = p.split('/');
+          const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+          const name = parts[parts.length - 1];
+          if (!result[folder]) result[folder] = [];
+          result[folder].push({ name, path: p });
+        }
+        res.json(result);
+      } else {
+        const assetsDir = path.join(__dirname, '..', 'assets');
+        const result = {};
+        if (fs.existsSync(assetsDir)) {
+          const entries = fs.readdirSync(assetsDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              const folderPath = path.join(assetsDir, entry.name);
+              const files = fs.readdirSync(folderPath).filter(f => {
+                const ext = path.extname(f).toLowerCase();
+                return ['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'].includes(ext);
+              });
+              if (files.length > 0) {
+                result[entry.name] = files.map(f => ({ name: f, path: `${entry.name}/${f}` }));
+              }
+            }
+          }
+        }
+        res.json(result);
+      }
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/assets/delete', async (req, res) => {
+    const { filename, folder } = req.body;
+    if (!filename) return res.status(400).json({ error: 'Filename required' });
+    const assetFolder = (folder || 'skins').replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      if (_driver.getType() === 'postgres') {
+        await _driver.deleteAsset(`${assetFolder}/${filename}`);
+      } else {
+        const filePath = path.join(__dirname, '..', 'assets', assetFolder, filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+      twitch.invalidateSkinsCache();
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Asset serving for remote storage (when using postgres, serve from DB)
+  app.get('/api/assets/:folder/:filename', async (req, res) => {
+    const folder = req.params.folder;
+    const filename = req.params.filename;
+    try {
+      if (_driver.getType() === 'postgres') {
+        const data = await _driver.readAsset(`${folder}/${filename}`);
+        if (!data) return res.status(404).send('Not found');
+        const ext = path.extname(filename).toLowerCase();
+        const mimeMap = {
+          '.png': 'image/png', '.gif': 'image/gif', '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.avif': 'image/avif'
+        };
+        res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.send(data);
+      } else {
+        const filePath = path.join(__dirname, '..', 'assets', folder, filename);
+        if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+        res.sendFile(filePath);
+      }
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Error handler
   app.use((err, req, res, next) => {
     const isDevelopment = _cfg.debug?.serverDebug === true;
@@ -821,7 +1022,7 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
       if (refresh_token) {
         _cfg.twitch.refreshToken = refresh_token;
         try {
-          fs.writeFileSync(_cfgPath, JSON.stringify(_cfg, null, 2));
+          await _driver.saveConfig(_cfgPath, _cfg);
         } catch (e) {
           _dbg('Failed to save refresh token:', e.message);
         }
