@@ -5,6 +5,15 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.5] - 2026-10-31
+
+### Fixed
+- PostgreSQL schema creation is serialized with an advisory lock, preventing `CREATE TABLE IF NOT EXISTS` races when multiple instances initialize the same database.
+- PostgreSQL tests run serially to avoid shared-config interference.
+
+### Added
+- Integration test proving database-backed config is authoritative at startup: the server listens on the DB-configured port and serves DB-configured channel/settings instead of the file fallback.
+
 ## [2.7.4] - 2026-10-31
 
 ### Fixed

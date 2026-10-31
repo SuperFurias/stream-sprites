@@ -17,26 +17,37 @@ class PostgresDriver {
     try {
       const client = await this.pool.connect();
       try {
-        await client.query(`CREATE TABLE IF NOT EXISTS ss_users (
-          id TEXT PRIMARY KEY,
-          display_name TEXT,
-          assigned_skin TEXT DEFAULT 'default'
-        )`);
-        await client.query(`CREATE TABLE IF NOT EXISTS ss_excluded_users (
-          id TEXT PRIMARY KEY,
-          reason TEXT
-        )`);
-        await client.query(`CREATE TABLE IF NOT EXISTS ss_config (
-          key TEXT PRIMARY KEY,
-          value JSONB NOT NULL,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )`);
-        await client.query(`CREATE TABLE IF NOT EXISTS ss_assets (
-          path TEXT PRIMARY KEY,
-          data BYTEA NOT NULL,
-          mime_type TEXT,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
-        )`);
+        // Serialize schema creation so two instances starting together cannot
+        // race on PostgreSQL's catalog unique indexes.
+        await client.query("SELECT pg_advisory_lock(hashtext('stream_sprites_schema_init'))");
+        try {
+          await client.query(`CREATE TABLE IF NOT EXISTS ss_users (
+            id TEXT PRIMARY KEY,
+            display_name TEXT,
+            assigned_skin TEXT DEFAULT 'default'
+          )`);
+          await client.query(`CREATE TABLE IF NOT EXISTS ss_excluded_users (
+            id TEXT PRIMARY KEY,
+            reason TEXT
+          )`);
+          await client.query(`CREATE TABLE IF NOT EXISTS ss_config (
+            key TEXT PRIMARY KEY,
+            value JSONB NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`);
+          await client.query(`CREATE TABLE IF NOT EXISTS ss_assets (
+            path TEXT PRIMARY KEY,
+            data BYTEA NOT NULL,
+            mime_type TEXT,
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )`);
+        } finally {
+          try {
+            await client.query("SELECT pg_advisory_unlock(hashtext('stream_sprites_schema_init'))");
+          } catch (unlockError) {
+            // The connection is being torn down; the lock is released with it.
+          }
+        }
       } finally {
         client.release();
       }

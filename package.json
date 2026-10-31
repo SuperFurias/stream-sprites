@@ -1,11 +1,11 @@
 {
   "name": "stream-sprites",
-  "version": "2.7.4",
+  "version": "2.7.5",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/phase1.test.js test/physics.test.js test/storage.test.js test/password.test.js test/http.test.js test/websocket.test.js",
-    "test:postgres": "node --test test/postgres.test.js",
+    "test:postgres": "node --test --test-concurrency=1 test/postgres.test.js test/postgres-startup.test.js",
     "soak": "node tools/soak.js"
   },
   "engines": {
