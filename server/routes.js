@@ -305,6 +305,14 @@ app.use((req, res, next) => {
 // Only read-only overlay/config endpoints are CORS-enabled, and only without
 // credentials. Everything else must be same-origin.
 app.use((req, res, next) => {
+  // Sensitive config and control responses must never be cached.
+  if (req.path === '/env' ||
+      req.path.startsWith('/api/local/') ||
+      req.path.startsWith('/api/dashboard/') ||
+      req.path.startsWith('/api/storage/')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+
   if (isPublicRequest(req)) {
     if (req.headers.origin) {
       res.setHeader('Access-Control-Allow-Origin', '*');

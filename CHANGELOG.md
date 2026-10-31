@@ -5,6 +5,11 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] - 2026-10-31
+
+### Security
+- Sensitive endpoints (`/env`, `/api/local/*`, `/api/dashboard/*`, `/api/storage/*`) now send `Cache-Control: no-store` so config/control data cannot linger in browser or intermediary caches.
+
 ## [2.7.2] - 2026-10-31
 
 ### Fixed

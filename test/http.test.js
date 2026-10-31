@@ -128,6 +128,7 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
 
     const localEnv = await request(port, '/env');
     assert.equal(localEnv.status, 200);
+    assert.equal(localEnv.headers['cache-control'], 'no-store');
     assert.equal(localEnv.json().isLocalhost, true);
     assert.ok(localEnv.json().twitch, 'trusted local env includes Twitch config');
 
@@ -166,7 +167,9 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
       headers: { Host: 'evil.example' }
     })).status, 200);
 
-    assert.equal((await request(port, '/api/local/users')).status, 200);
+    const localUsers = await request(port, '/api/local/users');
+    assert.equal(localUsers.status, 200);
+    assert.equal(localUsers.headers['cache-control'], 'no-store');
     assert.equal((await request(port, '/api/local/users', { headers: { Host: 'evil.example' } })).status, 401);
     assert.equal((await request(port, '/api/local/users', { headers: { Origin: 'http://evil.example' } })).status, 403);
     assert.equal((await request(port, '/api/assets/list', { headers: { Host: 'evil.example' } })).status, 401);
