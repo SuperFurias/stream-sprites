@@ -799,7 +799,9 @@ app.use((req, res, next) => {
 
   // Restart server
   app.post('/api/local/restartServer', (req, res) => {
-    const supervised = process.env.STREAM_SPRITES_SUPERVISED === '1';
+    const supervised = process.env.STREAM_SPRITES_SUPERVISED === '1' ||
+      !!process.env.PM2_HOME ||
+      !!process.env.INVOCATION_ID; // systemd sets INVOCATION_ID
     res.json({ ok: true, message: 'Server restarting...' });
 
     // When running standalone (npm start / node server.js), a detached helper

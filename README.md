@@ -87,6 +87,7 @@ Run tests with `npm test`. Run `npm run soak` for a 10-second live-server load t
 | `STREAM_SPRITES_DATA_DIR` | Alternate SQLite/database data directory |
 | `STREAM_SPRITES_ASSETS_DIR` | Alternate skin/media directory |
 | `STREAM_SPRITES_STORAGE_CONFIG` | Alternate storage backend file |
+| `STREAM_SPRITES_SUPERVISED` | Set to `1` when an external supervisor handles restarts (PM2 and systemd are detected automatically) |
 
 The HTTP integration test uses all four so it never touches live data.
 
