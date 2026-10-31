@@ -187,6 +187,13 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
     assert.equal(fs.existsSync(path.join(assetsRoot, 'skins', 'escape.png')), true);
     assert.equal(fs.existsSync(path.join(assetsRoot, 'escape.png')), false);
 
+    const assign = await request(port, '/api/local/assignSkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'testuser', skinId: 'escape' })
+    });
+    assert.equal(assign.status, 200);
+
     const removeUpload = await request(port, '/api/assets/delete', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -194,6 +201,19 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
     });
     assert.equal(removeUpload.status, 200, removeUpload.text);
     assert.equal(fs.existsSync(path.join(assetsRoot, 'skins', 'escape.png')), false);
+
+    const usersAfterDelete = await request(port, '/api/local/users');
+    const testUser = usersAfterDelete.json().find(u => u.id === 'testuser');
+    assert.ok(testUser, 'assigned user remains in the database');
+    assert.equal(testUser.assigned_skin, 'default');
+
+    const deleteDefault = await request(port, '/api/assets/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: 'skins', filename: 'default.gif' })
+    });
+    assert.equal(deleteDefault.status, 409);
+    assert.equal(fs.existsSync(path.join(assetsRoot, 'skins', 'default.gif')), true);
 
     const login = await request(port, '/api/dashboard/login', {
       method: 'POST',

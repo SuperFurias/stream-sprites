@@ -1289,12 +1289,49 @@ app.use((req, res, next) => {
     const filePath = resolveAssetPath(ASSETS_ROOT, assetFolder, filename);
     if (!filePath) return res.status(400).json({ error: 'Invalid asset path' });
 
+    const skinId = assetFolder === 'skins'
+      ? path.basename(filename, path.extname(filename)).toLowerCase().replace(/[^a-z0-9_]/g, '_')
+      : null;
+
     try {
+      // Never delete the only default skin; it is the fallback for every sprite.
+      if (skinId === 'default') {
+        const currentSkins = await twitch.detectSkinsFromAssetsAsync();
+        const defaultSkins = currentSkins.filter(s => s.id === 'default');
+        if (defaultSkins.length <= 1) {
+          return res.status(409).json({
+            error: 'Cannot delete the only default skin. Upload a replacement default first.'
+          });
+        }
+      }
+
       if (_driver.getType() === 'postgres') {
         await _driver.deleteAsset(`${assetFolder}/${filename}`);
       }
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       twitch.invalidateSkinsCache();
+
+      // Reset assignments and live sprites that referenced a now-missing skin.
+      if (skinId) {
+        const remainingSkins = await twitch.detectSkinsFromAssetsAsync();
+        if (!remainingSkins.some(s => s.id === skinId)) {
+          await _driver.clearSkinAssignments(skinId);
+          let liveChanged = false;
+          for (const sprite of ws.serverSprites.values()) {
+            if (sprite.skin === skinId) {
+              sprite.skin = 'default';
+              sprite.lastActivity = Date.now();
+              liveChanged = true;
+            }
+          }
+          if (liveChanged) {
+            ws.setSpriteDirty(true);
+            ws.broadcastPhysicsState();
+          }
+          invalidateStatsCache();
+        }
+      }
+
       ws.broadcast({ type: 'cmd', cmd: 'reloadSkins' });
       res.json({ ok: true });
     } catch (e) {

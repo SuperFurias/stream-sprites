@@ -58,6 +58,11 @@ class SqliteDriver {
     `).run(userId.toLowerCase(), userId.toLowerCase(), skinId);
   }
 
+  async clearSkinAssignments(skinId) {
+    return this.db.prepare('UPDATE users SET assigned_skin = ? WHERE assigned_skin = ?')
+      .run('default', skinId);
+  }
+
   async getUser(userId) {
     return this.db.prepare('SELECT id, display_name, assigned_skin FROM users WHERE id = ?').get(userId.toLowerCase());
   }

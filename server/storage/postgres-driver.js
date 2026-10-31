@@ -88,6 +88,13 @@ class PostgresDriver {
     `, [userId.toLowerCase(), skinId]);
   }
 
+  async clearSkinAssignments(skinId) {
+    await this.pool.query(
+      'UPDATE ss_users SET assigned_skin = $1 WHERE assigned_skin = $2',
+      ['default', skinId]
+    );
+  }
+
   async getUser(userId) {
     const result = await this.pool.query(
       'SELECT id, display_name, assigned_skin FROM ss_users WHERE id = $1',

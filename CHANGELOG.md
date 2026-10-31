@@ -5,6 +5,13 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2026-10-31
+
+### Fixed
+- **Deleting a skin in use** now resets affected user assignments and live sprites to `default` instead of leaving them pointing at a missing file.
+- **The only default skin cannot be deleted**; upload a replacement default first (409 response).
+- Added `clearSkinAssignments` to both storage drivers and covered it in the storage and HTTP integration tests.
+
 ## [2.4.2] - 2026-10-31
 
 ### Fixed

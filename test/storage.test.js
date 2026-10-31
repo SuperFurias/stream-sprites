@@ -28,6 +28,10 @@ test('SQLite upsert and skin assignment preserve display names', async () => {
 
     await driver.upsertUser('TestUser', 'TestUser');
     assert.equal((await driver.getUser('testuser')).assigned_skin, 'kitty');
+
+    await driver.clearSkinAssignments('kitty');
+    assert.equal((await driver.getUser('testuser')).assigned_skin, 'default');
+    assert.equal((await driver.getUser('testuser')).display_name, 'TestUser');
   } finally {
     await driver.close();
     fs.rmSync(dir, { recursive: true, force: true });
