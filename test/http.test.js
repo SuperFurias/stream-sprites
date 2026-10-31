@@ -210,6 +210,18 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
       body: JSON.stringify({ password: 'changed-password' })
     });
     assert.equal(newLogin.status, 200);
+    const newCookie = String(newLogin.headers['set-cookie']).split(';')[0];
+
+    const logout = await request(port, '/api/dashboard/logout', {
+      method: 'POST',
+      headers: { Host: 'evil.example', Cookie: newCookie }
+    });
+    assert.equal(logout.status, 200);
+
+    const afterLogout = await request(port, '/api/local/users', {
+      headers: { Host: 'evil.example', Cookie: newCookie }
+    });
+    assert.equal(afterLogout.status, 401);
   } finally {
     if (!child.killed) child.kill('SIGTERM');
     await new Promise(resolve => {

@@ -397,6 +397,14 @@ app.use((req, res, next) => {
   app.use('/dashboard', express.static(path.join(PROJECT_ROOT, 'dashboard')));
   app.use('/assets', express.static(ASSETS_ROOT, { dotfiles: 'ignore', index: false }));
 
+  app.post('/api/dashboard/logout', (req, res) => {
+    const token = sessionTokenFromCookie(req);
+    if (token) activeSessions.delete(token);
+    const secure = isSecureRequest(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `dash_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    res.json({ ok: true });
+  });
+
   // Serve dashboard at root
   app.get('/', (req, res) => {
     res.sendFile(path.join(PROJECT_ROOT, 'index.html'));

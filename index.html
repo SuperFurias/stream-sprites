@@ -51,7 +51,9 @@
   /* Header layout */
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;position:relative}
   .header-left{flex:1}
-  .header-right{flex:0 0 auto}
+  .header-right{flex:0 0 auto;display:flex;align-items:flex-start;gap:12px}
+  .logout-btn{padding:8px 14px;background:#2a2a2a;color:#ccc;border:1px solid #444;border-radius:6px;font-size:13px;cursor:pointer}
+  .logout-btn:hover{background:#333;color:#fff;border-color:#666}
   .page-title{margin:0 0 8px 0;font-size:28px;font-weight:700;background:linear-gradient(135deg,#0af,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
   .page-subtitle{margin:0;color:#888;font-size:14px}
 
@@ -111,6 +113,7 @@
       <p class="page-subtitle">Admin Dashboard</p>
     </div>
     <div class="header-right">
+      <button id="logoutBtn" class="logout-btn" type="button" onclick="logoutDashboard()">Log out</button>
       <div class="stat-card" style="min-width:200px;margin-bottom:0">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div>
@@ -321,6 +324,15 @@
 
 // Initialize: try WebSocket first, only start polling if WS fails
 connectStatsWebSocket();
+
+    async function logoutDashboard() {
+      try {
+        await fetch('/api/dashboard/logout', { method: 'POST' });
+      } catch (e) {
+        // Even if the request fails, return to the auth page.
+      }
+      window.location.href = '/';
+    }
 
     // Announce dashboard presence to prevent duplicate browser opens
     let pingInterval;
