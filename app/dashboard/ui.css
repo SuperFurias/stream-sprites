@@ -617,6 +617,9 @@ body[data-tab="dashboard"] .metric { min-height: 88px; padding: 14px 18px; }
 body[data-tab="dashboard"] .metric strong { font-size: 28px; }
 body[data-tab="dashboard"] .metric-note { display: none; }
 body[data-tab="dashboard"] #content {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
