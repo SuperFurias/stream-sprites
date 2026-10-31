@@ -136,6 +136,18 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
     assert.equal(remoteEnv.json().twitch, undefined);
     assert.equal(remoteEnv.json().isLocalhost, false);
 
+    const remoteEnvCors = await request(port, '/env', {
+      headers: { Host: 'evil.example', Origin: 'http://overlay.example' }
+    });
+    assert.equal(remoteEnvCors.status, 200);
+    assert.equal(remoteEnvCors.headers['access-control-allow-origin'], '*');
+
+    const remoteSkinsCors = await request(port, '/api/skins/auto', {
+      headers: { Host: 'evil.example', Origin: 'http://overlay.example' }
+    });
+    assert.equal(remoteSkinsCors.status, 200);
+    assert.equal(remoteSkinsCors.headers['access-control-allow-origin'], '*');
+
     assert.equal((await request(port, '/server/.env')).status, 404);
     assert.equal((await request(port, '/package.json')).status, 404);
     assert.equal((await request(port, '/server/db/sa.db')).status, 404);
@@ -143,6 +155,9 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
     assert.equal((await request(port, '/overlay/overlay.html')).status, 200);
     assert.equal((await request(port, '/dashboard/dashboard.html')).status, 200);
     assert.equal((await request(port, '/assets/skins/default.gif')).status, 200);
+    assert.equal((await request(port, '/assets/skins/default.gif', {
+      headers: { Host: 'evil.example' }
+    })).status, 200);
 
     assert.equal((await request(port, '/api/local/users')).status, 200);
     assert.equal((await request(port, '/api/local/users', { headers: { Host: 'evil.example' } })).status, 401);

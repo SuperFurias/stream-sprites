@@ -5,6 +5,12 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.10] - 2026-10-31
+
+### Verified
+- Added integration coverage for the remote-overlay contract: cross-origin `/env` and `/api/skins/auto` responses include `Access-Control-Allow-Origin: *`, and `/assets` media remains readable without auth.
+- Manually verified a second-origin overlay (`?server=`) loading skins from the target server, connecting over WebSocket, and rendering spawned sprites with no console or request failures.
+
 ## [2.3.9] - 2026-10-31
 
 ### Security
