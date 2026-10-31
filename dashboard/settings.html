@@ -123,7 +123,7 @@
 
 <div class="panel">
   <h2 style="margin-top:0">🖥️ Server Configuration</h2>
-  <p>Configure all aspects of the overlay behavior. Changes are saved to .env and applied after server restart (or dynamically where supported).</p>
+  <p>Configure all aspects of the overlay behavior. Changes are saved to the active config store (local .env or PostgreSQL) and applied after a server restart (or dynamically where supported).</p>
   
   <form id="overlaySettingsForm">
     <div class="settings-section" data-section="canvas">
@@ -778,6 +778,11 @@
             <label>Resize Debounce (ms)</label>
             <input type="number" id="resizeDebounceMs" min="50" max="1000" step="50">
             <small>Debounce for canvas resize (100=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Network Snapshot Rate (Hz)</label>
+            <input type="number" id="networkFps" min="1" max="60" step="1">
+            <small>State updates sent to overlays per second (30=default; clients interpolate)</small>
           </div>
         </div>
       </div>

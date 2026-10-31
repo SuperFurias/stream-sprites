@@ -1,5 +1,4 @@
 const { Pool } = require('pg');
-const path = require('path');
 
 class PostgresDriver {
   constructor(connectionString) {
@@ -15,33 +14,39 @@ class PostgresDriver {
         : false
     });
 
-    // Test connection
-    const client = await this.pool.connect();
     try {
-      await client.query(`CREATE TABLE IF NOT EXISTS ss_users (
-        id TEXT PRIMARY KEY,
-        display_name TEXT,
-        assigned_skin TEXT DEFAULT 'default'
-      )`);
-      await client.query(`CREATE TABLE IF NOT EXISTS ss_excluded_users (
-        id TEXT PRIMARY KEY,
-        reason TEXT
-      )`);
-      await client.query(`CREATE TABLE IF NOT EXISTS ss_config (
-        key TEXT PRIMARY KEY,
-        value JSONB NOT NULL,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )`);
-      await client.query(`CREATE TABLE IF NOT EXISTS ss_assets (
-        path TEXT PRIMARY KEY,
-        data BYTEA NOT NULL,
-        mime_type TEXT,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )`);
-      console.log('✓ PostgreSQL/Supabase database connected');
-    } finally {
-      client.release();
+      const client = await this.pool.connect();
+      try {
+        await client.query(`CREATE TABLE IF NOT EXISTS ss_users (
+          id TEXT PRIMARY KEY,
+          display_name TEXT,
+          assigned_skin TEXT DEFAULT 'default'
+        )`);
+        await client.query(`CREATE TABLE IF NOT EXISTS ss_excluded_users (
+          id TEXT PRIMARY KEY,
+          reason TEXT
+        )`);
+        await client.query(`CREATE TABLE IF NOT EXISTS ss_config (
+          key TEXT PRIMARY KEY,
+          value JSONB NOT NULL,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )`);
+        await client.query(`CREATE TABLE IF NOT EXISTS ss_assets (
+          path TEXT PRIMARY KEY,
+          data BYTEA NOT NULL,
+          mime_type TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )`);
+      } finally {
+        client.release();
+      }
+    } catch (e) {
+      try { await this.pool.end(); } catch (closeError) { /* ignore */ }
+      this.pool = null;
+      throw e;
     }
+
+    console.log('✓ PostgreSQL/Supabase database connected');
     return this;
   }
 

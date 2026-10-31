@@ -69,6 +69,7 @@ function getOverlayConfig() {
       flipDurationMs: ov.flipDurationMs ?? d.flipDurationMs,
       fightDurationMs: ov.fightDurationMs ?? d.fightDurationMs
     };
+    physics.setPhysicsConfig(ov);
   }
   return _overlayConfigCache;
 }

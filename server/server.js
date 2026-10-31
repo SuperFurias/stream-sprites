@@ -163,6 +163,7 @@ initDb(dataDir).then(async () => {
     }
     try { websocket.cleanup(); } catch (e) {}
     try { twitch.cleanup(); } catch (e) {}
+    try { routes.cleanupTunnel(); } catch (e) {}
     try {
       const activeDriver = storage.getDriver();
       if (activeDriver) activeDriver.close();
@@ -185,6 +186,7 @@ initDb(dataDir).then(async () => {
     dbg(`Shutting down (${signal})...`);
     websocket.cleanup();
     twitch.cleanup();
+    routes.cleanupTunnel();
     const twitchClient = twitch.getTwitchClient();
     if (twitchClient) {
       try {

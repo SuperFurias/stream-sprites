@@ -79,6 +79,7 @@ function getFallbackDefaults() {
     fadeWarningMs: 5 * 60 * 1000,
     collisionPersonalSpaceThreshold: 0.1,
     collisionForceMultiplier: 0.02,
+    angularVelocityFromCollision: 0.0001,
     collisionProbabilityScaling: 1,
     collisionProbabilityLow: 0.0,
     collisionProbabilityMedium: 0.5,
@@ -154,7 +155,8 @@ function getFallbackDefaults() {
     centerPushForce: 0.02,
     groundYCenterOffset: 0.8,
     directionChangeThreshold: 0.3,
-    resizeDebounceMs: 100
+    resizeDebounceMs: 100,
+    networkFps: 30
   };
 }
 
@@ -277,6 +279,7 @@ const overlayFieldMap = {
   groundYCenterOffset: 'groundYCenterOffset',
   directionChangeThreshold: 'directionChangeThreshold',
   resizeDebounceMs: 'resizeDebounceMs',
+  networkFps: 'networkFps',
   commandCooldownMs: 'commandCooldownMs',
   flipDurationMs: 'flipDurationMs',
   fightDurationMs: 'fightDurationMs',
@@ -284,6 +287,21 @@ const overlayFieldMap = {
   flipAngularVelocity: 'flipAngularVelocity',
   fightCoinFlipProbability: 'fightCoinFlipProbability'
 };
+
+// These two inputs are expressed in minutes while the server stores milliseconds.
+const MINUTE_FIELDS = new Set(['spriteLifetimeMs', 'fadeWarningMs']);
+
+function toDisplayValue(fieldId, value) {
+  if (!MINUTE_FIELDS.has(fieldId)) return value;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number / 60000) : value;
+}
+
+function fromDisplayValue(fieldId, value) {
+  const number = parseFloat(value);
+  if (!Number.isFinite(number)) return 0;
+  return MINUTE_FIELDS.has(fieldId) ? Math.round(number * 60000) : number;
+}
 
 async function loadSettings() {
   try {
@@ -319,12 +337,12 @@ async function loadSettings() {
       if (input) {
         const value = overlay[configKey];
         if (value !== undefined) {
-          input.value = value;
+          input.value = toDisplayValue(fieldId, value);
         } else {
           // Use default if not present
           const defaultVal = defaultOverlay[configKey];
           if (defaultVal !== undefined) {
-            input.value = defaultVal;
+            input.value = toDisplayValue(fieldId, defaultVal);
           }
         }
       }
@@ -354,8 +372,9 @@ async function saveSettings() {
   for (const [fieldId, configKey] of Object.entries(overlayFieldMap)) {
     const input = document.getElementById(fieldId);
     if (input) {
-      const value = parseValue(input.value, input.type);
-      overlaySettings[configKey] = value;
+      overlaySettings[configKey] = input.type === 'number'
+        ? fromDisplayValue(fieldId, input.value)
+        : input.value;
     }
   }
   
@@ -394,14 +413,6 @@ async function saveSettings() {
   }
 }
 
-function parseValue(value, type) {
-  if (type === 'number') {
-    const num = parseFloat(value);
-    return isNaN(num) ? 0 : num;
-  }
-  return value;
-}
-
 function resetSettings() {
   if (!confirm('Reset all settings to defaults? This will clear all custom overlay configuration.')) return;
   
@@ -420,7 +431,7 @@ function resetSettings() {
     if (input) {
       const defaultVal = defaultOverlay[overlayFieldMap[fieldId]];
       if (defaultVal !== undefined) {
-        input.value = defaultVal;
+        input.value = toDisplayValue(fieldId, defaultVal);
       }
     }
   }

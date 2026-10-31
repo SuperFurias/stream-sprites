@@ -128,6 +128,30 @@ const FLIP_ANGULAR_VELOCITY = D.flipAngularVelocity;
 const JUMP_VELOCITY = D.jumpVelocity;
 const COLLISION_PROBABILITY_SCALING = D.collisionProbabilityScaling;
 
+// Live configuration. The overlay settings dashboard changes these values at
+// runtime; the constants above are only the defaults used before the first
+// configuration is applied.
+let activeConfig = { ...DEFAULT_OVERLAY };
+
+function setPhysicsConfig(overlayConfig) {
+  activeConfig = { ...DEFAULT_OVERLAY, ...(overlayConfig || {}) };
+}
+
+function getPhysicsConfig() {
+  return activeConfig;
+}
+
+function positive(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function bounded(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────
 
 // Simple hash for deterministic size from username
@@ -155,9 +179,19 @@ function estimateTextWidth(username) {
 }
 
 function getCollisionProbability(count) {
-  if (count < COLLISION_COUNT_THRESHOLD_LOW) return COLLISION_PROBABILITY_LOW;
-  if (count < COLLISION_COUNT_THRESHOLD_HIGH) return COLLISION_PROBABILITY_MEDIUM;
-  return COLLISION_PROBABILITY_HIGH;
+  const C = activeConfig;
+  const thresholdLow = Math.max(1, Number(C.collisionCountThresholdLow) || COLLISION_COUNT_THRESHOLD_LOW);
+  const thresholdHigh = Math.max(thresholdLow, Number(C.collisionCountThresholdHigh) || COLLISION_COUNT_THRESHOLD_HIGH);
+  let probability;
+  if (count < thresholdLow) {
+    probability = bounded(C.collisionProbabilityLow, 0, 1, COLLISION_PROBABILITY_LOW);
+  } else if (count < thresholdHigh) {
+    probability = bounded(C.collisionProbabilityMedium, 0, 1, COLLISION_PROBABILITY_MEDIUM);
+  } else {
+    probability = bounded(C.collisionProbabilityHigh, 0, 1, COLLISION_PROBABILITY_HIGH);
+  }
+  const scaling = bounded(C.collisionProbabilityScaling, 0, 2, COLLISION_PROBABILITY_SCALING);
+  return Math.min(1, Math.max(0, probability * scaling));
 }
 
 function colorFromName(name) {
@@ -172,6 +206,8 @@ function colorFromName(name) {
 // ── Sprite Creation ──────────────────────────────────────────────────────
 
 function createServerSprite(username, W, GROUND_Y, SPRITE_SIZE_MIN, SPRITE_SIZE_MAX) {
+  const C = activeConfig;
+
   // Deterministic size based on username hash
   const sizeHash = hashString(username + '_size');
   const sizeRatio = (sizeHash % 10000) / 10000;
@@ -179,9 +215,9 @@ function createServerSprite(username, W, GROUND_Y, SPRITE_SIZE_MIN, SPRITE_SIZE_
 
   const textWidth = estimateTextWidth(username);
   const collisionRadius = size / 2;
-  const boundaryRadius = Math.max(size / 2, textWidth / 2 + TEXT_WIDTH_PADDING);
-  const mass = Math.PI * Math.pow(size / 2, 2) / MASS_DIVISOR;
-  const momentOfInertia = MOMENT_OF_INERTIA_FACTOR * mass * Math.pow(size / 2, 2);
+  const boundaryRadius = Math.max(size / 2, textWidth / 2 + positive(C.textWidthPadding, TEXT_WIDTH_PADDING));
+  const mass = Math.PI * Math.pow(size / 2, 2) / positive(C.massDivisor, MASS_DIVISOR);
+  const momentOfInertia = positive(C.momentOfInertiaFactor, MOMENT_OF_INERTIA_FACTOR) * mass * Math.pow(size / 2, 2);
 
   // Deterministic spawn position (X is randomized, Y snapped to ground)
   const posHash = hashString(username + '_pos');
@@ -189,17 +225,24 @@ function createServerSprite(username, W, GROUND_Y, SPRITE_SIZE_MIN, SPRITE_SIZE_
   const jitterHash = hashString(username + '_jitter');
   const jitterRatio = ((jitterHash % 10000) / 10000 - 0.5);
 
-  let x = posRatio * (W - SPAWN_SIZE_PADDING) + SPAWN_BOUNDS_PADDING;
-  let y = GROUND_Y - collisionRadius; // Snap to ground immediately
-  x += jitterRatio * SPAWN_JITTER;
+  const sizePadding = Math.max(0, positive(C.spawnSizePadding, SPAWN_SIZE_PADDING));
+  const boundsPadding = Math.max(0, positive(C.spawnBoundsPadding, SPAWN_BOUNDS_PADDING));
+  const spawnJitter = Math.max(0, Number(C.spawnJitter) || 0);
+  let x = boundsPadding + posRatio * Math.max(1, W - sizePadding - boundsPadding);
+  const spawnYOffset = Math.max(0, Number(C.spawnYOffset) || 0);
+  const yOffsetHash = hashString(username + '_yoffset');
+  const yOffsetRatio = (yOffsetHash % 10000) / 10000;
+  let y = GROUND_Y - collisionRadius - yOffsetRatio * spawnYOffset;
+  x += jitterRatio * spawnJitter;
 
-  // Deterministic initial velocity
+  // Deterministic initial velocity, scaled by the configured initial velocity.
   const vxHash = hashString(username + '_vx');
-  const vx = ((vxHash % 10000) / 10000 - 0.5) * 2;
+  const initialVelocity = Math.max(0, Number(C.initialVelocity) || 0);
+  const vx = ((vxHash % 10000) / 10000 - 0.5) * initialVelocity;
 
   // Deterministic wiggle
   const wiggleHash = hashString(username + '_wiggle');
-  const wiggle = (wiggleHash % 10000) / 10000 * WIGGLE_RANGE;
+  const wiggle = (wiggleHash % 10000) / 10000 * Math.max(0, Number(C.wiggleRange) || 0);
 
   return {
     id: username.toLowerCase(),
@@ -244,26 +287,30 @@ function updatePhysics(dt, spriteArray, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                         GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY) {
   const arr = spriteArray;
   const now = Date.now();
+  const C = activeConfig;
 
-  spatialHash.reinitialize(SPATIAL_HASH_CELL_SIZE, W, H);
+  const cellSize = Math.max(8, Math.min(512, Math.round(positive(C.spatialHashCellSize, SPATIAL_HASH_CELL_SIZE))));
+  const numZones = Math.max(1, Math.min(20, Math.round(positive(C.numZones, NUM_ZONES))));
+
+  spatialHash.reinitialize(cellSize, W, H);
   for (const s of arr) spatialHash.insert(s);
 
-  const zoneWidth = W / NUM_ZONES;
-  const zoneCounts = new Array(NUM_ZONES).fill(0);
+  const zoneWidth = W / numZones;
+  const zoneCounts = new Array(numZones).fill(0);
   for (const s of arr) {
     const zone = Math.floor(s.x / zoneWidth);
-    if (zone >= 0 && zone < NUM_ZONES) zoneCounts[zone]++;
+    if (zone >= 0 && zone < numZones) zoneCounts[zone]++;
   }
-  const avgDensity = arr.length / NUM_ZONES;
+  const avgDensity = arr.length / numZones;
 
   for (const s of arr) {
     updateSpritePhysics(s, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                         GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY,
-                        zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
+                        zoneCounts, zoneWidth, avgDensity, numZones);
   }
 
   handleCollisions(arr, spatialHash, now);
-  applyAvoidance(arr, spatialHash, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
+  applyAvoidance(arr, spatialHash, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, numZones);
 
   return now;
 }
@@ -271,6 +318,11 @@ function updatePhysics(dt, spriteArray, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
 function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESISTANCE,
                              GROUND_FRICTION, BOUNCE_DAMPING, MIN_VELOCITY,
                              zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
+  const C = activeConfig;
+  const textPadding = positive(C.textWidthPadding, TEXT_WIDTH_PADDING);
+  const tiltReturnTime = Math.max(0, Number(C.tiltReturnTime) || 0);
+  const directionThreshold = Math.max(0, Number(C.directionChangeThreshold) || 0);
+
   sprite.vy += GRAVITY;
 
   if (sprite.flipUntil) {
@@ -284,14 +336,14 @@ function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESIS
     } else {
       sprite.flipUntil = null;
       sprite.isExhausted = false;
-      sprite.lastTiltTime = now - TILT_RETURN_TIME;
+      sprite.lastTiltTime = now - tiltReturnTime;
     }
   }
 
   if (sprite.state === 'dance') {
-    sprite.angularVelocity = (Math.random() - 0.5) * DANCE_ANGULAR_VELOCITY;
+    sprite.angularVelocity = (Math.random() - 0.5) * bounded(C.danceAngularVelocity, 0, 1, DANCE_ANGULAR_VELOCITY);
   } else {
-    sprite.angularVelocity *= ANGULAR_VELOCITY_DECAY;
+    sprite.angularVelocity *= bounded(C.angularVelocityDecay, 0, 1, ANGULAR_VELOCITY_DECAY);
   }
   sprite.angle += sprite.angularVelocity;
 
@@ -301,7 +353,7 @@ function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESIS
       sprite.vy = 0;
       sprite.y = GROUND_Y - (sprite.collisionRadius || sprite.size / 2);
     }
-    const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + TEXT_WIDTH_PADDING);
+    const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + textPadding);
     if (sprite.x < leftRightRadius) sprite.x = leftRightRadius;
     if (sprite.x > W - leftRightRadius) sprite.x = W - leftRightRadius;
     if (sprite.y < (sprite.collisionRadius || sprite.size / 2)) {
@@ -322,12 +374,12 @@ function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESIS
     sprite.vy *= AIR_RESISTANCE;
   }
 
-  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + TEXT_WIDTH_PADDING);
+  const leftRightRadius = sprite.boundaryRadius || Math.max(sprite.size / 2, (sprite.textWidth || 0) / 2 + textPadding);
   const topBottomRadius = sprite.collisionRadius || sprite.size / 2;
 
-  if (sprite.vx > DIRECTION_CHANGE_THRESHOLD) {
+  if (sprite.vx > directionThreshold) {
     sprite.facingRight = true;
-  } else if (sprite.vx < -DIRECTION_CHANGE_THRESHOLD) {
+  } else if (sprite.vx < -directionThreshold) {
     sprite.facingRight = false;
   }
 
@@ -359,18 +411,19 @@ function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESIS
                         zoneCounts, zoneWidth, avgDensity, NUM_ZONES);
 
   if (sprite.state === 'dance') {
-    sprite.vy += Math.sin((now + sprite.wiggle) / DANCE_FREQUENCY) * DANCE_GRAVITY_FACTOR;
+    const danceFrequency = positive(C.danceFrequency, DANCE_FREQUENCY);
+    sprite.vy += Math.sin((now + sprite.wiggle) / danceFrequency) * bounded(C.danceGravityFactor, -2, 2, DANCE_GRAVITY_FACTOR);
   }
 
   if (!sprite.flipUntil && sprite.lastTiltTime && sprite.angle !== 0) {
-    sprite.angularVelocity *= TILT_ANGULAR_DECAY;
+    sprite.angularVelocity *= bounded(C.tiltAngularDecay, 0, 1, TILT_ANGULAR_DECAY);
     const topRadius = sprite.collisionRadius || sprite.size / 2;
     const onGround = sprite.y >= GROUND_Y - topRadius - 1;
     if (onGround) {
       const timeSinceTilt = now - sprite.lastTiltTime;
-      if (timeSinceTilt > TILT_RETURN_TIME) {
-        sprite.angle *= ANGLE_DECAY;
-        if (Math.abs(sprite.angle) < TILT_ANGLE_THRESHOLD) {
+      if (timeSinceTilt > tiltReturnTime) {
+        sprite.angle *= bounded(C.angleDecay, 0, 1, ANGLE_DECAY);
+        if (Math.abs(sprite.angle) < bounded(C.tiltAngleThreshold, 0, 1, TILT_ANGLE_THRESHOLD)) {
           sprite.angle = 0;
           sprite.lastTiltTime = null;
         }
@@ -383,13 +436,27 @@ function updateSpritePhysics(sprite, dt, now, W, H, GROUND_Y, GRAVITY, AIR_RESIS
 
 function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topBottomRadius,
                                zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
+  const C = activeConfig;
   if (sprite.state === 'idle' || sprite.state === 'dance') {
+    const roamZoneYOffset = Math.max(0, Number(C.roamZoneYOffset) || 0);
+    const roamDurationBase = Math.max(0, Number(C.roamDurationBase) || 0);
+    const roamDurationVar = Math.max(0, Number(C.roamDurationVar) || 0);
+    const roamDistanceThreshold = Math.max(0, Number(C.roamDistanceThreshold) || 0);
+    const roamWalkForce = Math.max(0, Number(C.roamWalkForceMultiplier) || 0);
+    const roamWalkVertical = Math.max(0, Number(C.roamWalkVerticalFactor) || 0);
+    const roamSteerForce = Math.max(0, Number(C.roamSteerForceMultiplier) || 0);
+    const roamSteerVertical = Math.max(0, Number(C.roamSteerVerticalFactor) || 0);
+    const roamArrivalThreshold = Math.max(0, Number(C.roamArrivalThreshold) || 0);
+    const roamRandomChance = bounded(C.roamRandomMoveChance, 0, 1, 0);
+    const roamRandomForce = Math.max(0, Number(C.roamRandomMoveForce) || 0);
+    const roamRandomVertical = Math.max(0, Number(C.roamRandomMoveVertical) || 0);
+    const zoneSelectionBias = bounded(C.zoneSelectionBias, 0, 1, 0.7);
+
     if (sprite.roamTargetX === null || sprite.roamTargetY === null || sprite.roamTimer <= 0) {
-      let targetZone;
-      const currentZone = Math.floor(sprite.x / zoneWidth);
+      let targetZone = 0;
 
       let minDensity = Infinity;
-      let underpopulatedZones = [];
+      const underpopulatedZones = [];
       for (let z = 0; z < NUM_ZONES; z++) {
         if (zoneCounts[z] < avgDensity) {
           underpopulatedZones.push(z);
@@ -402,29 +469,27 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
 
       if (underpopulatedZones.length === 0) {
         targetZone = Math.floor(Math.random() * NUM_ZONES);
-      } else {
-        if (Math.random() >= ZONE_SELECTION_BIAS) {
-          targetZone = underpopulatedZones[Math.floor(Math.random() * underpopulatedZones.length)];
-        }
+      } else if (Math.random() >= zoneSelectionBias) {
+        targetZone = underpopulatedZones[Math.floor(Math.random() * underpopulatedZones.length)];
       }
 
       const zoneLeft = targetZone * zoneWidth;
-      const zoneRight = zoneLeft + zoneWidth;
-      sprite.roamTargetX = zoneLeft + leftRightRadius + Math.random() * (zoneWidth - leftRightRadius * 2);
-      sprite.roamTargetY = GROUND_Y - topBottomRadius - Math.random() * ROAM_ZONE_Y_OFFSET;
-      sprite.roamDuration = ROAM_DURATION_BASE + Math.random() * ROAM_DURATION_VAR;
+      const targetSpread = Math.max(0, zoneWidth - leftRightRadius * 2);
+      sprite.roamTargetX = zoneLeft + leftRightRadius + Math.random() * targetSpread;
+      sprite.roamTargetY = GROUND_Y - topBottomRadius - Math.random() * roamZoneYOffset;
+      sprite.roamDuration = roamDurationBase + Math.random() * roamDurationVar;
       sprite.roamTimer = sprite.roamDuration;
 
       const speed = sprite.roamSpeed;
       const dx = sprite.roamTargetX - sprite.x;
       const dy = sprite.roamTargetY - sprite.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > ROAM_DISTANCE_THRESHOLD) {
+      if (dist > roamDistanceThreshold) {
         const nx = dx / dist;
         const ny = dy / dist;
-        const walkForce = speed * ROAM_WALK_FORCE_MULTIPLIER;
+        const walkForce = speed * roamWalkForce;
         sprite.vx += nx * walkForce;
-        sprite.vy += ny * walkForce * ROAM_WALK_VERTICAL_FACTOR;
+        sprite.vy += ny * walkForce * roamWalkVertical;
       }
     }
 
@@ -434,30 +499,37 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
       const dx = sprite.roamTargetX - sprite.x;
       const dy = sprite.roamTargetY - sprite.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > ROAM_ARRIVAL_THRESHOLD) {
+      if (dist > roamArrivalThreshold) {
         const nx = dx / dist;
         const ny = dy / dist;
-        const steerForce = sprite.roamSpeed * ROAM_STEER_FORCE_MULTIPLIER;
+        const steerForce = sprite.roamSpeed * roamSteerForce;
         sprite.vx += nx * steerForce;
-        sprite.vy += ny * steerForce * ROAM_STEER_VERTICAL_FACTOR;
-      } else if (dist <= ROAM_ARRIVAL_THRESHOLD) {
+        sprite.vy += ny * steerForce * roamSteerVertical;
+      } else {
         sprite.roamTimer = 0;
         sprite.roamTargetX = null;
         sprite.roamTargetY = null;
       }
     }
 
-    if (Math.random() < ROAM_RANDOM_MOVE_CHANCE) {
-      sprite.vx += (Math.random() - 0.5) * ROAM_RANDOM_MOVE_FORCE;
-      sprite.vy += (Math.random() - 0.5) * ROAM_RANDOM_MOVE_VERTICAL;
+    if (Math.random() < roamRandomChance) {
+      sprite.vx += (Math.random() - 0.5) * roamRandomForce;
+      sprite.vy += (Math.random() - 0.5) * roamRandomVertical;
     }
   }
 }
 
 function handleCollisions(arr, grid, now) {
+  const C = activeConfig;
   const collisionProbability = getCollisionProbability(arr.length);
   if (collisionProbability <= 0) return;
-  const thresholdSq = COLLISION_PERSONAL_SPACE_THRESHOLD * COLLISION_PERSONAL_SPACE_THRESHOLD;
+
+  const collisionThreshold = Math.max(0, Number(C.collisionPersonalSpaceThreshold) || 0);
+  const thresholdSq = collisionThreshold * collisionThreshold;
+  const forceMultiplier = Math.max(0, Number(C.collisionForceMultiplier) || 0);
+  const angularFromCollision = Math.max(0, Number(C.angularVelocityFromCollision) || 0);
+  const nudgeDistance = Math.max(0, Number(C.safetyNudgeDistance) || 0);
+
   for (const a of arr) {
     const near = grid.query(a, a);
     for (const b of near) {
@@ -469,40 +541,74 @@ function handleCollisions(arr, grid, now) {
       const distSq = dx * dx + dy * dy;
       const personalSpace = a.collisionRadius + b.collisionRadius;
       const personalSpaceSq = personalSpace * personalSpace;
+      if (distSq >= personalSpaceSq) continue;
 
-      if (distSq < personalSpaceSq && distSq > thresholdSq) {
-        const dist = Math.sqrt(distSq);
-        const nx = dx / dist, ny = dy / dist;
-        const force = (personalSpace - dist) * COLLISION_FORCE_MULTIPLIER;
-
-        const invMassA = 1 / (a.mass || 1);
-        const invMassB = 1 / (b.mass || 1);
-
-        const fx = force * nx;
-        const fy = force * ny;
-
-        a.vx -= fx * invMassA;
-        a.vy -= fy * invMassA;
-        b.vx += fx * invMassB;
-        b.vy += fy * invMassB;
-
-        const tangentX = -ny, tangentY = nx;
-        const tangentVel = (b.vx - a.vx) * tangentX + (b.vy - a.vy) * tangentY;
-        // Don't add collision angular velocity during flips — it stacks and causes crazy spinning
-        if (!a.flipUntil) a.angularVelocity += tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
-        if (!b.flipUntil) b.angularVelocity -= tangentVel * ANGULAR_VELOCITY_FROM_COLLISION;
-
-        if (!a.lastTiltTime) a.lastTiltTime = now;
-        if (!b.lastTiltTime) b.lastTiltTime = now;
+      let dist;
+      let nx;
+      let ny;
+      if (distSq <= thresholdSq) {
+        // Perfectly overlapping sprites have no direction to separate along.
+        // Nudge them apart and use that direction for the collision response.
+        const angle = Math.random() * Math.PI * 2;
+        nx = Math.cos(angle);
+        ny = Math.sin(angle);
+        dist = 0;
+        if (nudgeDistance > 0) {
+          a.x -= nx * nudgeDistance;
+          a.y -= ny * nudgeDistance;
+          b.x += nx * nudgeDistance;
+          b.y += ny * nudgeDistance;
+        }
+      } else {
+        dist = Math.sqrt(distSq);
+        nx = dx / dist;
+        ny = dy / dist;
       }
+
+      const force = (personalSpace - dist) * forceMultiplier;
+
+      const invMassA = 1 / (a.mass || 1);
+      const invMassB = 1 / (b.mass || 1);
+
+      const fx = force * nx;
+      const fy = force * ny;
+
+      a.vx -= fx * invMassA;
+      a.vy -= fy * invMassA;
+      b.vx += fx * invMassB;
+      b.vy += fy * invMassB;
+
+      const tangentX = -ny, tangentY = nx;
+      const tangentVel = (b.vx - a.vx) * tangentX + (b.vy - a.vy) * tangentY;
+      // Don't add collision angular velocity during flips — it stacks and causes crazy spinning
+      if (!a.flipUntil) a.angularVelocity += tangentVel * angularFromCollision;
+      if (!b.flipUntil) b.angularVelocity -= tangentVel * angularFromCollision;
+
+      if (!a.lastTiltTime) a.lastTiltTime = now;
+      if (!b.lastTiltTime) b.lastTiltTime = now;
     }
   }
 }
 
 function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDensity, NUM_ZONES) {
+  const C = activeConfig;
+  const avoidanceMultiplier = positive(C.avoidanceRadiusMultiplier, AVOIDANCE_RADIUS_MULTIPLIER);
+  const sizeSimilarityThreshold = bounded(C.sizeSimilarityThreshold, 0, 1, SIZE_SIMILARITY_THRESHOLD);
+  const expandedMultiplier = positive(C.expandedRadiusMultiplier, EXPANDED_RADIUS_MULTIPLIER);
+  const sizeDiffThresholdLow = bounded(C.sizeDiffThresholdLow, 0, 1, SIZE_DIFF_THRESHOLD_LOW);
+  const attractionRadiusMultiplier = positive(C.sizeDiffAttractionMultiplier, 1.5);
+  const minAttractionDistance = Math.max(0, Number(C.minAttractionDistance) || 0);
+  const sizeDiffFactorBase = Math.max(0, Number(C.sizeDiffFactor) || 0);
+  const attractionForceBase = Math.max(0, Number(C.attractionForceBase) || 0);
+  const largerRepulsionFactor = Math.max(0, Number(C.largerRepulsionFactor) || 0);
+  const moderateRepulsionRadiusMultiplier = positive(C.moderateRepulsionRadius, 1);
+  const moderateRepulsionForce = Math.max(0, Number(C.moderateRepulsionForce) || 0);
+
   const centerX = W / 2;
-  const centerY = GROUND_Y * GROUND_Y_CENTER_OFFSET;
-  const centerPushRadiusSq = CENTER_PUSH_RADIUS * CENTER_PUSH_RADIUS;
+  const centerY = GROUND_Y * bounded(C.groundYCenterOffset, 0, 2, GROUND_Y_CENTER_OFFSET);
+  const centerPushRadius = positive(C.centerPushRadius, CENTER_PUSH_RADIUS);
+  const centerPushForce = Math.max(0, Number(C.centerPushForce) || 0);
+  const centerPushRadiusSq = centerPushRadius * centerPushRadius;
 
   for (const a of arr) {
     if (a.isFighting) continue;
@@ -529,13 +635,13 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
       const sizeB = b.size || 50;
       const largerSize = Math.max(sizeA, sizeB);
       const smallerSize = Math.min(sizeA, sizeB);
-      const sizeRatio = smallerSize / largerSize;
+      const sizeRatio = largerSize > 0 ? smallerSize / largerSize : 1;
 
-      const baseAvoidanceRadius = (a.collisionRadius + b.collisionRadius) * AVOIDANCE_RADIUS_MULTIPLIER;
+      const baseAvoidanceRadius = (a.collisionRadius + b.collisionRadius) * avoidanceMultiplier;
       const baseAvoidanceRadiusSq = baseAvoidanceRadius * baseAvoidanceRadius;
 
-      if (sizeRatio > SIZE_SIMILARITY_THRESHOLD) {
-        const expandedRadius = baseAvoidanceRadius * (1.0 + (sizeRatio - SIZE_SIMILARITY_THRESHOLD) * EXPANDED_RADIUS_MULTIPLIER);
+      if (sizeRatio > sizeSimilarityThreshold) {
+        const expandedRadius = baseAvoidanceRadius * (1.0 + (sizeRatio - sizeSimilarityThreshold) * expandedMultiplier);
         const expandedRadiusSq = expandedRadius * expandedRadius;
         if (distSq < expandedRadiusSq) {
           const normalizedDist = dist / expandedRadius;
@@ -545,30 +651,32 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
           b.vx += nx * force;
           b.vy += ny * force;
         }
-      } else if (sizeRatio < SIZE_DIFF_THRESHOLD_LOW) {
-        const attractionRadius = baseAvoidanceRadius * 1.5;
+      } else if (sizeRatio < sizeDiffThresholdLow) {
+        const attractionRadius = baseAvoidanceRadius * attractionRadiusMultiplier;
         const attractionRadiusSq = attractionRadius * attractionRadius;
-        const minAttrDistSq = MIN_ATTRACTION_DISTANCE * MIN_ATTRACTION_DISTANCE;
+        const minAttrDistSq = minAttractionDistance * minAttractionDistance;
         if (distSq < attractionRadiusSq && distSq > minAttrDistSq) {
-          const sizeDiffFactor = (1 - sizeRatio) * SIZE_DIFF_FACTOR;
+          const sizeDiffFactor = (1 - sizeRatio) * sizeDiffFactorBase;
           const proximityFactor = 1 - (dist / attractionRadius);
-          const attractionForce = sizeDiffFactor * proximityFactor * ATTRACTION_FORCE_BASE * 2;
+          const attractionForce = sizeDiffFactor * proximityFactor * attractionForceBase * 2;
           if (sizeA < sizeB) {
             a.vx += nx * attractionForce;
             a.vy += ny * attractionForce;
-            b.vx -= nx * attractionForce * LARGER_REPULSION_FACTOR;
-            b.vy -= ny * attractionForce * LARGER_REPULSION_FACTOR;
+            b.vx -= nx * attractionForce * largerRepulsionFactor;
+            b.vy -= ny * attractionForce * largerRepulsionFactor;
           } else {
             b.vx += nx * attractionForce;
             b.vy += ny * attractionForce;
-            a.vx -= nx * attractionForce * LARGER_REPULSION_FACTOR;
-            a.vy -= ny * attractionForce * LARGER_REPULSION_FACTOR;
+            a.vx -= nx * attractionForce * largerRepulsionFactor;
+            a.vy -= ny * attractionForce * largerRepulsionFactor;
           }
         }
       } else {
-        if (distSq < baseAvoidanceRadiusSq) {
-          const normalizedDist = dist / baseAvoidanceRadius;
-          const force = Math.pow(1 - normalizedDist, 2) * MODERATE_REPULSION_FORCE * 2;
+        const moderateRadius = baseAvoidanceRadius * moderateRepulsionRadiusMultiplier;
+        const moderateRadiusSq = moderateRadius * moderateRadius;
+        if (distSq < moderateRadiusSq) {
+          const normalizedDist = dist / moderateRadius;
+          const force = Math.pow(1 - normalizedDist, 2) * moderateRepulsionForce * 2;
           a.vx -= nx * force;
           a.vy -= ny * force;
           b.vx += nx * force;
@@ -580,13 +688,15 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
     const dcx = a.x - centerX;
     const dcy = a.y - centerY;
     const distFromCenterSq = dcx * dcx + dcy * dcy;
-    if (distFromCenterSq < centerPushRadiusSq) {
+    if (centerPushRadius > 0 && distFromCenterSq < centerPushRadiusSq) {
       const distFromCenter = Math.sqrt(distFromCenterSq);
-      const nx = dcx / distFromCenter;
-      const ny = dcy / distFromCenter;
-      const centerForce = (CENTER_PUSH_RADIUS - distFromCenter) / CENTER_PUSH_RADIUS * CENTER_PUSH_FORCE;
-      a.vx += nx * centerForce;
-      a.vy += ny * centerForce;
+      if (distFromCenter > 0) {
+        const nx = dcx / distFromCenter;
+        const ny = dcy / distFromCenter;
+        const centerForce = (centerPushRadius - distFromCenter) / centerPushRadius * centerPushForce;
+        a.vx += nx * centerForce;
+        a.vy += ny * centerForce;
+      }
     }
   }
 }
@@ -681,6 +791,8 @@ function serializeSpritePhysics(sprite) {
 
 module.exports = {
   SpatialHash,
+  setPhysicsConfig,
+  getPhysicsConfig,
   createServerSprite,
   updatePhysics,
   manageLifetime,

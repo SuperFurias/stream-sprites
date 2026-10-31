@@ -45,10 +45,12 @@ log_red()    { echo -e "\033[31m$*\033[0m"; }
 SERVER_PORT=8080
 if [[ -f "$ENV_FILE" ]]; then
     ENV_SERVER_PORT=""
-    if grep -qE '^serverPort=' "$ENV_FILE"; then
-        ENV_SERVER_PORT=$(grep -oP '^serverPort=\K.*' "$ENV_FILE" 2>/dev/null || true)
+    if command -v node >/dev/null 2>&1; then
+        ENV_SERVER_PORT=$(node -e "const fs=require('fs');try{const c=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));if(c.serverPort)process.stdout.write(String(c.serverPort))}catch(e){}" "$ENV_FILE" 2>/dev/null || true)
+    else
+        ENV_SERVER_PORT=$(sed -n 's/.*"serverPort"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$ENV_FILE" | head -n 1)
     fi
-    if [[ -n "$ENV_SERVER_PORT" ]]; then
+    if [[ "$ENV_SERVER_PORT" =~ ^[0-9]+$ ]]; then
         SERVER_PORT="$ENV_SERVER_PORT"
         log_green "Using port $SERVER_PORT from .env file"
     else
@@ -136,7 +138,11 @@ install_dependencies() {
         log_yellow "node_modules not found. Full install required."
         needs_install=true
     elif [[ -f "$lock_file" ]]; then
-        if [[ "$package_json" -nt "$node_modules" ]]; then
+        local install_stamp="$node_modules/.package-lock.json"
+        if [[ ! -f "$install_stamp" ]]; then
+            install_stamp="$node_modules"
+        fi
+        if [[ "$package_json" -nt "$install_stamp" ]]; then
             log_yellow "package.json changed since last install. Updating dependencies..."
             needs_install=true
         fi
@@ -161,7 +167,7 @@ install_dependencies() {
 
     if [[ "$AUDIT_FIX" == true ]]; then
         log_cyan "Running npm audit fix..."
-        if npm audit fix --force; then
+        if npm audit fix; then
             log_green "Vulnerabilities patched."
         else
             log_yellow "Some vulnerabilities could not be auto-fixed."

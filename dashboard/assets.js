@@ -80,7 +80,9 @@ async function loadAssets() {
         mediaElement.style.borderRadius = '4px';
 
         const nameDiv = document.createElement('div');
-        nameDiv.innerHTML = `<strong>${asset.name}</strong>`;
+        const nameStrong = document.createElement('strong');
+        nameStrong.textContent = asset.name;
+        nameDiv.appendChild(nameStrong);
 
         const delBtn = document.createElement('button');
         delBtn.className = 'danger';

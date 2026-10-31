@@ -156,10 +156,12 @@
     const content = document.getElementById('content');
     let currentTab = 'dashboard';
     let loadedScripts = new Set();
+    let tabLoadSequence = 0;
 
     // Tab switching with dynamic loading
     async function switchTab(tabId) {
       currentTab = tabId;
+      const loadSequence = ++tabLoadSequence;
 
       // Remove active class from all tabs
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
@@ -174,6 +176,7 @@
           throw new Error(`Failed to load ${tabId} tab`);
         }
         const html = await response.text();
+        if (loadSequence !== tabLoadSequence) return;
         content.innerHTML = html;
 
         // Load tab-specific JavaScript file if not already loaded
@@ -183,6 +186,8 @@
           loadedScripts.add(tabId);
           console.log(`Script loaded: dashboard/${tabId}.js`);
         }
+
+        if (loadSequence !== tabLoadSequence) return;
 
         // Initialize tab-specific JavaScript
         console.log(`Checking initializer for: ${tabId}`);

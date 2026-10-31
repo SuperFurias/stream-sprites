@@ -200,6 +200,25 @@ function initRoutes(app, cfg, cfgPath, driver, dbg) {
     return req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
   }
 
+  function requestBaseUrl(req) {
+    const protocol = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https'
+      ? 'https'
+      : 'http';
+    const host = String(req.headers.host || `localhost:${_cfg.serverPort || 8080}`)
+      .replace(/[^a-zA-Z0-9.\-:\[\]]/g, '');
+    return `${protocol}://${host}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[ch]);
+  }
+
   function loginKey(req) {
     return req.ip || req.socket?.remoteAddress || 'unknown';
   }
@@ -483,6 +502,10 @@ app.use((req, res, next) => {
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
     if (!isValidSkinId(skinId)) return res.status(400).json({ error: 'Invalid skin ID' });
     try {
+      const skins = await twitch.detectSkinsFromAssetsAsync();
+      if (!skins.some(s => s.id === skinId)) {
+        return res.status(400).json({ error: 'Unknown skin ID' });
+      }
       await _driver.assignSkin(userId, skinId);
       invalidateStatsCache();
       res.json({ ok: true, assigned_skin: skinId });
@@ -871,15 +894,28 @@ app.use((req, res, next) => {
 
     try {
       const { spawn } = require('child_process');
-      tunnelProcess = spawn('npx', ['cloudflared', 'tunnel', '--url', `http://localhost:${_cfg.serverPort || 8080}`], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: true
-      });
+      const localCloudflared = path.join(PROJECT_ROOT, 'node_modules', 'cloudflared', 'bin',
+        process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
+      const tunnelArgs = ['tunnel', '--url', `http://localhost:${_cfg.serverPort || 8080}`];
+
+      // Prefer the binary installed with the dependency. Fall back to npx only
+      // when the package is missing (for example on a trimmed deployment).
+      const useLocalBinary = fs.existsSync(localCloudflared);
+      tunnelProcess = useLocalBinary
+        ? spawn(localCloudflared, tunnelArgs, {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true
+          })
+        : spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx',
+            ['--yes', 'cloudflared', ...tunnelArgs], {
+              stdio: ['ignore', 'pipe', 'pipe'],
+              windowsHide: true
+            });
 
       let outputBuffer = '';
 
       function processOutput(data) {
-        outputBuffer += data.toString();
+        outputBuffer = (outputBuffer + data.toString()).slice(-16384);
         const match = outputBuffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
         if (match && !tunnelUrl) {
           tunnelUrl = match[0];
@@ -1003,6 +1039,7 @@ app.use((req, res, next) => {
       _driver = storage.getDriver();
       twitch.setDriver(_driver);
       twitch.invalidateSkinsCache();
+      ws.invalidateOverlayConfigCache();
       invalidateEnvCache();
       invalidateStatsCache();
       res.json(result);
@@ -1230,11 +1267,9 @@ app.use((req, res, next) => {
     const state = crypto.randomBytes(16).toString('hex');
     pendingOAuthStates.set(state, Date.now());
     // Use the actual request host so OAuth works with tunnels too
-    const host = req.headers.host || `localhost:${_cfg.serverPort || 8080}`;
-    const protocol = req.headers['x-forwarded-proto'] || 'http';
-    const baseUrl = `${protocol}://${host}`;
+    const baseUrl = requestBaseUrl(req);
     const oauthRedirectUrl = `${baseUrl}/auth/callback`;
-    const url = `https://id.twitch.tv/oauth2/authorize?client_id=${_cfg.twitch.clientId}&redirect_uri=${encodeURIComponent(oauthRedirectUrl)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
+    const url = `https://id.twitch.tv/oauth2/authorize?client_id=${encodeURIComponent(_cfg.twitch.clientId || '')}&redirect_uri=${encodeURIComponent(oauthRedirectUrl)}&response_type=code&scope=${encodeURIComponent('chat:read chat:edit')}&state=${state}`;
     console.log('→ Redirecting to:', url.substring(0, 80) + '...');
     res.redirect(url);
   });
@@ -1247,9 +1282,7 @@ app.use((req, res, next) => {
     }
     pendingOAuthStates.delete(state);
     try {
-      const host = req.headers.host || `localhost:${_cfg.serverPort || 8080}`;
-      const protocol = req.headers['x-forwarded-proto'] || 'http';
-      const baseUrl = `${protocol}://${host}`;
+      const baseUrl = requestBaseUrl(req);
       const oauthRedirectUrl = `${baseUrl}/auth/callback`;
       const params = new URLSearchParams({
         client_id: _cfg.twitch.clientId,
@@ -1277,18 +1310,19 @@ app.use((req, res, next) => {
       }
 
       const dashboardUrl = `${baseUrl}/`;
+      const safeDashboardUrl = escapeHtml(dashboardUrl);
       res.send(`
         <html><body style="font-family:sans-serif;padding:20px;background:#111;color:#fff">
           <h2>✓ OAuth Token Generated</h2>
           <p>Refresh token saved. Use the dashboard to connect to Twitch.</p>
-          <p><a href="${dashboardUrl}" style="color:#0af">Go to Local Control Dashboard</a></p>
+          <p><a href="${safeDashboardUrl}" style="color:#0af">Go to Local Control Dashboard</a></p>
           <p>Redirecting in 3 seconds...</p>
-          <script>setTimeout(() => { window.location.href = "${dashboardUrl}"; }, 3000);</script>
+          <script>setTimeout(() => { window.location.href = ${JSON.stringify(dashboardUrl)}; }, 3000);</script>
         </body></html>
       `);
     } catch (e) {
       _dbg('OAuth callback error:', e.message);
-      res.status(500).send('OAuth failed: ' + (e.response?.data?.message || e.message));
+      res.status(500).send('OAuth failed: ' + escapeHtml(e.response?.data?.message || e.message));
     }
   });
 
@@ -1303,10 +1337,33 @@ app.use((req, res, next) => {
   }, 5 * 60 * 1000);
 }
 
+function cleanupTunnel() {
+  if (!tunnelProcess) return;
+  const pid = tunnelProcess.pid;
+  try {
+    if (process.platform === 'win32') {
+      const { spawnSync } = require('child_process');
+      spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], {
+        stdio: 'ignore',
+        windowsHide: true,
+        timeout: 3000
+      });
+    } else {
+      tunnelProcess.kill('SIGTERM');
+    }
+  } catch (e) {
+    // Process may already have exited.
+  }
+  tunnelProcess = null;
+  tunnelUrl = null;
+  tunnelStatus = 'stopped';
+}
+
 module.exports = {
   initRoutes,
   broadcastStats,
   refreshStatsCache,
   invalidateStatsCache,
-  setDashboardConfirmedOpen
+  setDashboardConfirmedOpen,
+  cleanupTunnel
 };

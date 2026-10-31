@@ -59,6 +59,16 @@ function openOverlayInNewTab() {
 
 // Chat functionality
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[ch]);
+}
+
 function addChatLog(text, type) {
   const log = document.getElementById('chatLog');
   if (!log) return;
@@ -84,10 +94,10 @@ async function sendChat() {
     });
     const data = await res.json();
     if (data.commandResult) {
-      addChatLog(`<span class="system">→ ${data.commandResult}</span>`, 'system');
+      addChatLog(`<span class="system">→ ${escapeHtml(data.commandResult)}</span>`, 'system');
     }
   } catch (e) {
-    addChatLog(`<span class="system">Error: ${e.message}</span>`, 'system');
+    addChatLog(`<span class="system">Error: ${escapeHtml(e.message)}</span>`, 'system');
   }
 
   inputEl.focus();
@@ -137,8 +147,8 @@ window.tabInitializers.dashboard = async function() {
 
   // Listen for Twitch chat messages via WebSocket
   window.onTwitchChat = (username, message) => {
-    const escapedUser = username.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const escapedMsg = message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escapedUser = escapeHtml(username);
+    const escapedMsg = escapeHtml(message);
     const isCommand = message.startsWith('!');
     addChatLog(`<span class="user">${escapedUser}:</span> ${escapedMsg}`, isCommand ? 'command' : '');
   };

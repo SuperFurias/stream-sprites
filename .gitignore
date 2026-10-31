@@ -44,9 +44,6 @@ Desktop.ini
 .env.*.local
 server/.env
 
-# Package lock (optional)
-package-lock.json
-
 # Build outputs
 dist/
 build/

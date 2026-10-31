@@ -5,6 +5,43 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-10-31
+
+### Security
+- **Static exposure fixed**: only `index.html`, `favicon.ico`, `dashboard/`, `overlay/`, and `assets/` are served. Server config, SQLite files, logs, and source files are no longer reachable over HTTP.
+- **Asset path traversal fixed**: uploads are reduced to a safe basename, folders and filenames are validated, and deletion/serving resolves inside `assets/` only.
+- **Auth hardened**: loopback detection now validates the peer address, Host header, proxy headers, and request origin; mutating APIs reject cross-origin and cross-site requests; login attempts are rate-limited and password comparison is constant-time.
+- **Secret leaks removed**: the public `/env` response no longer includes Twitch client credentials, and the WebSocket no longer sends the full config (which contained tokens) to every client.
+- **Dashboard setup is local-only**; remote setup attempts return 403. Set the password from the local machine before exposing a tunnel.
+- **Config writes sanitized**: unknown/runtime keys are dropped, prototype-pollution keys are blocked, and OAuth access tokens are never persisted.
+
+### Fixed
+- **Storage switch startup bug**: `server/storage.json` shadowed the `server/storage/` module, so restarting after switching databases failed. The config moved to `server/storage-config.json` (legacy files migrate automatically).
+- **Stale driver after switch**: switching to PostgreSQL now updates the Twitch module and all route handlers instead of using a closed SQLite driver.
+- **PostgreSQL config at startup** is loaded before routes and Twitch initialize.
+- **PostgreSQL skins** now resolve assignments and list DB-stored skins correctly.
+- **Fight resolution** no longer marks both participants as losers; the chosen loser is preserved and fights expire if they never connect.
+- **MAX_SPRITES** is enforced for chat-created sprites as well as `!spawn`.
+- **Sprite cleanup** removes login-name index entries and drag ownership.
+- **Storage UI** no longer advertises unsupported MySQL/MongoDB backends.
+- **Settings lifetime/fade fields** now round-trip correctly between minutes (UI) and milliseconds (server).
+- **Dashboard tab races** and chat/asset XSS paths fixed.
+- **Invalid JSON bodies** return 400 instead of 500.
+
+### Changed
+- **Server physics now honors dashboard settings** for collisions, avoidance, roaming, spawning, zones, decay, dances, and particle effects.
+- **Snapshot rate is configurable** (`networkFps`, default 30 Hz); clients interpolate between snapshots.
+- **Game loop** schedules the next frame instead of polling every millisecond, and broadcasts are skipped when no overlays are connected.
+- **WebSocket heartbeat** drops dead clients.
+- **Overlay rendering** caches DOM writes, re-sorts drag targets on click, uses shortest-arc rotation interpolation, and normalizes particles to 60 FPS.
+- **Logs rotate** at 5 MB.
+- **Node.js 22+** is required (better-sqlite3 13).
+- **Dependencies** updated and pinned via overrides; `npm audit` reports 0 vulnerabilities.
+- **Tests**: added `npm test` coverage for config safety, asset paths, permissions, physics configuration, collisions, lifetime, and serialization.
+
+### Removed
+- Unused `cors` dependency.
+
 ## [2.2.0] - 2026-04-27
 
 ### Added

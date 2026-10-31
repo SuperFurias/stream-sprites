@@ -17,7 +17,7 @@ Stream Sprites is a powerful, feature-rich Twitch overlay application that trans
 - **Server-Authoritative State** – Centralized sprite management prevents duplicates and ensures consistency
 - **Advanced Physics Engine** – Gravity, collisions, friction, bouncing, and spatial awareness
 - **Dynamic Skin System** – Automatic detection from `assets/skins/` with support for PNG, JPG, GIF, WebP, and WebM
-- **User Skin Assignments** – Persistent per-user skin preferences stored in SQLite
+- **User Skin Assignments** – Persistent per-user skin preferences stored in SQLite or PostgreSQL
 - **Admin Dashboard** – Full-featured web interface for configuration and management
 
 ### Interactive Commands
@@ -50,7 +50,7 @@ Users can control their sprites via Twitch chat:
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Node.js 18+** – [Download from nodejs.org](https://nodejs.org/)
+- **Node.js 22+** – [Download from nodejs.org](https://nodejs.org/)
 - **Twitch Account** – For bot credentials and OAuth
 
 ### Installation (Windows – Recommended)
@@ -72,15 +72,14 @@ Users can control their sprites via Twitch chat:
 ### Manual Setup (All Platforms)
 
 ```bash
-# Navigate to server directory
-cd server
-
-# Install dependencies
+# From the project root
 npm install
 
 # Start the server
 npm start
 ```
+
+Run tests with `npm test`. For isolated development, set `STREAM_SPRITES_CONFIG` to an alternate config file and `STREAM_SPRITES_DATA_DIR` to a scratch data directory.
 
 The server will:
 - Create `server/.env` with default configuration on first run
@@ -240,15 +239,17 @@ Enable in Settings tab:
 | **Config** | Twitch credentials, OAuth, connection management |
 | **Settings** | Overlay physics, visuals, performance tuning |
 | **Users** | View all users, assign/edit skins, manage exclusions |
-| **Skins** | Preview all detected skins (including animations) |
+| **Assets** | Upload, preview, and delete skins and media |
+| **Storage** | Switch between SQLite and PostgreSQL-compatible databases |
+| **Help** | Command reference and troubleshooting |
 
-### Local Control API Endpoints
+### Control API Endpoints
 
-All local control endpoints are intended for localhost use only (no external exposure):
+Local requests are trusted. Remote requests require the dashboard password, and all mutating requests are same-origin only. Endpoints live under `/api/local/*` and `/api/dashboard/*`:
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/local/saveConfig` | POST | Save configuration to `.env` |
+| `/api/local/saveConfig` | POST | Save configuration to the active store (`.env` or PostgreSQL) |
 | `/api/local/connectTwitch` | POST | Initiate Twitch connection |
 | `/api/local/disconnectTwitch` | POST | Disconnect Twitch |
 | `/api/local/users` | GET | List all users with assignments |
@@ -302,19 +303,19 @@ Twitch Chat → TMI.js → Server → WebSocket → Overlay Client
 ```
 
 1. **Chat messages** arrive via TMI.js
-2. **Server** processes commands, validates, updates sprite state
-3. **WebSocket** broadcasts state changes to all connected overlays
-4. **Overlay clients** render sprites with physics
+2. **Server** processes commands and simulates physics authoritatively at 60 Hz
+3. **WebSocket** broadcasts interpolated snapshots at a configurable rate (default 30 Hz)
+4. **Overlay clients** interpolate and render sprites; they never own physics state
 5. **Dashboard** reads/writes configuration and user data via REST
 
 ### Sprite Lifecycle
 
 1. **Spawn** – User types in chat or broadcaster/mod uses `!spawn`
 2. **Validation** – Server checks throttle, max sprites, exclusions
-3. **Creation** – Client creates sprite with skin from cache/DB
-4. **Physics** – Updated every frame (gravity, collisions, roaming)
-5. **Lifetime** – Auto-removed after configurable timeout (default 30min)
-6. **Sync** – Server-authoritative; clients reconcile state on disconnect
+3. **Creation** – Server creates the sprite using the assigned skin from the active database
+4. **Physics** – Simulated server-side every frame (gravity, collisions, roaming)
+5. **Lifetime** – Auto-removed after configurable timeout (default 30 min)
+6. **Sync** – Server-authoritative; clients reconcile state on connect and after network loss
 
 ---
 
@@ -324,44 +325,50 @@ Twitch Chat → TMI.js → Server → WebSocket → Overlay Client
 
 ```
 Stream Sprites/
-├── start.ps1                    # Windows startup script
+├── index.html                  # Dashboard shell (authenticated route)
+├── server.js                   # Node entry point
+├── package.json                # Scripts and dependencies
+├── test/                       # node:test unit tests
 ├── server/
-│   ├── server.js               # Main server (Express + WebSocket)
-│   ├── package.json
-│   ├── .env                    # Configuration (created automatically)
-│   └── db/
-│       └── sa.db               # SQLite database
+│   ├── server.js               # Express + WebSocket bootstrap
+│   ├── routes.js               # REST, auth, assets, OAuth, storage
+│   ├── websocket.js            # Authoritative simulation + snapshots
+│   ├── physics.js              # Physics engine (live-configurable)
+│   ├── twitch.js               # TMI connection and chat commands
+│   ├── db.js                   # Database facade
+│   ├── config.js               # Defaults and config loading
+│   ├── .env                    # Runtime config (created automatically)
+│   ├── storage-config.json     # Selected backend (created after switching)
+│   ├── db/sa.db                # SQLite database
+│   ├── lib/
+│   │   ├── util.js             # Validation, merge, rate limiting
+│   │   ├── logger.js           # Filtered/file logging with rotation
+│   │   ├── asset-paths.js      # Traversal-safe asset paths
+│   │   └── config-safety.js    # Config whitelist and token handling
+│   └── storage/
+│       ├── index.js            # Driver selection/switching
+│       ├── sqlite-driver.js
+│       └── postgres-driver.js
 ├── overlay/
 │   ├── overlay.html            # OBS browser source entry
-│   ├── overlay.css             # Overlay styles
-│   ├── overlay_client.js       # Client entry point
-│   └── js/                     # Client modules
-│       ├── config.js           # Constants & defaults
-│       ├── canvas.js           # Canvas setup
-│       ├── sprite.js           # Sprite creation
-│       ├── physics.js          # Physics engine
-│       ├── renderer.js         # Drawing
+│   ├── overlay.css
+│   ├── overlay_client.js       # Overlay entry point
+│   └── js/
+│       ├── config.js           # Constants derived from /env
+│       ├── canvas.js
+│       ├── core.js             # Game loop and skin cache
+│       ├── sprite.js
+│       ├── renderer.js         # Canvas drawing
+│       ├── animatedMediaRenderer.js  # GIF/WebM layer
 │       ├── explosion.js        # Particles
-│       ├── connection.js       # WebSocket + TMI
-│       ├── commands.js         # Command handling
-│       ├── input.js            # Mouse interaction
-│       ├── skins.js            # Skin loading
-│       ├── userSkinCache.js    # User skin caching
-│       ├── animatedMediaRenderer.js  # GIF/WebM
-│       ├── spatialHash.js      # Collision grid
-│       └── utils.js            # Utilities
-├── dashboard/                  # Admin interface
-│   ├── index.html              # Main dashboard
-│   ├── config.html/js          # Twitch config
-│   ├── settings.html/js        # Overlay settings
-│   ├── users.html/js           # User management
-│   ├── skins.html/js           # Skin preview
-│   ├── userSkinAssignmentManager.js
-│   └── userExclusionManager.js
+│       ├── connection.js       # WebSocket + TMI fallback
+│       ├── input.js            # Drag/toss interaction
+│       ├── skins.js
+│       └── utils.js
+├── dashboard/                  # Admin tabs and shared JS
 ├── assets/
-│   └── skins/                  # Place skin images here
-├── logs/
-│   └── debug.log               # Optional file logging
+│   └── skins/                  # Skin media
+├── logs/debug.log              # Optional rotated file logging
 ├── README.md
 ├── CHANGELOG.md
 ├── LICENSE
@@ -370,13 +377,20 @@ Stream Sprites/
 
 ### Key Modules
 
-**Server (`server/server.js`)**
-- Configuration loading with auto-recovery
-- Skin detection from filesystem
-- REST API routes
-- WebSocket server with broadcast
-- TMI.js client for chat
-- Database operations (users, exclusions)
+**Server (`server/server.js`, `server/routes.js`)**
+- Auth, same-origin protection, and dashboard sessions
+- Traversal-safe asset upload/list/delete/serve
+- OAuth and token-refresh handling
+- Database operations (users, exclusions, skins, assets)
+- Storage backend switching with rollback
+
+**Simulation (`server/websocket.js`, `server/physics.js`)**
+- 60 Hz authoritative server simulation
+- Configurable snapshot rate (default 30 Hz)
+- Spatial hash grid for collision optimization
+- Sprite physics integration (velocity, gravity, friction)
+- Collision, avoidance, zone density, and roaming behavior
+- Fight resolution, drag authority, and lifetime management
 
 **Overlay Client (`overlay/overlay_client.js`)**
 - Module loader and initializer
@@ -384,16 +398,7 @@ Stream Sprites/
 - Canvas setup and resize handling
 - Game loop (requestAnimationFrame)
 - WebSocket connection with reconnection
-- Command routing
-- Sprite state synchronization
-
-**Physics (`overlay/js/physics.js`)**
-- Spatial hash grid for collision optimization
-- Sprite physics integration (velocity, gravity, friction)
-- Collision detection and response
-- Avoidance behavior (size-based attraction/repulsion)
-- Zone density calculation for distribution
-- Roaming behavior with target selection
+- Snapshot interpolation and sprite state synchronization
 
 **Renderer (`overlay/js/renderer.js`)**
 - Canvas clearing and sorting (by Y depth)
@@ -407,17 +412,23 @@ Stream Sprites/
 
 ## 🔒 Security Notes
 
-- **Development Mode**: Admin endpoints have no authentication. Add reverse proxy auth or implement JWT for production.
-- **OAuth Token**: Access tokens are stored in memory only and never saved to disk. Refresh tokens are stored in `.env` for automatic reconnection. Enable **Auto-Generate OAuth** in the dashboard to use them on startup, or disable both toggles to clear all stored tokens.
-- **.env File**: Automatically added to `.gitignore`. Never commit credentials.
-- **Input Validation**: Usernames limited to 25 characters in the dashboard UI. Server validates all inputs.
+- **Remote access requires a dashboard password.** Loopback requests are trusted after validating the peer address, Host header, proxy headers, and origin. Set a password from the local machine before exposing the server through a tunnel.
+- **Same-origin protection**: mutating API calls and dashboard data reject cross-origin requests. Only public read-only overlay endpoints (`/env`, skins, viewer skins, and media) are CORS-readable without credentials.
+- **OAuth tokens**: access tokens are kept in memory only and are never written to `.env` or the database. Refresh tokens may be persisted so the bot can reconnect. Enabling **Auto-Generate OAuth** with **Auto-Connect** uses them at startup.
+- **Static files**: only `index.html`, `favicon.ico`, `dashboard/`, `overlay/`, and `assets/` are served. Server config, databases, logs, and source files are not reachable over HTTP.
+- **Uploads**: filenames and folders are sanitized and resolved inside `assets/`; path traversal is rejected.
+- **Secrets file**: `server/.env` and storage connection settings are gitignored. Never commit credentials.
+- **Input validation**: server-side validation applies to usernames, skin IDs, settings, drag coordinates, and API payloads.
+
+If exposing the server beyond localhost, use HTTPS (the built-in Cloudflare quick tunnel is supported) and set a strong dashboard password first.
 
 ---
 
 ## 🐛 Troubleshooting
 
 ### Server won't start
-- Ensure Node.js 18+ is installed: `node --version`
+- Ensure Node.js 22+ is installed: `node --version`
+- Run `npm install` after upgrading Node so native modules (`better-sqlite3`) match the runtime
 - Check port 8080 (or configured) is not in use
 - Verify `server/.env` exists and is valid JSON
 - Check logs in `logs/debug.log` if enabled
@@ -436,19 +447,20 @@ Stream Sprites/
 - Enable debug logging to see message processing
 
 ### Skins not detected
-- Place image files in `assets/skins/`
-- Supported formats: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.webm`
-- Refresh dashboard Skins tab or restart server
+- Place image files in `assets/skins/` or upload them from the **Assets** tab
+- Supported formats: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.webm`, `.avif`
+- Refresh the Assets tab or restart the server
 - Check server console for detection logs
 
 ### WebSocket connection failed
 - Ensure `useServer: true` in config
 - Check firewall allows port 8080
 - Verify no proxy interfering
-- Overlay will fall back to TMI.js if WebSocket unavailable (limited functionality)
+- The overlay retries the WebSocket connection automatically
 
 ### High CPU usage
 - Reduce `maxSprites` in Settings
+- Lower **Network Snapshot Rate** (30 Hz default; 15-20 Hz is fine on slower machines)
 - Increase `spawnThrottleMs`
 - Disable file logging (`logToFile: false`)
 - Reduce canvas size if running at high resolution
@@ -484,9 +496,8 @@ Unless required by applicable law or agreed to in writing, software distributed 
 
 See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
 
+---
 
-## Repository layout
+## Versioning
 
-- `index.html` at the project root is the main dashboard entry for static hosting and for the authenticated dashboard route.
-- `server.js` at the project root is the Node entry point.
-- `server/` still contains the backend implementation and runtime config files.
+The current release line is **2.3.x**. See [CHANGELOG.md](CHANGELOG.md) for the full history. Revert points are tagged and pushed as the project is improved.

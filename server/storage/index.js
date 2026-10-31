@@ -125,6 +125,7 @@ async function switchToPostgres(connectionString, serverDir) {
     storageConfig = { type: 'postgres', connectionString };
     saveStorageConfig(storageConfig);
   } catch (e) {
+    try { await next.close(); } catch (closeError) { /* ignore */ }
     driver = await reopenPreviousDriver(serverDir, previousConfig);
     storageConfig = previousConfig || { type: 'sqlite' };
     saveStorageConfig(storageConfig);
@@ -151,6 +152,7 @@ async function switchToSqlite(serverDir) {
     storageConfig = { type: 'sqlite' };
     saveStorageConfig(storageConfig);
   } catch (e) {
+    try { await next.close(); } catch (closeError) { /* ignore */ }
     driver = await reopenPreviousDriver(serverDir, previousConfig);
     storageConfig = previousConfig || { type: 'sqlite' };
     saveStorageConfig(storageConfig);

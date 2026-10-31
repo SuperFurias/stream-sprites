@@ -65,6 +65,20 @@ function applySpriteState(sprite, serverSprite) {
     GROUND_Y_MULTIPLIER: GROUND_Y_MULT
   } = constants;
 
+  const particleOptions = {
+    countBase: constants.PARTICLE_COUNT_BASE,
+    countVar: constants.PARTICLE_COUNT_VAR,
+    speedBase: constants.PARTICLE_SPEED_BASE,
+    speedVar: constants.PARTICLE_SPEED_VAR,
+    gravity: constants.PARTICLE_GRAVITY,
+    decayBase: constants.PARTICLE_DECAY_BASE,
+    decayVar: constants.PARTICLE_DECAY_VAR,
+    sizeBase: constants.PARTICLE_SIZE_BASE,
+    sizeVar: constants.PARTICLE_SIZE_VAR,
+    hueBase: constants.PARTICLE_HUE_BASE,
+    hueRange: constants.PARTICLE_HUE_RANGE
+  };
+
   const { canvas, ctx, DPR } = setupCanvas();
   const SERVER_W = overlay.canvasWidth || 1920;
   const SERVER_H = overlay.canvasHeight || 1080;
@@ -315,7 +329,7 @@ function applySpriteState(sprite, serverSprite) {
     updateSpriteCountDisplay(sprites);
   }
 
-  const loop = createGameLoop(renderWrapper, updatePhysicsWrapper, updateExplosionParticlesWrapper);
+  const loop = createGameLoop(renderWrapper, updatePhysicsWrapper, updateExplosionParticlesWrapper, constants.DT_CAP);
   requestAnimationFrame(loop);
 
   dbg('Setting up WebSocket connection to:', WS_URL);
@@ -339,7 +353,7 @@ function applySpriteState(sprite, serverSprite) {
             const epicenterX = data?.x || Math.random() * (W - EXPLOSION_RADIUS_BASE) + (EXPLOSION_RADIUS_BASE / 2);
             const epicenterY = data?.y ?? GROUND_Y;
             const explosionRadius = data?.radius || EXPLOSION_RADIUS_BASE + Math.random() * EXPLOSION_RADIUS_VAR;
-            createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles);
+            createExplosionEffect(epicenterX, epicenterY, explosionRadius, explosionParticles, particleOptions);
           }
         },
         (spriteState) => {

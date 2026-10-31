@@ -116,7 +116,7 @@ if ($nodeJustInstalled) {
 
 # ── Dependency management function ─────────────────────────────────────────
 function Install-Dependencies {
-    Set-Location (Join-Path $projectRoot "server")
+    Set-Location $projectRoot
     
     $packageJson = Join-Path $projectRoot "package.json"
     $lockFile = Join-Path $projectRoot "package-lock.json"
@@ -129,9 +129,14 @@ function Install-Dependencies {
         $needsInstall = $true
     }
     elseif (Test-Path $lockFile) {
-        # Check if package.json is newer than node_modules
+        # Use npm's install stamp so dependency changes are detected reliably.
+        $installStamp = Join-Path $nodeModules ".package-lock.json"
         $packageTime = (Get-Item $packageJson).LastWriteTime
-        $modulesTime = (Get-Item $nodeModules).LastWriteTime
+        $modulesTime = if (Test-Path $installStamp) {
+            (Get-Item $installStamp).LastWriteTime
+        } else {
+            (Get-Item $nodeModules).LastWriteTime
+        }
         if ($packageTime -gt $modulesTime) {
             Write-Host "package.json changed since last install. Updating dependencies..." -ForegroundColor Yellow
             $needsInstall = $true
@@ -162,7 +167,7 @@ function Install-Dependencies {
     # Optional: run audit fix
     if ($AuditFix) {
         Write-Host "Running npm audit fix..." -ForegroundColor Cyan
-        $auditProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm audit fix --force" -Wait -PassThru -NoNewWindow
+        $auditProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "npm audit fix" -Wait -PassThru -NoNewWindow
         if ($auditProcess.ExitCode -eq 0) {
             Write-Host "Vulnerabilities patched." -ForegroundColor Green
         } else {

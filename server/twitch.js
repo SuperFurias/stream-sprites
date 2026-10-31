@@ -343,6 +343,9 @@ async function processServerCommand(username, text, tags) {
   const userId = username.toLowerCase();
   const now = Date.now();
 
+  const handler = commandRegistry[cmd];
+  if (!handler) return { result: null, stateChanged: false };
+
   const cooldownMs = (_cfg.overlay && _cfg.overlay.commandCooldownMs) || 5000;
   if (cooldownMs > 0) {
     const isVip = tags?.badges?.vip;
@@ -363,9 +366,6 @@ async function processServerCommand(username, text, tags) {
       userCooldowns.set(cmd, now);
     }
   }
-
-  const handler = commandRegistry[cmd];
-  if (!handler) return { result: null, stateChanged: false };
 
   const ctx = { stateChanged: false };
   const response = await handler(username, userId, args, tags, now, ctx);

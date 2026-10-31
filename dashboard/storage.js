@@ -22,18 +22,6 @@ const DB_CONFIGS = {
     placeholder: 'postgresql://user:password@ep-cool-rain-123456.us-east-2.aws.neon.tech/dbname?sslmode=require',
     example: 'postgresql://neondb_owner:abcdef@ep-cool-rain-123456.us-east-2.aws.neon.tech/mydb?sslmode=require',
     supportsTest: true
-  },
-  mysql: {
-    label: 'MySQL',
-    placeholder: 'mysql://user:password@localhost:3306/dbname',
-    example: 'mysql://root:password@localhost:3306/mysprites',
-    supportsTest: false
-  },
-  mongodb: {
-    label: 'MongoDB',
-    placeholder: 'mongodb+srv://user:password@cluster.mongodb.net/dbname',
-    example: 'mongodb+srv://admin:password@cluster0.abc123.mongodb.net/mysprites',
-    supportsTest: false
   }
 };
 

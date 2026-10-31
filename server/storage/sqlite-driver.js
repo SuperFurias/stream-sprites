@@ -43,15 +43,19 @@ class SqliteDriver {
 
   async upsertUser(id, displayName, assignedSkin) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO users (id, display_name, assigned_skin)
-      VALUES (?, ?, COALESCE((SELECT assigned_skin FROM users WHERE id = ?), 'default'))
+      INSERT INTO users (id, display_name, assigned_skin)
+      VALUES (?, ?, 'default')
+      ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name
     `);
-    stmt.run(id.toLowerCase(), displayName, id.toLowerCase());
+    stmt.run(id.toLowerCase(), displayName);
   }
 
   async assignSkin(userId, skinId) {
-    this.db.prepare('INSERT OR REPLACE INTO users (id, display_name, assigned_skin) VALUES (?,?,?)')
-      .run(userId.toLowerCase(), userId.toLowerCase(), skinId);
+    this.db.prepare(`
+      INSERT INTO users (id, display_name, assigned_skin)
+      VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET assigned_skin = excluded.assigned_skin
+    `).run(userId.toLowerCase(), userId.toLowerCase(), skinId);
   }
 
   async getUser(userId) {
