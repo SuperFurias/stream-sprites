@@ -94,7 +94,7 @@ The HTTP integration test uses all four so it never touches live data.
 
 The server will:
 - Create `server/.env` with default configuration on first run
-- Initialize SQLite database at `server/db/sa.db`
+- Initialize the active storage backend (SQLite at `server/db/sa.db`, or PostgreSQL)
 - Start listening on `http://localhost:8080`
 
 ---
@@ -308,14 +308,14 @@ From the dashboard or via API:
 ```
 Twitch Chat → TMI.js → Server → WebSocket → Overlay Client
                                      ↓
-                              SQLite Database
+                              SQLite / PostgreSQL
                                      ↓
                               Dashboard (REST API)
 ```
 
 1. **Chat messages** arrive via TMI.js
 2. **Server** processes commands and simulates physics authoritatively at 60 Hz
-3. **WebSocket** broadcasts interpolated snapshots at a configurable rate (default 30 Hz)
+3. **WebSocket** broadcasts compressed interpolated snapshots at a configurable rate (default 30 Hz)
 4. **Overlay clients** interpolate and render sprites; they never own physics state
 5. **Dashboard** reads/writes configuration and user data via REST
 
@@ -339,7 +339,8 @@ Stream Sprites/
 ├── index.html                  # Dashboard shell (authenticated route)
 ├── server.js                   # Node entry point
 ├── package.json                # Scripts and dependencies
-├── test/                       # node:test unit tests
+├── test/                       # node:test unit + HTTP integration tests
+├── tools/soak.js               # Live-server load/soak test
 ├── server/
 │   ├── server.js               # Express + WebSocket bootstrap
 │   ├── routes.js               # REST, auth, assets, OAuth, storage
@@ -347,15 +348,17 @@ Stream Sprites/
 │   ├── physics.js              # Physics engine (live-configurable)
 │   ├── twitch.js               # TMI connection and chat commands
 │   ├── db.js                   # Database facade
+│   ├── restart-helper.js       # Detached self-restart helper
 │   ├── config.js               # Defaults and config loading
 │   ├── .env                    # Runtime config (created automatically)
 │   ├── storage-config.json     # Selected backend (created after switching)
-│   ├── db/sa.db                # SQLite database
+│   ├── db/sa.db                # Local SQLite database
 │   ├── lib/
 │   │   ├── util.js             # Validation, merge, rate limiting
 │   │   ├── logger.js           # Filtered/file logging with rotation
 │   │   ├── asset-paths.js      # Traversal-safe asset paths
-│   │   └── config-safety.js    # Config whitelist and token handling
+│   │   ├── config-safety.js    # Config whitelist and token handling
+│   │   └── password.js         # scrypt hash/verify helpers
 │   └── storage/
 │       ├── index.js            # Driver selection/switching
 │       ├── sqlite-driver.js
@@ -372,7 +375,7 @@ Stream Sprites/
 │       ├── renderer.js         # Canvas drawing
 │       ├── animatedMediaRenderer.js  # GIF/WebM layer
 │       ├── explosion.js        # Particles
-│       ├── connection.js       # WebSocket + TMI fallback
+│       ├── connection.js       # WebSocket connection/reconnect
 │       ├── input.js            # Drag/toss interaction
 │       ├── skins.js
 │       └── utils.js
@@ -511,4 +514,4 @@ See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
 
 ## Versioning
 
-The current release line is **2.3.x**. See [CHANGELOG.md](CHANGELOG.md) for the full history. Revert points are tagged and pushed as the project is improved.
+The current release line is **2.5.x**. See [CHANGELOG.md](CHANGELOG.md) for the full history. Revert points are tagged and pushed as the project is improved.
