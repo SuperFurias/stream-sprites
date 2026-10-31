@@ -505,28 +505,6 @@ app.use((req, res, next) => {
     }
   });
 
-  app.get('/api/viewer/profile', (req, res) => {
-    res.json({
-      id: 'viewer',
-      display_name: 'Viewer',
-      skins: ['default'],
-      assigned_skin: 'default'
-    });
-  });
-
-  app.post('/api/viewer/updateSkin', async (req, res) => {
-    const { skinId } = req.body;
-    if (!skinId) return res.status(400).json({ error: 'missing skinId' });
-    try {
-      const allSkins = await twitch.detectSkinsFromAssetsAsync();
-      const validSkin = allSkins.find(s => s.id === skinId);
-      if (!validSkin) return res.status(400).json({ error: 'Invalid skin ID' });
-      res.json({ ok: true, message: 'Skin updated' });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
   // Local control: Assign skin
   app.post('/api/local/assignSkin', async (req, res) => {
     const { userId, skinId } = req.body;
@@ -687,16 +665,6 @@ app.use((req, res, next) => {
     res.json({ ok: true });
   });
 
-  app.post('/api/local/clearSpritesServer', (req, res) => {
-    try {
-      ws.clearServerSprites();
-      ws.broadcast({ type: 'cmd', cmd: 'clearSprites' });
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
   // Local control: Reset user
   app.post('/api/local/resetUser', async (req, res) => {
     const { id } = req.body;
@@ -752,8 +720,12 @@ app.use((req, res, next) => {
   app.post('/api/local/exclude', async (req, res) => {
     const { userId, reason } = req.body;
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
+    const safeReason = typeof reason === 'string' ? reason.slice(0, 500) : '';
     try {
-      await _driver.excludeUser(userId, reason);
+      await _driver.excludeUser(userId, safeReason);
+      if (ws.removeServerSprite(userId)) {
+        ws.broadcastPhysicsState();
+      }
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -774,8 +746,9 @@ app.use((req, res, next) => {
   app.post('/api/local/updateExclusionReason', async (req, res) => {
     const { userId, reason } = req.body;
     if (!isValidUsername(userId)) return res.status(400).json({ error: 'Invalid username' });
+    const safeReason = typeof reason === 'string' ? reason.slice(0, 500) : '';
     try {
-      await _driver.updateExclusionReason(userId, reason);
+      await _driver.updateExclusionReason(userId, safeReason);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });

@@ -632,6 +632,24 @@ function getWss() {
   return _wss;
 }
 
+function removeServerSprite(identifier) {
+  const key = String(identifier || '').toLowerCase();
+  const mappedId = _loginUsernameIndex.get(key);
+  const spriteId = mappedId || key;
+  const sprite = serverSprites.get(spriteId);
+  if (!sprite) return false;
+
+  if (sprite.loginUsername && _loginUsernameIndex) {
+    _loginUsernameIndex.delete(sprite.loginUsername);
+  }
+  serverSprites.delete(spriteId);
+  draggedSprites.delete(spriteId);
+  dragOwners.delete(spriteId);
+  spriteDirty = true;
+  markServerSpriteArrayDirty();
+  return true;
+}
+
 function cleanup() {
   if (cleanupIntervalId) { clearInterval(cleanupIntervalId); cleanupIntervalId = null; }
   if (gameLoopIntervalId) { clearTimeout(gameLoopIntervalId); gameLoopIntervalId = null; }
@@ -645,6 +663,7 @@ module.exports = {
   broadcastPhysicsState,
   sendFullStateToClient,
   clearServerSprites,
+  removeServerSprite,
   spawnServerSprite,
   updateServerSprite,
   resolveSpriteId,

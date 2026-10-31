@@ -5,6 +5,16 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.8] - 2026-10-31
+
+### Fixed
+- **Excluding a user** now removes their live sprite immediately, including the login-name lookup entry, instead of leaving them on screen until the lifetime timeout.
+- Exclusion reasons are capped at 500 characters on both create and edit.
+
+### Removed
+- Dead `/api/viewer/profile` and `/api/viewer/updateSkin` endpoints (the latter reported success without changing anything).
+- Duplicate `/api/local/clearSpritesServer` endpoint.
+
 ## [2.3.7] - 2026-10-31
 
 ### Fixed
