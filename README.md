@@ -7,7 +7,7 @@ Copyright 2026 SuperFurias | [Apache License 2.0](LICENSE)
 
 Stream Sprites is a powerful, feature-rich Twitch overlay application that transforms chat participation into an interactive visual experience. Each viewer receives a personalized sprite with realistic physics, creating a living, breathing community representation on your stream.
 
-![Stream Sprites Demo](assets/skins/default.gif)
+![Stream Sprites Demo](app/assets/skins/default.gif)
 
 ---
 
@@ -17,8 +17,9 @@ Stream Sprites is a powerful, feature-rich Twitch overlay application that trans
 - **Real-time Twitch Integration** – Live chat-to-sprite conversion with WebSocket communication
 - **Server-Authoritative State** – Centralized sprite management prevents duplicates and ensures consistency
 - **Advanced Physics Engine** – Gravity, collisions, friction, bouncing, and spatial awareness
-- **Dynamic Skin System** – Automatic detection from `assets/skins/` with support for PNG, JPG, GIF, WebP, and WebM
+- **Dynamic Skin System** – Automatic detection from `app/assets/skins/` with support for PNG, JPG, GIF, WebP, and WebM
 - **User Skin Assignments** – Persistent per-user skin preferences stored in SQLite or PostgreSQL
+- **Local Accounts & Profiles** – Shared guest profile plus separate accounts with isolated Twitch settings, databases, skins, and overlay state
 - **Admin Dashboard** – Full-featured web interface for configuration and management
 
 ### Interactive Commands
@@ -50,52 +51,77 @@ Users can control their sprites via Twitch chat:
 
 ## 🚀 Quick Start
 
+### Windows Desktop App
+
+Download the latest Windows release from the [Releases page](https://github.com/SuperFurias/stream-sprites/releases/latest), or run **`Stream Sprites.exe`** from the repository root. The native window opens immediately with a loading screen, then shows the account chooser. Continue as **Guest**, sign in to an existing account, or create a new one. After a profile is selected, the local server starts and the dashboard opens with standard Windows minimize, maximize, and close controls. The window remembers its last size, position, and maximized state. Closing the window stops the server and exits the app.
+
+Each account gets its own Twitch configuration, database, skins, logs, and overlay state. Only one profile is active at a time; **Log out** from the dashboard returns to the account chooser. The guest profile is shared by anyone using the app and is the existing single-profile data after upgrading.
+
+The launcher is a ~1.5 MB Windows executable that uses the installed Edge WebView2 runtime and Node.js. The `app/` folder must stay next to the executable. Account data, profiles, configuration, logs, and WebView2 cache stay in `%APPDATA%\Stream Sprites`.
+
+The executable includes the Stream Sprites product, company, copyright, trademark, and Apache-2.0 license metadata. Builds are currently unsigned, so Windows UAC may still show **Unknown publisher**; removing that requires a trusted code-signing certificate.
+
 ### Prerequisites
 - **Node.js 22+** – [Download from nodejs.org](https://nodejs.org/)
+- **Microsoft Edge WebView2 Runtime** – Included with current Edge and Windows 11
+- **.NET 8 Desktop Runtime** – Required by the native desktop launcher
 - **Twitch Account** – For bot credentials and OAuth
+- **.NET 8 SDK** – Only needed to build the desktop executable
 
-### Installation (Windows – Recommended)
+### Source Installation (Windows – Recommended)
 
 1. **Clone or download** this repository to your local machine
 
-2. **Run the startup script** (PowerShell):
+2. **Run the startup script** from the app folder (PowerShell):
    ```powershell
-   cd "Stream Sprites"
+   cd app
    .\start.ps1
    ```
 
    The script will:
    - Check for Node.js and offer to install if missing (via winget or Chocolatey)
    - Install server dependencies (`npm install`)
-   - Start the server on port 8080 (or configured port)
-   - Optionally open the dashboard in your default browser
+   - Start the account chooser on port 8080 (or configured port)
+   - Print the account chooser URL; open `http://localhost:8080` when you are ready
 
 ### Manual Setup (All Platforms)
 
 ```bash
-# From the project root
+cd app
 npm install
-
-# Start the server
 npm start
 ```
 
-Run tests with `npm test`. Run `npm run soak` for a 10-second live-server load test that spawns 300+ sprites, drives every command, and verifies snapshots keep flowing. For isolated development or alternate deployments, these environment variables override default paths:
+Run tests from `app/` with `npm test`. Run `npm run soak` for a 10-second live-server load test that spawns 300+ sprites, drives every command, and verifies snapshots keep flowing.
+
+### Desktop Build
+
+```powershell
+cd app
+npm install
+npm run desktop:build
+```
+
+The single-file native executable is written to the repository root as `Stream Sprites.exe`. It is a thin WinForms/WebView2 launcher around the existing Node server. For isolated development or alternate deployments, these environment variables override default paths:
 
 | Variable | Purpose |
 |----------|---------|
+| `STREAM_SPRITES_ACCOUNTS` | Set to `0` to disable account/profile selection and use the legacy single profile |
 | `STREAM_SPRITES_CONFIG` | Alternate config file (JSON) |
 | `STREAM_SPRITES_DATA_DIR` | Alternate SQLite/database data directory |
 | `STREAM_SPRITES_ASSETS_DIR` | Alternate skin/media directory |
 | `STREAM_SPRITES_STORAGE_CONFIG` | Alternate storage backend file |
+| `STREAM_SPRITES_LOG_DIR` | Alternate log directory |
+| `STREAM_SPRITES_NO_BROWSER` | Set to `1` to prevent the server from opening a browser tab |
 | `STREAM_SPRITES_SUPERVISED` | Set to `1` when an external supervisor handles restarts (PM2 and systemd are detected automatically) |
 | `STREAM_SPRITES_NO_COMPRESSION` | Set to `1` to disable WebSocket snapshot compression if CPU-bound |
 
-The HTTP integration test uses all four so it never touches live data.
+The HTTP integration test uses all four storage-path overrides so it never touches live data.
 
-The server will:
-- Create `server/.env` with default configuration on first run
-- Initialize the active storage backend (SQLite at `server/db/sa.db`, or PostgreSQL)
+The source server will:
+- Start the account chooser on first run
+- Create `app/server/.env` and initialize the guest profile after choosing **Continue as Guest** or signing into an account
+- Use SQLite at `app/server/db/sa.db` for guest, or a separate database under `app/server/profiles/<profile>/db` for accounts
 - Start listening on `http://localhost:8080`
 
 ---
@@ -104,31 +130,41 @@ The server will:
 
 ### Initial Setup
 
-1. **Open the dashboard**: Navigate to `http://localhost:8080` in your browser
+1. **Choose an account**: Open `http://localhost:8080` and use **Sign In**, **Create Account**, or **Continue as Guest**
 
-2. **Configure Twitch credentials** (Config tab):
+2. **Open the dashboard**: After the profile starts, the dashboard is available at the same URL
+
+3. **Configure Twitch credentials** (Config tab):
    - **Client ID** – From your Twitch Developer Application
    - **Client Secret** – From your Twitch Developer Application
    - **Bot Username** – The Twitch account that will connect to chat
    - **Channel** – Your Twitch channel name
 
-3. **Generate OAuth Token**:
+4. **Generate OAuth Token**:
    - Click "Generate OAuth Token"
    - Authorize the application in the Twitch popup
    - The refresh token is saved automatically for future auto-connection
 
-4. **Connect to Twitch**:
+5. **Connect to Twitch**:
    - Click "Connect to Twitch"
    - Verify connection status shows success
    - (Optional) Enable **Auto-Generate OAuth** and **Auto-Connect** toggles to skip manual steps on future server starts
 
-5. **Add Overlay to OBS**:
+6. **Add Overlay to OBS**:
    - Open OBS Studio
    - Add a **Browser Source** to your scene
    - URL: `http://localhost:8080/overlay/overlay.html`
    - Width: `1920`, Height: `1080` (or match your canvas settings)
    - Check "Control audio via OBS" if you want audio control (optional)
    - Click "OK"
+
+### Accounts & Profiles
+
+- **Guest** – Passwordless shared profile. Existing data from before accounts were added lives here.
+- **Registered accounts** – Each account gets a separate profile directory containing its own config, SQLite database, skins, logs, and storage settings.
+- **One active profile** – Switching accounts or logging out restarts the local server. This keeps the desktop app and overlay on one active profile.
+- **Local account management** – Registration, sign-in, and profile switching are accepted only from this PC. Remote dashboard access still uses the active profile's dashboard password.
+- **Storage** – Account records live in `accounts.db`; the selected profile is tracked in `active-profile.json`; account data lives in `profiles/`. In source mode these are under `app/server/`; the desktop app uses `%APPDATA%\Stream Sprites`.
 
 ### Overlay Settings
 
@@ -180,7 +216,7 @@ Enable in Settings tab:
 - **Auth Error Logging** – Authentication failures
 - **Other Error Logging** – Non-auth Twitch errors
 - **Verbose Messages** – Detailed message processing
-- **Log to File** – Write logs to `logs/debug.log`
+- **Log to File** – Write logs to `app/logs/debug.log` (or `%APPDATA%\Stream Sprites\logs` in the desktop app)
 
 ---
 
@@ -200,7 +236,7 @@ Enable in Settings tab:
 
 **Examples:**
 - `!spawn` – Spawns 1 random sprite
-- `!spawn Yae_Kibo` – Spawns 1 default skin sprite named Yae_Kibo
+- `!spawn ExampleUser` – Spawns 1 default skin sprite named ExampleUser
 - `!spawn 5` – Spawns 5 default skin sprites
 - `!spawn 3 custom_skin` – Spawns 3 with specified skin
 - `!spawn 2 custom_skin username` – Spawns 2 as another user
@@ -208,7 +244,7 @@ Enable in Settings tab:
 
 ### Skin Management
 
-1. **Add Skins**: Place image files (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.webm`) in `assets/skins/`
+1. **Add Skins**: Place image files (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.webm`) in `app/assets/skins/`, `%APPDATA%\Stream Sprites\assets\skins\` for the desktop app, or upload them from the **Assets** tab
 2. **Auto-Detection**: Skins are automatically detected on server startup and dashboard load
 3. **Preview**: Visit the Skins tab in the dashboard to see all available skins
 4. **Assign**: Use the Users tab to assign specific skins to users
@@ -338,69 +374,97 @@ Twitch Chat → TMI.js → Server → WebSocket → Overlay Client
 
 ```
 Stream Sprites/
-├── index.html                  # Dashboard shell (authenticated route)
-├── server.js                   # Node entry point
-├── package.json                # Scripts and dependencies
-├── test/                       # node:test unit + HTTP integration tests
-├── tools/soak.js               # Live-server load/soak test
-├── server/
-│   ├── server.js               # Express + WebSocket bootstrap
-│   ├── routes.js               # REST, auth, assets, OAuth, storage
-│   ├── websocket.js            # Authoritative simulation + snapshots
-│   ├── physics.js              # Physics engine (live-configurable)
-│   ├── twitch.js               # TMI connection and chat commands
-│   ├── db.js                   # Database facade
-│   ├── restart-helper.js       # Detached self-restart helper
-│   ├── config.js               # Defaults and config loading
-│   ├── .env                    # Runtime config (created automatically)
-│   ├── storage-config.json     # Selected backend (created after switching)
-│   ├── db/sa.db                # Local SQLite database
-│   ├── lib/
-│   │   ├── util.js             # Validation, merge, rate limiting
-│   │   ├── logger.js           # Filtered/file logging with rotation
-│   │   ├── asset-paths.js      # Traversal-safe asset paths
-│   │   ├── config-safety.js    # Config whitelist and token handling
-│   │   └── password.js         # scrypt hash/verify helpers
-│   └── storage/
-│       ├── index.js            # Driver selection/switching
-│       ├── sqlite-driver.js
-│       └── postgres-driver.js
-├── overlay/
-│   ├── overlay.html            # OBS browser source entry
-│   ├── overlay.css
-│   ├── overlay_client.js       # Overlay entry point
-│   └── js/
-│       ├── config.js           # Constants derived from /env
-│       ├── canvas.js
-│       ├── core.js             # Game loop and skin cache
-│       ├── sprite.js
-│       ├── renderer.js         # Canvas drawing
-│       ├── animatedMediaRenderer.js  # GIF/WebM layer
-│       ├── explosion.js        # Particles
-│       ├── connection.js       # WebSocket connection/reconnect
-│       ├── input.js            # Drag/toss interaction
-│       ├── skins.js
-│       └── utils.js
-├── dashboard/                  # Admin tabs and shared JS
-├── assets/
-│   └── skins/                  # Skin media
-├── logs/debug.log              # Optional rotated file logging
+├── Stream Sprites.exe          # Native WebView2 launcher
+├── .github/
+│   └── workflows/ci.yml        # GitHub Actions CI
+├── .gitignore
 ├── README.md
 ├── CHANGELOG.md
 ├── LICENSE
-└── NOTICE
+├── NOTICE
+└── app/
+    ├── index.html              # Dashboard shell (authenticated route)
+    ├── favicon.ico             # App icon
+    ├── server.js               # Node entry point
+    ├── package.json            # Scripts and dependencies
+    ├── start.ps1               # Windows source launcher
+    ├── start.sh                # Linux/macOS source launcher
+    ├── accounts/
+    │   └── accounts.html       # Local account chooser
+    ├── desktop/
+    │   ├── Program.cs          # Native WebView2 window + server lifecycle
+    │   ├── StreamSprites.Desktop.csproj
+    │   └── build.ps1          # Builds the root executable
+    ├── test/                   # node:test unit + HTTP integration tests
+    │   └── accounts.test.js    # Account/profile switching coverage
+    ├── tools/soak.js           # Live-server load/soak test
+    ├── server/
+    │   ├── server.js           # Express + WebSocket bootstrap
+    │   ├── accounts.js         # Local accounts and isolated profile data
+    │   ├── account-gateway.js  # Account chooser/login/register server
+    │   ├── routes.js           # REST, auth, assets, OAuth, storage
+    │   ├── websocket.js        # Authoritative simulation + snapshots
+    │   ├── physics.js          # Physics engine (live-configurable)
+    │   ├── twitch.js           # TMI connection and chat commands
+    │   ├── db.js               # Database facade
+    │   ├── restart-helper.js   # Detached self-restart helper
+    │   ├── config.js           # Defaults and config loading
+    │   ├── .env                # Source runtime config (created automatically)
+    │   ├── storage-config.json # Selected backend (created after switching)
+    │   ├── db/sa.db            # Source SQLite database
+    │   ├── lib/
+    │   │   ├── util.js         # Validation, merge, rate limiting
+    │   │   ├── logger.js       # Filtered/file logging with rotation
+    │   │   ├── asset-paths.js  # Traversal-safe asset paths
+    │   │   ├── config-safety.js # Config whitelist and token handling
+    │   │   └── password.js     # scrypt hash/verify helpers
+    │   └── storage/
+    │       ├── index.js        # Driver selection/switching
+    │       ├── sqlite-driver.js
+    │       └── postgres-driver.js
+    ├── overlay/
+    │   ├── overlay.html        # OBS browser source entry
+    │   ├── overlay.css
+    │   ├── overlay_client.js   # Overlay entry point
+    │   └── js/
+    │       ├── config.js       # Constants derived from /env
+    │       ├── canvas.js
+    │       ├── core.js         # Game loop and skin cache
+    │       ├── sprite.js
+    │       ├── renderer.js     # Canvas drawing
+    │       ├── animatedMediaRenderer.js # GIF/WebM layer
+    │       ├── explosion.js    # Particles
+    │       ├── connection.js   # WebSocket connection/reconnect
+    │       ├── input.js        # Drag/toss interaction
+    │       ├── skins.js
+    │       └── utils.js
+    ├── dashboard/              # Admin tabs, shared JS, and ui.css theme
+    ├── assets/
+    │   ├── branding/           # Original app icon source
+    │   └── skins/              # Skin media
+    └── logs/debug.log          # Optional rotated file logging
 ```
+
+Desktop app data lives outside the repository in `%APPDATA%\Stream Sprites`:
+
+- `accounts.db` – Local account records and password hashes
+- `active-profile.json` – Selected guest/account profile
+- `window-state.json` – Last desktop window size, position, and maximized state
+- `profiles/` – Isolated account profiles (config, database, skins, logs)
+- Guest profile files remain directly in this folder (`config.json`, `db/`, `assets/`, `logs/`)
+- `WebView2/` – Edge WebView2 browser cache
+
 
 ### Key Modules
 
-**Server (`server/server.js`, `server/routes.js`)**
+**Server (`app/server/server.js`, `app/server/routes.js`)**
 - Auth, same-origin protection, and dashboard sessions
 - Traversal-safe asset upload/list/delete/serve
 - OAuth and token-refresh handling
 - Database operations (users, exclusions, skins, assets)
 - Storage backend switching with rollback
 
-**Simulation (`server/websocket.js`, `server/physics.js`)**
+**Simulation (`app/server/websocket.js`, `app/server/physics.js`)**
 - 60 Hz authoritative server simulation
 - Configurable snapshot rate (default 30 Hz)
 - Spatial hash grid for collision optimization
@@ -408,7 +472,7 @@ Stream Sprites/
 - Collision, avoidance, zone density, and roaming behavior
 - Fight resolution, drag authority, and lifetime management
 
-**Overlay Client (`overlay/overlay_client.js`)**
+**Overlay Client (`app/overlay/overlay_client.js`)**
 - Module loader and initializer
 - Config fetch and constant derivation
 - Canvas setup and resize handling
@@ -416,7 +480,7 @@ Stream Sprites/
 - WebSocket connection with reconnection
 - Snapshot interpolation and sprite state synchronization
 
-**Renderer (`overlay/js/renderer.js`)**
+**Renderer (`app/overlay/js/renderer.js`)**
 - Canvas clearing and sorting (by Y depth)
 - Sprite drawing with rotation and flip
 - Shadow rendering
@@ -428,12 +492,13 @@ Stream Sprites/
 
 ## 🔒 Security Notes
 
+- **Local accounts**: registration and profile switching accept only loopback clients; passwords are stored as salted scrypt hashes. Guest has no password and is shared.
 - **Remote access requires a dashboard password.** Loopback requests are trusted after validating the peer address, Host header, proxy headers, and origin. Set a password from the local machine before exposing the server through a tunnel.
 - **Same-origin protection**: mutating API calls and dashboard data reject cross-origin requests. Only public read-only overlay endpoints (`/env`, skins, viewer skins, and media) are CORS-readable without credentials.
 - **OAuth tokens**: access tokens are kept in memory only and are never written to `.env` or the database. Refresh tokens may be persisted so the bot can reconnect. Enabling **Auto-Generate OAuth** with **Auto-Connect** uses them at startup.
-- **Static files**: only `index.html`, `favicon.ico`, `dashboard/`, `overlay/`, and `assets/` are served. Server config, databases, logs, and source files are not reachable over HTTP.
-- **Uploads**: filenames and folders are sanitized and resolved inside `assets/`; path traversal is rejected.
-- **Secrets file**: `server/.env` and storage connection settings are gitignored. Never commit credentials.
+- **Static files**: only `app/index.html`, `app/favicon.ico`, `app/dashboard/`, `app/overlay/`, and `app/assets/` are served. Server config, databases, logs, and source files are not reachable over HTTP.
+- **Uploads**: filenames and folders are sanitized and resolved inside `app/assets/`; path traversal is rejected.
+- **Secrets file**: `app/server/.env`, `%APPDATA%\Stream Sprites\config.json`, and storage connection settings are sensitive. Never commit credentials.
 - **Input validation**: server-side validation applies to usernames, skin IDs, settings, drag coordinates, and API payloads.
 
 If exposing the server beyond localhost, use HTTPS (the built-in Cloudflare quick tunnel is supported) and set a strong dashboard password first.
@@ -443,11 +508,13 @@ If exposing the server beyond localhost, use HTTPS (the built-in Cloudflare quic
 ## 🐛 Troubleshooting
 
 ### Server won't start
-- Ensure Node.js 22+ is installed: `node --version`
-- Run `npm install` after upgrading Node so native modules (`better-sqlite3`) match the runtime
+- For the desktop app, open `%APPDATA%\Stream Sprites\logs\desktop.log` for the error
+- Ensure Node.js 22+, the .NET 8 Desktop Runtime, and the Edge WebView2 Runtime are installed
+- Ensure the `app/` folder is next to `Stream Sprites.exe`
+- Run `npm install` from `app/` after upgrading Node so native modules (`better-sqlite3`) match the runtime
 - Check port 8080 (or configured) is not in use
-- Verify `server/.env` exists and is valid JSON
-- Check logs in `logs/debug.log` if enabled
+- Verify `app/server/.env` exists and is valid JSON
+- Check logs in `app/logs/debug.log` if enabled
 
 ### Overlay not showing in OBS
 - Verify server is running and dashboard accessible
@@ -463,7 +530,7 @@ If exposing the server beyond localhost, use HTTPS (the built-in Cloudflare quic
 - Enable debug logging to see message processing
 
 ### Skins not detected
-- Place image files in `assets/skins/` or upload them from the **Assets** tab
+- Place image files in `app/assets/skins/` (source) or `%APPDATA%\Stream Sprites\assets\skins\` (desktop), or upload them from the **Assets** tab
 - Supported formats: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.webm`, `.avif`
 - Refresh the Assets tab or restart the server
 - Check server console for detection logs
@@ -516,4 +583,4 @@ See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
 
 ## Versioning
 
-The current release line is **2.5.x**. See [CHANGELOG.md](CHANGELOG.md) for the full history. Revert points are tagged and pushed as the project is improved.
+The current release line is **2.8.x**. See [CHANGELOG.md](CHANGELOG.md) for the full history. Revert points are tagged and pushed as the project is improved.

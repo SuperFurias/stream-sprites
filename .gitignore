@@ -2,15 +2,15 @@
 node_modules/
 
 # Database
-server/db/
+app/server/db/
 *.db
 *.db-shm
 *.db-wal
 
 # Storage config (contains connection strings)
-server/storage.json
-server/storage.json.bak
-server/storage-config.json
+app/server/storage.json
+app/server/storage.json.bak
+app/server/storage-config.json
 
 # Logs
 logs/
@@ -42,7 +42,7 @@ Desktop.ini
 .env.*.local
 .env.test
 .env.*.local
-server/.env
+app/server/.env
 
 # Build outputs
 dist/
@@ -123,3 +123,18 @@ captures/
 
 # Developer notes
 RELEASE.md
+
+# Desktop build output and root executable
+release/
+/*.exe
+
+# Native desktop build output
+app/desktop/bin/
+app/desktop/obj/
+
+# Local account profiles (source mode)
+app/server/accounts.db
+app/server/accounts.db-shm
+app/server/accounts.db-wal
+app/server/active-profile.json
+app/server/profiles/

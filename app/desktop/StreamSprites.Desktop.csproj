@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Stream Sprites</AssemblyName>
+    <RootNamespace>StreamSprites.Desktop</RootNamespace>
+    <AssemblyTitle>Stream Sprites - Twitch Sprite Overlay</AssemblyTitle>
+    <Description>Twitch sprite overlay dashboard and native desktop app. Licensed under the Apache License 2.0.</Description>
+    <Product>Stream Sprites</Product>
+    <Company>SuperFurias</Company>
+    <Authors>SuperFurias</Authors>
+    <Copyright>Copyright (c) 2026 SuperFurias. Licensed under the Apache License 2.0.</Copyright>
+    <Trademark>Stream Sprites</Trademark>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/SuperFurias/stream-sprites</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SuperFurias/stream-sprites</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <ApplicationIcon>..\favicon.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+  </ItemGroup>
+
+</Project>

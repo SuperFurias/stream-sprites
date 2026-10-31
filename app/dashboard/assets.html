@@ -1,0 +1,17 @@
+<div class="panel">
+  <div class="panel-head">
+    <p class="section-kicker">Media library</p>
+    <h2>Assets</h2>
+    <p>Upload and manage the images and videos used by your sprites.</p>
+  </div>
+
+  <div class="upload-bar">
+    <select id="assetFolderSelect" aria-label="Asset folder">
+      <option value="skins">skins</option>
+    </select>
+    <input type="file" id="assetFileInput" accept=".png,.gif,.jpg,.jpeg,.webp,.webm,.avif" aria-label="Choose asset file">
+    <button type="button" class="primary" onclick="uploadAsset()" id="uploadBtn">Upload</button>
+  </div>
+
+  <div id="assetContainer"></div>
+</div>

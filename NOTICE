@@ -4,12 +4,21 @@ Copyright 2026 SuperFurias
 This product includes software developed by Stream Sprites Contributors.
 https://github.com/SuperFurias/stream-sprites
 
+Artwork:
+- App icon: original artwork created for Stream Sprites.
+- "Cat & Dog - Free Sprites" by pzUH, licensed CC0 1.0 Universal (public domain dedication)
+  https://opengameart.org/content/cat-dog-free-sprites
+- `default.gif` and `mochi.png` use the cat idle artwork from that pack.
+
 Third-party licenses:
 - Express.js - MIT License
 - tmi.js - MIT License
 - ws - MIT License
 - better-sqlite3 - MIT License
 - axios - MIT License
+- Microsoft Edge WebView2 SDK - Microsoft Software License Terms
+- Microsoft Edge WebView2 Runtime - Provided by Microsoft Edge
+- Node.js - MIT License (used from the host system)
 - And other open-source dependencies
 
 All third-party licenses are available in the node_modules directory

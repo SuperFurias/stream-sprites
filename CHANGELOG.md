@@ -5,6 +5,34 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-10-31
+
+### Added
+- **Native Windows desktop app** at the repository root. The 1.5 MB WebView2 launcher opens instantly, shows a branded loading screen, and uses standard Windows minimize, maximize, and close controls.
+- **Local accounts and profiles**: passwordless shared **Guest**, per-account registration/sign-in, scrypt-hashed passwords, and isolated config, database, skins, logs, and overlay state for each account.
+- **Account chooser** with a default **Sign In** tab, saved-account shortcuts, and local-only account management.
+- **Window state persistence**: the desktop window remembers its size, position, and maximized state across launches.
+- Original Stream Sprites app icon and source artwork.
+- Account/profile, logout, desktop-window, UI, and responsive-layout test coverage.
+
+### Changed
+- Complete dashboard redesign: dark glass theme, sidebar navigation, modern metrics, tables, forms, toggles, modals, and responsive 4-column mobile navigation.
+- Reorganized the repository so the root contains the executable, GitHub files, and an `app/` folder with the source and runtime files.
+- Account/profile switching restarts the local server; dashboard logout returns to the account chooser.
+- Replaced the bundled default skin artwork with CC0 assets; renamed the secondary bundled skin from `bunbun` to `mochi`.
+- Auto-open browser now defaults off and is suppressed for desktop, account, test, and soak runs.
+- Updated setup, account, desktop, and security documentation.
+
+### Fixed
+- Cloudflare tunnel cleanup no longer references out-of-scope state during shutdown.
+- Local dashboard logout now performs a real account/profile transition instead of reloading into the same trusted local dashboard.
+- Preserved window controls, loading state, and server shutdown when switching profiles.
+
+### Security
+- Account passwords are stored as salted scrypt hashes in a local account database; credentials and profile data stay outside the repository.
+- Local account APIs accept loopback clients only.
+- Removed obsolete Electron cache data from the desktop app data folder.
+
 ## [2.7.5] - 2026-10-31
 
 ### Fixed
@@ -591,7 +619,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.12] - 2026-03-26
 
 ### Added
-- **!spawn flexible argument parsing**: Arguments can now be in any order. Auto-detects quantity (number), skin (known skin ID), and username (first unrecognized arg). Examples: `!spawn Yae_Kibo`, `!spawn default Yae_Kibo`, `!spawn Yae_Kibo 3`, `!spawn default 1`.
+- **!spawn flexible argument parsing**: Arguments can now be in any order. Auto-detects quantity (number), skin (known skin ID), and username (first unrecognized arg). Examples: `!spawn ExampleUser`, `!spawn default ExampleUser`, `!spawn ExampleUser 3`, `!spawn default 1`.
 
 ### Changed
 - **!fight loser exhaustion**: Fight loser now stops moving entirely while flipped (exhausted). Velocity is zeroed on fight resolution and physics freezes the sprite until the flip duration expires, then normal movement resumes. Normal `!flip` commands are unaffected.

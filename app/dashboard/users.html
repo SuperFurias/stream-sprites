@@ -1,0 +1,119 @@
+<div class="users-layout">
+  <section class="panel user-panel">
+    <div class="panel-head">
+      <p class="section-kicker">Appearance</p>
+      <h2>Skin assignment</h2>
+      <p>Assign a specific skin to a Twitch user.</p>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="userSearch" aria-label="Search users" placeholder="Search users..." oninput="window.userSkinAssignment.filterUsers()">
+    </div>
+
+    <div class="table-shell">
+      <table class="user-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Assigned skin</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="userTable"></tbody>
+      </table>
+    </div>
+
+    <div id="userPagination" class="pagination"></div>
+
+    <div class="user-form">
+      <div class="form-group">
+        <label for="assignUser">Username</label>
+        <input id="assignUser" type="text" placeholder="Twitch username" maxlength="25" aria-label="Twitch username">
+      </div>
+      <div class="form-group">
+        <label for="assignSkin">Skin</label>
+        <select id="assignSkin" aria-label="Skin to assign"></select>
+      </div>
+      <button type="button" class="primary" onclick="window.userSkinAssignment.assignSkin()">Assign skin</button>
+    </div>
+  </section>
+
+  <section class="panel user-panel">
+    <div class="panel-head">
+      <p class="section-kicker">Moderation</p>
+      <h2>Excluded users</h2>
+      <p>Blocked users never appear on the overlay.</p>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="excludedSearch" aria-label="Search excluded users" placeholder="Search excluded users..." oninput="window.userExclusion.filterExcluded()">
+    </div>
+
+    <div class="table-shell">
+      <table class="user-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Reason</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="excludedTable"></tbody>
+      </table>
+    </div>
+
+    <div id="excludedPagination" class="pagination"></div>
+
+    <div class="user-form">
+      <div class="form-group">
+        <label for="excludeUser">Username</label>
+        <input id="excludeUser" type="text" placeholder="Twitch username" maxlength="25" aria-label="Twitch username to exclude">
+      </div>
+      <div class="form-group">
+        <label for="excludeReason">Reason <span class="muted">(optional)</span></label>
+        <input id="excludeReason" type="text" placeholder="Why exclude?" aria-label="Reason for exclusion">
+      </div>
+      <button type="button" class="danger" onclick="window.userExclusion.excludeUser()">Exclude user</button>
+    </div>
+  </section>
+</div>
+
+<div id="reasonModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Exclusion reason" style="display:none">
+  <div class="modal-card">
+    <button type="button" class="modal-close" onclick="window.userExclusion.closeReasonModal()" aria-label="Close">&times;</button>
+    <p class="section-kicker">Moderation</p>
+    <h3>Exclusion reason</h3>
+    <p id="modalReasonText"></p>
+  </div>
+</div>
+
+<div id="editReasonModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit exclusion reason" style="display:none">
+  <div class="modal-card">
+    <button type="button" class="modal-close" onclick="window.userExclusion.closeEditReasonModal()" aria-label="Close">&times;</button>
+    <p class="section-kicker">Moderation</p>
+    <h3>Edit exclusion reason</h3>
+    <p>Username: <span id="editReasonUsername" class="modal-username"></span></p>
+    <textarea id="editReasonInput" aria-label="Exclusion reason" placeholder="Enter reason..."></textarea>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="window.userExclusion.closeEditReasonModal()">Cancel</button>
+      <button type="button" class="primary" onclick="window.userExclusion.saveEditedReason()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="editSkinModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit assigned skin" style="display:none">
+  <div class="modal-card">
+    <button type="button" class="modal-close" onclick="window.userSkinAssignment.closeEditSkinModal()" aria-label="Close">&times;</button>
+    <p class="section-kicker">Appearance</p>
+    <h3>Edit assigned skin</h3>
+    <p>Username: <span id="editSkinUsername" class="modal-username"></span></p>
+    <div class="form-group">
+      <label for="editSkinSelect">New skin</label>
+      <select id="editSkinSelect" aria-label="Assigned skin"></select>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="window.userSkinAssignment.closeEditSkinModal()">Cancel</button>
+      <button type="button" class="primary" onclick="window.userSkinAssignment.saveEditedSkin()">Save</button>
+    </div>
+  </div>
+</div>

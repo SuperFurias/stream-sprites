@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f1014">
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+<title>Stream Sprites — Admin Dashboard</title>
+<link rel="stylesheet" href="dashboard/ui.css">
+   <!-- User Management Manager Scripts -->
+   <script src="dashboard/dashboardUtils.js"></script>
+   <script src="dashboard/userSkinAssignmentManager.js"></script>
+   <script src="dashboard/userExclusionManager.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <img class="brand-mark" src="/favicon.ico" alt="">
+        <div class="brand-copy">
+          <span class="brand-name">Stream Sprites</span>
+          <span class="brand-meta">Control room</span>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">Workspace</div>
+        <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+          <button type="button" class="tab active" role="tab" aria-selected="true" aria-controls="content" data-tab="dashboard" onclick="switchTab('dashboard')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span>Dashboard</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="users" onclick="switchTab('users')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Users</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="assets" onclick="switchTab('assets')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            <span>Assets</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="config" onclick="switchTab('config')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+            <span>Twitch</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="deploy" onclick="switchTab('deploy')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="m12 12 3-3 3 3M15 9v8"/></svg>
+            <span>Deploy</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="storage" onclick="switchTab('storage')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/></svg>
+            <span>Database</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="settings" onclick="switchTab('settings')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+            <span>Config</span>
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="help" onclick="switchTab('help')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9a2.9 2.9 0 0 1 5.6 1c0 2-3 2.3-3 4"/><path d="M12 17h.01"/></svg>
+            <span>Help</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-foot">
+        <span id="accountBadge" class="account-badge" hidden></span>
+        <button id="logoutBtn" class="logout-btn" type="button" onclick="logoutDashboard()">Log out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="page-heading">
+          <p class="eyebrow">Stream Sprites</p>
+          <h1 class="page-title" id="pageTitle">Overview</h1>
+          <p class="page-subtitle" id="pageSubtitle">A live look at your overlay and community.</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-ghost" type="button" onclick="window.open('/overlay/overlay.html','_blank')">Open overlay</button>
+          <span id="serverStatus" class="status-pill" role="status">Connecting</span>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Profile summary">
+        <article class="metric">
+          <span class="metric-kicker">Audience</span>
+          <strong id="totalUsers">0</strong>
+          <span class="metric-note">Tracked users</span>
+        </article>
+        <article class="metric">
+          <span class="metric-kicker">Custom skins</span>
+          <strong id="customSkins" class="metric-accent-cyan">0</strong>
+          <span class="metric-note">Uploaded by you</span>
+        </article>
+        <article class="metric">
+          <span class="metric-kicker">Default skins</span>
+          <strong id="defaultSkins">0</strong>
+          <span class="metric-note">Ready to use</span>
+        </article>
+      </section>
+
+      <div id="content" role="tabpanel" aria-label="Section content" tabindex="-1">
+    <!-- Tab content will be loaded dynamically -->
+  </div>
+
+      <footer class="footer-credit">Made by <a href="https://github.com/SuperFurias" target="_blank" rel="noopener">SuperFurias</a></footer>
+    </main>
+  </div>
+
+  <script>
+    const content = document.getElementById('content');
+    let currentTab = 'dashboard';
+    let loadedScripts = new Set();
+    let tabLoadSequence = 0;
+
+    const tabMeta = {
+      dashboard: { title: 'Overview', subtitle: 'A live look at your overlay and community.' },
+      users: { title: 'Users', subtitle: 'Manage who appears and which skin they wear.' },
+      assets: { title: 'Assets', subtitle: 'Upload and organize the media behind your sprites.' },
+      config: { title: 'Twitch', subtitle: 'Connect the bot and keep your channel in sync.' },
+      deploy: { title: 'Deploy', subtitle: 'Share the overlay with a temporary public tunnel.' },
+      storage: { title: 'Database', subtitle: 'Choose where this profile keeps its data.' },
+      settings: { title: 'Configuration', subtitle: 'Tune physics, spawning, rendering, and behavior.' },
+      help: { title: 'Help', subtitle: 'Commands, setup notes, and quick answers.' }
+    };
+
+    document.querySelector('.tabs').addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      const tabs = Array.from(document.querySelectorAll('.tab'));
+      const index = tabs.indexOf(document.activeElement);
+      if (index === -1) return;
+      event.preventDefault();
+      let nextIndex = index;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + tabs.length) % tabs.length;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % tabs.length;
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = tabs.length - 1;
+      tabs[nextIndex].focus();
+      switchTab(tabs[nextIndex].dataset.tab);
+    });
+
+    function isValidTab(tabId) {
+      return !!tabId && Array.from(document.querySelectorAll('.tab')).some(tab => tab.dataset.tab === tabId);
+    }
+
+    function tabIdFromHash() {
+      const raw = location.hash.slice(1);
+      if (!raw) return null;
+      try { return decodeURIComponent(raw); } catch (e) { return raw; }
+    }
+
+    window.addEventListener('hashchange', () => {
+      const tabId = tabIdFromHash();
+      if (tabId === 'content') {
+        document.getElementById('content')?.focus();
+        history.replaceState(null, '', `#${currentTab}`);
+        return;
+      }
+      if (isValidTab(tabId) && tabId !== currentTab) switchTab(tabId);
+    });
+
+    // Tab switching with dynamic loading
+    async function switchTab(tabId) {
+      currentTab = tabId;
+      const meta = tabMeta[tabId];
+      if (meta) {
+        const pageTitle = document.getElementById('pageTitle');
+        const pageSubtitle = document.getElementById('pageSubtitle');
+        if (pageTitle) pageTitle.textContent = meta.title;
+        if (pageSubtitle) pageSubtitle.textContent = meta.subtitle;
+      }
+      const loadSequence = ++tabLoadSequence;
+      if (location.hash !== `#${tabId}`) {
+        history.replaceState(null, '', `#${tabId}`);
+      }
+
+      // Update active state and accessibility attributes on all tabs.
+      document.querySelectorAll('.tab').forEach(tab => {
+        const isActive = tab.dataset.tab === tabId;
+        tab.classList.toggle('active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+      });
+
+      const activeTab = document.querySelector('.tab[data-tab="' + tabId + '"]');
+      if (activeTab && activeTab.parentElement &&
+          activeTab.parentElement.scrollWidth > activeTab.parentElement.clientWidth) {
+        activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+
+      // Load content for the tab
+      try {
+        const response = await fetch(`dashboard/${tabId}.html`);
+        if (!response.ok) {
+          throw new Error(`Failed to load ${tabId} tab`);
+        }
+        const html = await response.text();
+        if (loadSequence !== tabLoadSequence) return;
+        content.innerHTML = html;
+
+        // Associate labels with their adjacent form controls in tab markup.
+        content.querySelectorAll('label').forEach((label) => {
+          const control = label.parentElement?.querySelector('input, select, textarea');
+          if (control?.id && !label.htmlFor) label.htmlFor = control.id;
+        });
+
+        // Load tab-specific JavaScript file if not already loaded
+        if (!loadedScripts.has(tabId)) {
+          console.log(`Loading script: dashboard/${tabId}.js`);
+          await loadScript(`dashboard/${tabId}.js`);
+          loadedScripts.add(tabId);
+          console.log(`Script loaded: dashboard/${tabId}.js`);
+        }
+
+        if (loadSequence !== tabLoadSequence) return;
+
+        // Initialize tab-specific JavaScript
+        console.log(`Checking initializer for: ${tabId}`);
+        console.log('Available initializers:', window.tabInitializers);
+        if (window.tabInitializers && window.tabInitializers[tabId]) {
+          console.log(`Calling initializer for: ${tabId}`);
+          await window.tabInitializers[tabId]();
+        } else {
+          console.warn(`No initializer found for: ${tabId}`);
+        }
+      } catch (e) {
+        content.innerHTML = `<div class="panel error">Error loading tab: ${e.message}</div>`;
+        console.error('Tab loading error:', e);
+      }
+    }
+
+    // Dynamically load a script file
+    function loadScript(src) {
+      console.log(`Attempting to load script: ${src}`);
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => {
+          console.log(`Script loaded successfully: ${src}`);
+          resolve();
+        };
+        script.onerror = (err) => {
+          console.error(`Failed to load script: ${src}`, err);
+          reject(err);
+        };
+        document.head.appendChild(script);
+      });
+    }
+
+// Load initial tab on page load
+(async ()=>{
+  console.log('Page loaded, starting initial tab load...');
+
+  // Check if localhost and hide Deploy tab if not
+  try {
+    const res = await fetch('/env');
+    if (res.ok) {
+      const cfg = await res.json();
+      if (!cfg.isLocalhost) {
+        const deployTab = document.querySelector('.tab[data-tab="deploy"]');
+        if (deployTab) deployTab.style.display = 'none';
+      }
+      if (cfg.accountName) {
+        const badge = document.getElementById('accountBadge');
+        if (badge) {
+          badge.textContent = '';
+          badge.append(document.createTextNode('Profile: '));
+          const strong = document.createElement('strong');
+          strong.textContent = cfg.accountName;
+          badge.appendChild(strong);
+          badge.hidden = false;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to check localhost status:', e);
+  }
+
+  const initialTab = tabIdFromHash();
+  await switchTab(isValidTab(initialTab) ? initialTab : 'dashboard');
+  console.log('Dashboard tab loaded, refreshing stats...');
+  await refreshStatsHTTP();
+})();
+
+    // Auto-refresh stats: prefer WebSocket, fall back to HTTP polling
+    let statsWs = null;
+    let statsPollInterval = null;
+
+    function updateStatsUI(stats) {
+      document.getElementById('totalUsers').textContent = stats.total_users || 0;
+      document.getElementById('customSkins').textContent = stats.custom_skins || 0;
+      document.getElementById('defaultSkins').textContent = stats.default_skins || 0;
+      const status = document.getElementById('serverStatus');
+      status.textContent = 'Online';
+      status.classList.add('is-online');
+      status.classList.remove('is-offline');
+    }
+
+    function startStatsPolling() {
+      if (statsPollInterval) return;
+      statsPollInterval = setInterval(refreshStatsHTTP, 30000); // Fallback: poll every 30s
+    }
+
+    function stopStatsPolling() {
+      if (statsPollInterval) {
+        clearInterval(statsPollInterval);
+        statsPollInterval = null;
+      }
+    }
+
+    async function refreshStatsHTTP() {
+      try {
+        const res = await fetch('/api/stats');
+        if (res.status === 401) {
+          window.location.href = '/';
+          return;
+        }
+        const stats = await res.json();
+        updateStatsUI(stats);
+      } catch (e) {
+        const status = document.getElementById('serverStatus');
+        status.textContent = 'Offline';
+        status.classList.add('is-offline');
+        status.classList.remove('is-online');
+      }
+    }
+
+    // Try WebSocket for real-time stats
+    function connectStatsWebSocket() {
+      try {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        statsWs = new WebSocket(`${protocol}//${location.host}`);
+        statsWs.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'stats') {
+              updateStatsUI(data.data);
+              stopStatsPolling(); // WebSocket is working, stop HTTP polling
+            } else if (data.type === 'chat') {
+              if (typeof window.onTwitchChat === 'function') {
+                window.onTwitchChat(data.username, data.message);
+              }
+            }
+          } catch (e) { /* ignore non-JSON messages */ }
+        };
+    statsWs.onopen = () => {
+      statsWs.send(JSON.stringify({ type: 'identify', clientType: 'dashboard' }));
+      refreshStatsHTTP(); // Get initial stats immediately
+    };
+        statsWs.onclose = () => {
+          startStatsPolling(); // WebSocket closed, fall back to polling
+          // Try to reconnect after 5s
+          setTimeout(connectStatsWebSocket, 5000);
+        };
+        statsWs.onerror = () => {
+          startStatsPolling();
+        };
+      } catch (e) {
+        startStatsPolling();
+      }
+    }
+
+// Initialize: try WebSocket first, only start polling if WS fails
+connectStatsWebSocket();
+
+    async function logoutDashboard() {
+      const btn = document.getElementById('logoutBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Logging out...';
+      }
+      let restarting = false;
+      try {
+        const response = await fetch('/api/dashboard/logout', { method: 'POST', credentials: 'same-origin' });
+        const data = await response.json();
+        restarting = !!data.restarting;
+      } catch (e) {
+        // Even if the request fails, return to the auth page.
+      }
+
+      if (!restarting) {
+        window.location.replace('/');
+        return;
+      }
+
+      if (btn) btn.textContent = 'Switching account...';
+      const started = Date.now();
+      while (Date.now() - started < 30000) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+          const response = await fetch('/healthz', { cache: 'no-store' });
+          if (!response.ok) continue;
+          const data = await response.json();
+          if (data.status === 'ok' && data.mode === 'accounts') {
+            window.location.replace('/');
+            return;
+          }
+        } catch (e) {
+          // The local server is restarting.
+        }
+      }
+      window.location.replace('/');
+    }
+
+    // Announce dashboard presence to prevent duplicate browser opens
+    let pingInterval;
+    async function announceDashboard(){
+      try{
+        const res = await fetch('/api/dashboard/ping', { method: 'GET' });
+        const data = await res.json();
+        // If server signals to stop pinging, clear the interval
+        if(data.stopPinging){
+          console.log('Dashboard already detected by server, stopping presence pings');
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
+      }catch(e){
+        // Silently fail - not critical
+      }
+    }
+
+    // Ping every 2s until server detects us, then stop (reduced from 100ms to save bandwidth)
+    pingInterval = setInterval(announceDashboard, 2000);
+    // Initial ping
+    announceDashboard();
+
+    // Shared API helper
+    async function api(path, opts={}){
+      const res = await fetch(path, {
+        ...opts,
+        headers: {
+          ...(opts.headers || {}),
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res.status === 401) {
+        window.location.href = '/';
+        throw new Error('Session expired');
+      }
+      const contentType = res.headers.get('content-type');
+      if(contentType && contentType.includes('application/json')){
+        return await res.json();
+      } else {
+        const text = await res.text();
+        if(!res.ok) throw new Error(text);
+        return { result: text };
+      }
+    }
+
+    // Shared functions available to all tabs
+    window.tabInitializers = {};
+    window.sharedAPI = api;
+  </script>
+</body>
+</html>

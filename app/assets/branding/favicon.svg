@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1224"/>
+      <stop offset="1" stop-color="#19162f"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0.12" y1="0.04" x2="0.88" y2="0.96">
+      <stop offset="0" stop-color="#7cf5df"/>
+      <stop offset="0.42" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#020617" flood-opacity="0.65"/>
+    </filter>
+  </defs>
+
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#tile)"/>
+  <rect x="44" y="44" width="936" height="936" rx="212" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="8"/>
+  <circle cx="512" cy="500" r="370" fill="url(#glow)"/>
+
+  <g filter="url(#shadow)">
+    <path d="M512 162
+             C550 328 586 366 750 500
+             C586 634 550 672 512 838
+             C474 672 438 634 274 500
+             C438 366 474 328 512 162 Z"
+          fill="url(#spark)" stroke="url(#spark)" stroke-width="44" stroke-linejoin="round"/>
+  </g>
+
+  <ellipse cx="440" cy="502" rx="38" ry="56" fill="#0b1224"/>
+  <ellipse cx="584" cy="502" rx="38" ry="56" fill="#0b1224"/>
+  <circle cx="429" cy="486" r="10" fill="#ffffff" opacity="0.9"/>
+  <circle cx="573" cy="486" r="10" fill="#ffffff" opacity="0.9"/>
+  <ellipse cx="390" cy="578" rx="35" ry="19" fill="#fb7185" opacity="0.34"/>
+  <ellipse cx="634" cy="578" rx="35" ry="19" fill="#fb7185" opacity="0.34"/>
+  <path d="M480 574 C497 598 527 598 544 574" fill="none" stroke="#0b1224" stroke-width="20" stroke-linecap="round"/>
+
+  <rect x="188" y="640" width="34" height="34" rx="9" fill="#7cf5df" opacity="0.85" transform="rotate(-16 205 657)"/>
+  <rect x="790" y="666" width="26" height="26" rx="7" fill="#a78bfa" opacity="0.8" transform="rotate(18 803 679)"/>
+  <rect x="764" y="266" width="20" height="20" rx="6" fill="#ffffff" opacity="0.65" transform="rotate(22 774 276)"/>
+</svg>

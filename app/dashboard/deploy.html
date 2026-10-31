@@ -1,0 +1,23 @@
+<div class="panel">
+  <div class="panel-head">
+    <p class="section-kicker">Sharing</p>
+    <h2>Cloudflare Tunnel</h2>
+    <p>Create a temporary HTTPS URL for OBS or a remote browser. No account is required, and the URL changes each time the tunnel starts.</p>
+  </div>
+
+  <div id="tunnelStatus" class="status-indicator stopped">
+    <span class="status-dot stopped"></span> Stopped
+  </div>
+
+  <div class="url-display" id="tunnelUrlDisplay" style="display:none">
+    <a id="tunnelUrl" href="#" target="_blank" rel="noopener"></a>
+    <button class="copy-btn" type="button" onclick="copyTunnelUrl()">Copy</button>
+  </div>
+
+  <div id="tunnelError" class="error" style="display:none"></div>
+
+  <div class="deploy-actions">
+    <button id="startTunnelBtn" class="primary" type="button" onclick="startTunnel()">Start tunnel</button>
+    <button id="stopTunnelBtn" class="danger" type="button" onclick="stopTunnel()" style="display:none">Stop tunnel</button>
+  </div>
+</div>

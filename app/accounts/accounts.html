@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+<title>Stream Sprites — Accounts</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 32px 20px;
+    background:
+      radial-gradient(700px 500px at 50% -10%, rgba(56,189,248,0.16), transparent 70%),
+      radial-gradient(600px 480px at 85% 105%, rgba(139,92,246,0.14), transparent 70%),
+      #0f1014;
+    color: #f8fafc;
+    font-family: "Segoe UI", system-ui, Arial, sans-serif;
+  }
+  button, input { font: inherit; }
+  .shell { width: 100%; max-width: 500px; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 0 4px 22px;
+  }
+  .brand img {
+    width: 58px;
+    height: 58px;
+    border-radius: 14px;
+    box-shadow: 0 12px 30px rgba(2,6,23,0.55);
+  }
+  .brand h1 { font-size: 25px; letter-spacing: -0.02em; }
+  .brand p { margin-top: 4px; color: #94a3b8; font-size: 13px; }
+  .card {
+    background: rgba(27,29,36,0.92);
+    border: 1px solid rgba(148,163,184,0.16);
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.42);
+    backdrop-filter: blur(14px);
+  }
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 20px;
+    border-radius: 10px;
+    background: #13151b;
+    border: 1px solid rgba(148,163,184,0.1);
+  }
+  .tab {
+    border: 0;
+    border-radius: 7px;
+    padding: 10px 12px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .tab:hover { color: #e2e8f0; }
+  .tab.active { background: #252935; color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset; }
+  .tab:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+  }
+  .pane[hidden] { display: none; }
+  .accounts { margin-bottom: 16px; }
+  .accounts-label {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .account-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .account-chip {
+    border: 1px solid rgba(148,163,184,0.2);
+    border-radius: 999px;
+    padding: 6px 12px;
+    background: #222631;
+    color: #dbeafe;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .account-chip:hover { border-color: #38bdf8; color: white; }
+  .no-accounts { color: #64748b; font-size: 13px; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    margin-bottom: 6px;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .field input {
+    width: 100%;
+    padding: 11px 13px;
+    border-radius: 8px;
+    border: 1px solid #3b4250;
+    background: #14161d;
+    color: #f8fafc;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field input::placeholder { color: #596274; }
+  .field input:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.15);
+  }
+  .primary {
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    padding: 11px 14px;
+    background: linear-gradient(135deg, #22d3ee, #6366f1);
+    color: #06111f;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .primary:hover { filter: brightness(1.08); }
+  .primary:disabled { opacity: 0.55; cursor: wait; }
+  .error {
+    display: none;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 8px;
+    background: rgba(127,29,29,0.2);
+    color: #fca5a5;
+    font-size: 13px;
+  }
+  .guest {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(148,163,184,0.12);
+  }
+  .guest strong { display: block; font-size: 13px; margin-bottom: 3px; }
+  .guest span { display: block; color: #7c879a; font-size: 12px; line-height: 1.35; }
+  .guest-button {
+    flex-shrink: 0;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    padding: 9px 13px;
+    background: #20242e;
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .guest-button:hover { border-color: #38bdf8; color: #fff; }
+  .footnote {
+    margin: 16px 4px 0;
+    color: #5f6b7d;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .switching {
+    position: fixed;
+    inset: 0;
+    display: none;
+    place-items: center;
+    background: rgba(10,11,15,0.88);
+    backdrop-filter: blur(6px);
+    z-index: 10;
+  }
+  .switching.visible { display: grid; }
+  .switching-box { text-align: center; }
+  .spinner {
+    width: 38px;
+    height: 38px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    border: 3px solid rgba(148,163,184,0.2);
+    border-top-color: #38bdf8;
+    animation: spin 0.8s linear infinite;
+  }
+  .switching h2 { font-size: 17px; margin-bottom: 6px; }
+  .switching p { color: #94a3b8; font-size: 13px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation-duration: 1.8s; }
+  }
+  @media (max-width: 520px) {
+    .card { padding: 18px; border-radius: 14px; }
+    .brand { margin-bottom: 16px; }
+    .guest { align-items: flex-start; flex-direction: column; }
+    .guest-button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="brand">
+    <img src="/favicon.ico" alt="">
+    <div>
+      <h1>Stream Sprites</h1>
+      <p>Choose how to continue</p>
+    </div>
+  </div>
+
+  <main class="card">
+    <div class="tabs" role="tablist" aria-label="Account access">
+      <button class="tab active" id="loginTab" type="button" role="tab" aria-selected="true" aria-controls="loginPane">Sign In</button>
+      <button class="tab" id="registerTab" type="button" role="tab" aria-selected="false" aria-controls="registerPane">Create Account</button>
+    </div>
+
+    <div class="error" id="error" role="alert" aria-live="polite"></div>
+
+    <section class="pane" id="loginPane" role="tabpanel" aria-labelledby="loginTab">
+      <div class="accounts" id="accountsBlock" hidden>
+        <div class="accounts-label">Saved accounts</div>
+        <div class="account-chips" id="accountChips"></div>
+      </div>
+      <form id="loginForm">
+        <div class="field">
+          <label for="loginUsername">Username</label>
+          <input id="loginUsername" name="username" autocomplete="username" maxlength="24" spellcheck="false" placeholder="Your username">
+        </div>
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Your password">
+        </div>
+        <button class="primary" id="loginButton" type="submit">Sign In</button>
+      </form>
+    </section>
+
+    <section class="pane" id="registerPane" role="tabpanel" aria-labelledby="registerTab" hidden>
+      <form id="registerForm">
+        <div class="field">
+          <label for="registerUsername">Username</label>
+          <input id="registerUsername" name="username" autocomplete="username" maxlength="24" spellcheck="false" placeholder="Choose a username">
+        </div>
+        <div class="field">
+          <label for="registerPassword">Password</label>
+          <input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="At least 6 characters">
+        </div>
+        <div class="field">
+          <label for="registerConfirm">Confirm password</label>
+          <input id="registerConfirm" name="confirm" type="password" autocomplete="new-password" placeholder="Repeat your password">
+        </div>
+        <button class="primary" id="registerButton" type="submit">Create Account</button>
+      </form>
+    </section>
+
+    <div class="guest">
+      <div>
+        <strong>Just looking around?</strong>
+        <span>The guest profile is shared by anyone using this app and keeps no account password.</span>
+      </div>
+      <button class="guest-button" id="guestButton" type="button">Continue as Guest</button>
+    </div>
+  </main>
+
+  <p class="footnote">
+    Each account has its own Twitch settings, database, skins, and overlay state.<br>
+    Accounts and profiles stay on this PC. Only one profile is active at a time.
+  </p>
+</div>
+
+<div class="switching" id="switching" role="status" aria-live="polite">
+  <div class="switching-box">
+    <div class="spinner"></div>
+    <h2>Opening profile</h2>
+    <p id="switchingText">Preparing your local server...</p>
+  </div>
+</div>
+
+<script>
+  const errorEl = document.getElementById('error');
+  const loginTab = document.getElementById('loginTab');
+  const registerTab = document.getElementById('registerTab');
+  const loginPane = document.getElementById('loginPane');
+  const registerPane = document.getElementById('registerPane');
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  const loginButton = document.getElementById('loginButton');
+  const registerButton = document.getElementById('registerButton');
+  const guestButton = document.getElementById('guestButton');
+  const switching = document.getElementById('switching');
+  const switchingText = document.getElementById('switchingText');
+  const accountsBlock = document.getElementById('accountsBlock');
+  const accountChips = document.getElementById('accountChips');
+  const loginUsername = document.getElementById('loginUsername');
+  const loginPassword = document.getElementById('loginPassword');
+
+  let busy = false;
+
+  function showError(message) {
+    errorEl.textContent = message || 'Something went wrong.';
+    errorEl.style.display = 'block';
+  }
+
+  function clearError() {
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+  }
+
+  function setTab(tab) {
+    const login = tab === 'login';
+    loginTab.classList.toggle('active', login);
+    registerTab.classList.toggle('active', !login);
+    loginTab.setAttribute('aria-selected', String(login));
+    registerTab.setAttribute('aria-selected', String(!login));
+    loginPane.hidden = !login;
+    registerPane.hidden = login;
+    clearError();
+    if (login) {
+      if (!loginUsername.value) loginUsername.focus();
+      else loginPassword.focus();
+    } else {
+      document.getElementById('registerUsername').focus();
+    }
+  }
+
+  loginTab.addEventListener('click', () => setTab('login'));
+  registerTab.addEventListener('click', () => setTab('register'));
+
+  async function loadAccounts() {
+    try {
+      const response = await fetch('/api/accounts', { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+      if (accounts.length === 0) return;
+      accountChips.replaceChildren();
+      for (const account of accounts) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'account-chip';
+        chip.textContent = account.username;
+        chip.addEventListener('click', () => {
+          loginUsername.value = account.username;
+          loginPassword.focus();
+        });
+        accountChips.appendChild(chip);
+      }
+      accountsBlock.hidden = false;
+    } catch (e) {
+      // The page still works without the saved-account shortcuts.
+    }
+  }
+
+  function setBusy(nextBusy) {
+    busy = nextBusy;
+    loginButton.disabled = nextBusy;
+    registerButton.disabled = nextBusy;
+    guestButton.disabled = nextBusy;
+  }
+
+  async function waitForProfile(label) {
+    switchingText.textContent = 'Opening ' + label + '...';
+    const started = Date.now();
+    while (Date.now() - started < 45000) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      try {
+        const response = await fetch('/healthz', { cache: 'no-store' });
+        if (!response.ok) continue;
+        const data = await response.json();
+        if (data.status === 'ok' && data.mode === 'app') {
+          window.location.replace('/');
+          return;
+        }
+      } catch (e) {
+        // The local server is restarting.
+      }
+    }
+    switching.classList.remove('visible');
+    setBusy(false);
+    showError('The profile took too long to open. Check the desktop log and try again.');
+  }
+
+  async function selectProfile(path, body, label) {
+    if (busy) return;
+    setBusy(true);
+    clearError();
+    try {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Could not open that profile.');
+      }
+      switching.classList.add('visible');
+      await waitForProfile(data.profile || label);
+    } catch (e) {
+      switching.classList.remove('visible');
+      setBusy(false);
+      showError(e.message);
+    }
+  }
+
+  loginForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    selectProfile('/api/accounts/login', {
+      username: loginUsername.value.trim(),
+      password: loginPassword.value
+    }, 'your account');
+  });
+
+  registerForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const username = document.getElementById('registerUsername').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    const confirm = document.getElementById('registerConfirm').value;
+    if (password.length < 6) {
+      showError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      showError('Passwords do not match.');
+      return;
+    }
+    selectProfile('/api/accounts/register', { username, password }, username || 'your account');
+  });
+
+  guestButton.addEventListener('click', () => {
+    selectProfile('/api/accounts/guest', {}, 'the guest profile');
+  });
+
+  loadAccounts();
+</script>
+</body>
+</html>

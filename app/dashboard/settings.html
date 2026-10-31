@@ -1,0 +1,755 @@
+
+
+<div class="panel">
+  <div class="panel-head"><p class="section-kicker">Behavior</p><h2>Server configuration</h2><p>Configure physics, spawning, rendering, and debugging. Changes are saved to the active profile and applied after a server restart or dynamically where supported.</p></div>
+
+
+  <form id="overlaySettingsForm">
+    <div class="settings-section" data-section="canvas">
+      <div class="settings-section-header">
+        <h3>Canvas</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Canvas Width (px)</label>
+            <input type="number" id="canvasWidth" min="800" max="3840" step="10">
+            <small>Overlay canvas width in pixels</small>
+          </div>
+          <div class="form-group">
+            <label>Canvas Height (px)</label>
+            <input type="number" id="canvasHeight" min="600" max="2160" step="10">
+            <small>Overlay canvas height in pixels</small>
+          </div>
+          <div class="form-group">
+            <label>Ground Y Position</label>
+            <input type="number" id="groundY" min="100" max="2000" step="10">
+            <small>Y coordinate where sprites rest (0=top, higher=lower)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="physics">
+      <div class="settings-section-header">
+        <h3>Physics</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Gravity</label>
+            <input type="number" id="gravity" min="0" max="2" step="0.05">
+            <small>Downward acceleration (0=none, 0.6=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Air Resistance</label>
+            <input type="number" id="airResistance" min="0.9" max="1" step="0.001">
+            <small>Velocity multiplier per frame (0.992=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Ground Friction</label>
+            <input type="number" id="groundFriction" min="0.5" max="1" step="0.01">
+            <small>Ground velocity multiplier (0.92=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Bounce Damping</label>
+            <input type="number" id="bounceDamping" min="0" max="1" step="0.05">
+            <small>Energy retained after bounce (0.65=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Minimum Velocity</label>
+            <input type="number" id="minVelocity" min="0.01" max="1" step="0.01">
+            <small>Velocity threshold before stopping (0.15=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="spawning">
+      <div class="settings-section-header">
+        <h3>Spawning</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Max Sprites</label>
+            <input type="number" id="maxSprites" min="100" max="2000" step="50">
+            <small>Maximum number of sprites allowed (1500=default, hard cap 2000)</small>
+          </div>
+          <div class="form-group">
+            <label>Max Spawn Quantity</label>
+            <input type="number" id="maxSpawnQuantity" min="1" max="500" step="1">
+            <small>Max sprites per !spawn command (100=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spawn Throttle (ms)</label>
+            <input type="number" id="spawnThrottleMs" min="0" max="10000" step="50">
+            <small>Minimum time between spawns per user (700=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Sprite Size Min (px)</label>
+            <input type="number" id="spriteSizeMin" min="10" max="100" step="5">
+            <small>Minimum sprite size (30=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Sprite Size Max (px)</label>
+            <input type="number" id="spriteSizeMax" min="20" max="200" step="5">
+            <small>Maximum sprite size (80=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spawn Max Tries</label>
+            <input type="number" id="spawnMaxTries" min="1" max="20" step="1">
+            <small>Attempts to find non-overlapping spawn position (8=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spawn Y Offset (px)</label>
+            <input type="number" id="spawnYOffset" min="0" max="100" step="5">
+            <small>Vertical offset from ground (40=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spawn Jitter (px)</label>
+            <input type="number" id="spawnJitter" min="0" max="20" step="1">
+            <small>Random horizontal jitter on spawn (6=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spawn Bounds Padding (px)</label>
+            <input type="number" id="spawnBoundsPadding" min="0" max="200" step="10">
+            <small>Padding from canvas edges (60=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spawn Size Padding (px)</label>
+            <input type="number" id="spawnSizePadding" min="0" max="200" step="10">
+            <small>Extra space for size-based overlap check (120=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Initial Velocity</label>
+            <input type="number" id="initialVelocity" min="0" max="10" step="0.5">
+            <small>Initial horizontal velocity on spawn (2=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="lifetime">
+      <div class="settings-section-header">
+        <h3>Lifetime</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Sprite Lifetime (minutes)</label>
+            <input type="number" id="spriteLifetimeMs" min="1" max="180" step="1">
+            <small>Time before sprite auto-removal (30 min = 1800000ms default)</small>
+          </div>
+          <div class="form-group">
+            <label>Fade Warning (minutes)</label>
+            <input type="number" id="fadeWarningMs" min="0" max="60" step="1">
+            <small>Start fade this long before removal (5 min = 300000ms default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="collision">
+      <div class="settings-section-header">
+        <h3>Collision</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Personal Space Threshold</label>
+            <input type="number" id="collisionPersonalSpaceThreshold" min="0" max="1" step="0.05">
+            <small>Minimum distance before collision (0.1=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Force Multiplier</label>
+            <input type="number" id="collisionForceMultiplier" min="0" max="1" step="0.01">
+            <small>Strength of collision push (0.02=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Spin Factor</label>
+            <input type="number" id="angularVelocityFromCollision" min="0" max="0.01" step="0.0001">
+            <small>Rotation added by collisions (0.0001=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Probability Scaling</label>
+            <input type="number" id="collisionProbabilityScaling" min="0" max="2" step="0.1">
+            <small>Scales collision probability (1=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Probability Low</label>
+            <input type="number" id="collisionProbabilityLow" min="0" max="1" step="0.1">
+            <small>Low density probability (0.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Probability Medium</label>
+            <input type="number" id="collisionProbabilityMedium" min="0" max="1" step="0.1">
+            <small>Medium density probability (0.5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Probability High</label>
+            <input type="number" id="collisionProbabilityHigh" min="0" max="1" step="0.1">
+            <small>High density probability (1.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Count Threshold Low</label>
+            <input type="number" id="collisionCountThresholdLow" min="1" max="20" step="1">
+            <small>Low density count (5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Collision Count Threshold High</label>
+            <input type="number" id="collisionCountThresholdHigh" min="5" max="50" step="1">
+            <small>High density count (15=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="explosion">
+      <div class="settings-section-header">
+        <h3>Explosion</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Explosion Force Multiplier</label>
+            <input type="number" id="explosionForceMultiplier" min="10" max="200" step="5">
+            <small>Base force of explosion (60=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Explosion Radius Base (px)</label>
+            <input type="number" id="explosionRadiusBase" min="100" max="1000" step="10">
+            <small>Base explosion radius (400=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Explosion Radius Var (px)</label>
+            <input type="number" id="explosionRadiusVar" min="0" max="500" step="10">
+            <small>Random variation in radius (300=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Explosion Upward Bias</label>
+            <input type="number" id="explosionUpwardBias" min="0" max="1" step="0.05">
+            <small>How much upward force (0.7=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spin Strength Factor</label>
+            <input type="number" id="spinStrengthFactor" min="0" max="0.5" step="0.01">
+            <small>Spin applied by explosion (0.05=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Random Jitter Factor</label>
+            <input type="number" id="randomJitterFactor" min="0" max="1" step="0.05">
+            <small>Random force variation (0.2=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Explosion Timing Jitter (s)</label>
+            <input type="number" id="explosionTimingJitter" min="0" max="1" step="0.05">
+            <small>Random delay variation (0.3=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="roaming">
+      <div class="settings-section-header">
+        <h3>Roaming</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Roam Zone Y Offset (px)</label>
+            <input type="number" id="roamZoneYOffset" min="0" max="100" step="5">
+            <small>Vertical offset for roam zones (30=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Duration Base (ms)</label>
+            <input type="number" id="roamDurationBase" min="500" max="10000" step="100">
+            <small>Base walk duration (3000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Duration Var (ms)</label>
+            <input type="number" id="roamDurationVar" min="0" max="10000" step="100">
+            <small>Random duration variation (4000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Distance Threshold (px)</label>
+            <input type="number" id="roamDistanceThreshold" min="1" max="50" step="1">
+            <small>Distance to consider arrived (5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Walk Force Multiplier</label>
+            <input type="number" id="roamWalkForceMultiplier" min="0" max="1" step="0.05">
+            <small>Force applied when walking (0.2=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Walk Vertical Factor</label>
+            <input type="number" id="roamWalkVerticalFactor" min="0" max="1" step="0.05">
+            <small>Vertical component of walk (0.3=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Steer Force Multiplier</label>
+            <input type="number" id="roamSteerForceMultiplier" min="0" max="1" step="0.05">
+            <small>Steering force strength (0.1=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Steer Vertical Factor</label>
+            <input type="number" id="roamSteerVerticalFactor" min="0" max="1" step="0.05">
+            <small>Vertical steering component (0.2=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Arrival Threshold (px)</label>
+            <input type="number" id="roamArrivalThreshold" min="1" max="50" step="1">
+            <small>Distance to stop (10=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Random Move Chance</label>
+            <input type="number" id="roamRandomMoveChance" min="0" max="0.2" step="0.01">
+            <small>Probability per frame (0.03=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Random Move Force</label>
+            <input type="number" id="roamRandomMoveForce" min="0" max="2" step="0.1">
+            <small>Force of random movement (0.3=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Roam Random Move Vertical</label>
+            <input type="number" id="roamRandomMoveVertical" min="0" max="1" step="0.05">
+            <small>Vertical random component (0.1=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="movement">
+      <div class="settings-section-header">
+        <h3>Movement & Animation</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Velocity Bump</label>
+            <input type="number" id="velocityBump" min="0" max="10" step="0.5">
+            <small>Velocity added on interaction (3=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Dragged Gravity</label>
+            <input type="number" id="draggedGravity" min="0" max="2" step="0.1">
+            <small>Gravity when dragging (0.5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Dance Gravity Factor</label>
+            <input type="number" id="danceGravityFactor" min="-1" max="1" step="0.1">
+            <small>Anti-gravity during dance (-0.2=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Dance Angular Velocity</label>
+            <input type="number" id="danceAngularVelocity" min="0" max="0.5" step="0.01">
+            <small>Spin speed during dance (0.1=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Dance Frequency (ms)</label>
+            <input type="number" id="danceFrequency" min="50" max="1000" step="10">
+            <small>Dance animation interval (200=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Tilt Return Time (ms)</label>
+            <input type="number" id="tiltReturnTime" min="100" max="5000" step="50">
+            <small>Time to return from tilt (1000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Jump Velocity</label>
+            <input type="number" id="jumpVelocity" min="-30" max="-1" step="1">
+            <small>Upward velocity for jump command (-16=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Flip Duration (ms)</label>
+            <input type="number" id="flipDurationMs" min="1000" max="30000" step="500">
+            <small>How long the flip effect lasts (5000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Flip Angular Velocity</label>
+            <input type="number" id="flipAngularVelocity" min="0.1" max="5" step="0.1">
+            <small>Spin speed during flip (1.57=default, i.e. PI/2)</small>
+          </div>
+          <div class="form-group">
+            <label>Fight Duration (ms)</label>
+            <input type="number" id="fightDurationMs" min="1000" max="60000" step="1000">
+            <small>How long the fight exhaustion lasts (10000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Fight Coin Flip Probability</label>
+            <input type="number" id="fightCoinFlipProbability" min="0" max="1" step="0.05">
+            <small>Chance challenger wins a fight (0.5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Direction Change Threshold</label>
+            <input type="number" id="directionChangeThreshold" min="0.1" max="1" step="0.05">
+            <small>Velocity to change facing (0.3=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Command Cooldown (ms)</label>
+            <input type="number" id="commandCooldownMs" min="0" max="30000" step="500">
+            <small>Cooldown between commands per user (5000=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="scaling">
+      <div class="settings-section-header">
+        <h3>Scaling & Size</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Height Scale Sit</label>
+            <input type="number" id="heightScaleSit" min="0.5" max="1" step="0.05">
+            <small>Scale when sitting (0.75=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Height Scale Idle</label>
+            <input type="number" id="heightScaleIdle" min="0.5" max="1.5" step="0.05">
+            <small>Scale when idle (1.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Text Width Padding (px)</label>
+            <input type="number" id="textWidthPadding" min="0" max="20" step="1">
+            <small>Extra space for username text (4=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Wiggle Range</label>
+            <input type="number" id="wiggleRange" min="0" max="2000" step="50">
+            <small>Random idle wiggle amount (1000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Name Length Limit</label>
+            <input type="number" id="nameLengthLimit" min="5" max="64" step="1">
+            <small>Max username length (32=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="particles">
+      <div class="settings-section-header">
+        <h3>Particles (Explosion Effects)</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Particle Count Base</label>
+            <input type="number" id="particleCountBase" min="5" max="100" step="5">
+            <small>Base number of particles (30=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Count Var</label>
+            <input type="number" id="particleCountVar" min="0" max="50" step="5">
+            <small>Random variation in count (20=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Speed Base</label>
+            <input type="number" id="particleSpeedBase" min="0.5" max="10" step="0.5">
+            <small>Base particle speed (2=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Speed Var</label>
+            <input type="number" id="particleSpeedVar" min="0" max="10" step="0.5">
+            <small>Speed variation (4=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Gravity</label>
+            <input type="number" id="particleGravity" min="0" max="1" step="0.05">
+            <small>Downward acceleration (0.1=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Decay Base</label>
+            <input type="number" id="particleDecayBase" min="0.001" max="0.1" step="0.005">
+            <small>Fade rate (0.01=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Decay Var</label>
+            <input type="number" id="particleDecayVar" min="0" max="0.1" step="0.005">
+            <small>Decay variation (0.02=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Size Base (px)</label>
+            <input type="number" id="particleSizeBase" min="1" max="20" step="1">
+            <small>Base particle size (3=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Size Var (px)</label>
+            <input type="number" id="particleSizeVar" min="0" max="20" step="1">
+            <small>Size variation (5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Hue Base</label>
+            <input type="number" id="particleHueBase" min="0" max="360" step="5">
+            <small>Base color hue (10=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Particle Hue Range</label>
+            <input type="number" id="particleHueRange" min="0" max="360" step="5">
+            <small>Hue variation (60=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="spatial">
+      <div class="settings-section-header">
+        <h3>Spatial & Zones</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Number of Zones</label>
+            <input type="number" id="numZones" min="1" max="10" step="1">
+            <small>Horizontal zones for distribution (5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Zone Selection Bias</label>
+            <input type="number" id="zoneSelectionBias" min="0" max="1" step="0.05">
+            <small>Preference for current zone (0.7=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Spatial Hash Cell Size</label>
+            <input type="number" id="spatialHashCellSize" min="16" max="256" step="8">
+            <small>Size of spatial hash cells (64=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Avoidance Radius Multiplier</label>
+            <input type="number" id="avoidanceRadiusMultiplier" min="1" max="5" step="0.2">
+            <small>Multiplier for avoidance (2.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Size Similarity Threshold</label>
+            <input type="number" id="sizeSimilarityThreshold" min="0.5" max="1" step="0.05">
+            <small>Threshold for size-based repulsion (0.85=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Expanded Radius Multiplier</label>
+            <input type="number" id="expandedRadiusMultiplier" min="1" max="10" step="0.5">
+            <small>Multiplier for expanded collision (4.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Size Diff Threshold Low</label>
+            <input type="number" id="sizeDiffThresholdLow" min="0" max="1" step="0.05">
+            <small>Low size difference threshold (0.7=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Size Diff Attraction Multiplier</label>
+            <input type="number" id="sizeDiffAttractionMultiplier" min="0" max="3" step="0.1">
+            <small>Attraction for size differences (1.5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Min Attraction Distance</label>
+            <input type="number" id="minAttractionDistance" min="5" max="100" step="5">
+            <small>Min distance for attraction (20=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Size Diff Factor</label>
+            <input type="number" id="sizeDiffFactor" min="0" max="5" step="0.2">
+            <small>Factor for size difference force (2.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Attraction Force Base</label>
+            <input type="number" id="attractionForceBase" min="0" max="1" step="0.01">
+            <small>Base attraction force (0.08=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Larger Repulsion Factor</label>
+            <input type="number" id="largerRepulsionFactor" min="0" max="1" step="0.05">
+            <small>Repulsion when one is larger (0.3=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Moderate Repulsion Radius</label>
+            <input type="number" id="moderateRepulsionRadius" min="0.5" max="3" step="0.1">
+            <small>Radius for moderate repulsion (1.0=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Moderate Repulsion Force</label>
+            <input type="number" id="moderateRepulsionForce" min="0" max="0.5" step="0.01">
+            <small>Force for moderate repulsion (0.08=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Center Push Radius (px)</label>
+            <input type="number" id="centerPushRadius" min="50" max="500" step="10">
+            <small>Radius for center push (150=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Center Push Force</label>
+            <input type="number" id="centerPushForce" min="0" max="0.5" step="0.01">
+            <small>Force toward center (0.02=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Ground Y Center Offset</label>
+            <input type="number" id="groundYCenterOffset" min="0.5" max="1" step="0.05">
+            <small>Ground Y offset ratio (0.8=default)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="physics-internals">
+      <div class="settings-section-header">
+        <h3>Physics Internals</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Mass Divisor</label>
+            <input type="number" id="massDivisor" min="100" max="10000" step="100">
+            <small>Divisor for mass calculation (1000=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Moment of Inertia Factor</label>
+            <input type="number" id="momentOfInertiaFactor" min="0.1" max="2" step="0.1">
+            <small>Rotational inertia factor (0.5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>DT Cap (s)</label>
+            <input type="number" id="dtCap" min="0.01" max="0.2" step="0.01">
+            <small>Max delta time per frame (0.05=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Ground Y Multiplier</label>
+            <input type="number" id="groundYMultiplier" min="0.9" max="1" step="0.01">
+            <small>Ground position smoothing (0.99=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Safety Nudge Distance</label>
+            <input type="number" id="safetyNudgeDistance" min="0" max="5" step="0.5">
+            <small>Push distance for overlap resolution (0.5=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Angular Velocity Decay</label>
+            <input type="number" id="angularVelocityDecay" min="0.8" max="1" step="0.01">
+            <small>Spin decay per frame (0.98=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Angle Decay</label>
+            <input type="number" id="angleDecay" min="0.8" max="1" step="0.01">
+            <small>Angle smoothing (0.95=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Tilt Angular Decay</label>
+            <input type="number" id="tiltAngularDecay" min="0.8" max="1" step="0.01">
+            <small>Tilt spin decay (0.9=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Tilt Angle Threshold</label>
+            <input type="number" id="tiltAngleThreshold" min="0.001" max="0.1" step="0.001">
+            <small>Min tilt to consider (0.01=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Lifetime Cleanup Threshold</label>
+            <input type="number" id="lifetimeCleanupThreshold" min="1" max="50" step="1">
+            <small>Min sprites before cleanup (10=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Resize Debounce (ms)</label>
+            <input type="number" id="resizeDebounceMs" min="50" max="1000" step="50">
+            <small>Debounce for canvas resize (100=default)</small>
+          </div>
+          <div class="form-group">
+            <label>Network Snapshot Rate (Hz)</label>
+            <input type="number" id="networkFps" min="1" max="60" step="1">
+            <small>State updates sent to overlays per second (30=default; clients interpolate)</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="security">
+      <div class="settings-section-header">
+        <h3>Dashboard Security</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Dashboard Password</label>
+            <input type="password" id="dashboardPassword" placeholder="Leave empty to disable">
+            <small>Required for remote access (tunnel). Leave empty to allow access without a password. Localhost access is always allowed.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section" data-section="debug">
+      <div class="settings-section-header">
+        <h3>Debug Settings</h3>
+        <span class="settings-section-toggle"></span>
+      </div>
+      <div class="settings-section-content">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="serverDebug">
+              <input type="checkbox" id="serverDebug" style="width:auto;margin-right:8px">
+              Server Debug Logging
+            </label>
+            <small>Enables detailed server-side debug logs</small>
+          </div>
+          <div class="form-group">
+            <label for="twitchDebug">
+              <input type="checkbox" id="twitchDebug" style="width:auto;margin-right:8px">
+              Twitch Client Debug
+            </label>
+            <small>Enables debug output from Twitch IRC client</small>
+          </div>
+          <div class="form-group">
+            <label for="twitchAuthErrors">
+              <input type="checkbox" id="twitchAuthErrors" style="width:auto;margin-right:8px">
+              Twitch Authentication Errors
+            </label>
+            <small>Show "Login authentication failed" errors</small>
+          </div>
+          <div class="form-group">
+            <label for="twitchOtherErrors">
+              <input type="checkbox" id="twitchOtherErrors" style="width:auto;margin-right:8px">
+              Twitch Other Errors
+            </label>
+            <small>Show other Twitch connection/network errors</small>
+          </div>
+          <div class="form-group">
+            <label for="verboseMessages">
+              <input type="checkbox" id="verboseMessages" style="width:auto;margin-right:8px">
+              Verbose Message Logging
+            </label>
+            <small>Logs all chat messages in console</small>
+          </div>
+          <div class="form-group">
+            <label for="logToFile">
+              <input type="checkbox" id="logToFile" style="width:auto;margin-right:8px">
+              Log to File
+            </label>
+            <small>Write debug logs to logs/debug.log file</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <script src="dashboard/settings.js"></script>
+
+  <div class="button-group">
+    <button id="refreshSettings" onclick="loadSettings()">Refresh</button>
+    <button id="saveSettings" onclick="saveSettings()" class="primary">Save Settings</button>
+    <button id="resetSettings" onclick="resetSettings()" class="secondary">Reset to Defaults</button>
+  </div>
+
+  <div id="settingsStatus" class="error"></div>
+  <div id="settingsSuccess" class="success"></div>
+</div>

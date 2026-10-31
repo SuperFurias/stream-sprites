@@ -1,0 +1,73 @@
+<div class="panel">
+  <div class="panel-head">
+    <p class="section-kicker">Connection</p>
+    <h2>Twitch OAuth</h2>
+    <p>Connect the bot to your channel and manage its access token.</p>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-group">
+      <label for="clientId">Client ID</label>
+      <input id="clientId" type="text" placeholder="Twitch client ID" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label for="clientSecret">Client secret</label>
+      <div class="password-wrapper">
+        <input id="clientSecret" type="password" placeholder="Twitch client secret" autocomplete="off">
+        <button type="button" class="password-toggle" onclick="togglePassword('clientSecret', this)">Show</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="botUsername">Bot username</label>
+      <input id="botUsername" type="text" placeholder="Bot account name" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label for="channel">Channel</label>
+      <input id="channel" type="text" placeholder="Your channel" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <div class="toggle-row">
+      <label for="autoGenerateOAuth" class="toggle-label">
+        <input id="autoGenerateOAuth" type="checkbox" class="toggle">
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="toggle-text">Auto-generate OAuth on startup</span>
+    </div>
+    <span id="autoGenerateError" class="error"></span>
+    <small>Refresh and create a new token at startup using the stored refresh token.</small>
+  </div>
+
+  <div class="form-group">
+    <div class="toggle-row">
+      <label for="autoConnect" class="toggle-label">
+        <input id="autoConnect" type="checkbox" class="toggle">
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="toggle-text">Auto-connect to Twitch on startup</span>
+    </div>
+    <span id="autoConnectError" class="error"></span>
+    <small>Connect automatically after a token is available. Requires auto-generate OAuth.</small>
+  </div>
+
+  <div class="button-group">
+    <button id="refreshConfig" type="button" class="secondary" onclick="loadConfig()">Reload</button>
+    <button id="saveConfig" type="button" class="primary" onclick="saveConfig()">Save config</button>
+    <button id="generateOAuth" type="button" onclick="generateOAuth()">Generate token</button>
+  </div>
+  <span id="configActionStatus" class="error"></span>
+  <div id="oauthStatus" class="error"></div>
+  <div id="oauthSuccess" class="success"></div>
+
+  <div class="token-display">
+    <strong>Current token</strong>
+    <code id="currentToken">Not set</code>
+  </div>
+
+  <div class="connection-buttons">
+    <button id="connectTwitchBtn" type="button" class="primary" onclick="connectTwitch()">Connect to Twitch</button>
+    <button id="disconnectTwitchBtn" type="button" class="danger" onclick="disconnectTwitch()">Disconnect</button>
+  </div>
+  <div id="configStatus" class="error"></div>
+</div>
