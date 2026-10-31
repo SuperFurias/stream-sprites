@@ -5,6 +5,18 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-10-31
+
+### Accessibility & UX
+- **Keyboard tabs**: dashboard tabs are real buttons in a `tablist`, support Arrow/Home/End navigation, and expose `aria-selected`.
+- **Deep links**: the active tab is stored in the URL hash (`#settings`, `#users`, …) and restored on load.
+- **Skip link** and visible `:focus-visible` outlines across dashboard controls.
+- **Labels**: all 114 settings labels are associated with their controls; users-tab search/username/reason fields and modals have accessible names.
+- **Auth pages**: password fields have labels, proper autocomplete values, live error regions, and dark color-scheme metadata.
+- **Icon buttons**: asset delete, modal close, and pagination buttons have accessible labels.
+- **Reduced motion**: dashboard transitions and hover lifts are disabled under `prefers-reduced-motion`.
+- **Transitions** no longer use `transition: all`; tabs wrap on narrow screens.
+
 ## [2.3.3] - 2026-10-31
 
 ### Added

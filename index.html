@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111111">
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <title>Stream Sprites — Admin Dashboard</title>
 <style>
+  :root{color-scheme:dark}
   body{font-family:system-ui,Arial;font-size:14px;background:#111;color:#fff;padding:20px;max-width:1400px;margin:0 auto}
   h2{font-size:20px;margin-top:0;margin-bottom:12px}
   p{font-size:14px;line-height:1.5}
@@ -13,7 +15,8 @@
   .panel{background:#222;padding:20px;border-radius:10px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
   input,button,select{padding:10px 14px;margin:4px;background:#333;color:#fff;border:1px solid #555;border-radius:6px;font-size:14px;box-sizing:border-box}
   input::placeholder{color:#888}
-  button{background:#0af;cursor:pointer;border:none;transition:all 0.2s;font-weight:600}
+  button{background:#0af;cursor:pointer;border:none;transition:background-color 0.2s,color 0.2s,border-color 0.2s,transform 0.2s,box-shadow 0.2s;font-weight:600}
+  button:focus-visible,.tab:focus-visible,.logout-btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #0af;outline-offset:2px}
   button:hover{background:#0dc;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,170,255,0.3)}
   button:disabled{background:#555;cursor:not-allowed;transform:none;box-shadow:none}
   button.danger{background:#e53e3e}
@@ -32,6 +35,8 @@
   .badge{display:inline-block;padding:4px 10px;border-radius:12px;font-size:12px;background:#0af;color:#000;font-weight:600}
   textarea{width:100%;height:120px;font-family:monospace;background:#222;color:#fff;border:1px solid #555;border-radius:4px;padding:8px}
   .hidden{display:none}
+  .skip-link{position:absolute;left:-9999px;top:8px;z-index:10000;background:#0af;color:#000;padding:8px 12px;border-radius:4px;font-weight:600;text-decoration:none}
+  .skip-link:focus-visible{left:8px}
 
   /* Form layout styles */
   .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:16px 0}
@@ -53,31 +58,37 @@
   .header-left{flex:1}
   .header-right{flex:0 0 auto;display:flex;align-items:flex-start;gap:12px}
   .logout-btn{padding:8px 14px;background:#2a2a2a;color:#ccc;border:1px solid #444;border-radius:6px;font-size:13px;cursor:pointer}
-  .logout-btn:hover{background:#333;color:#fff;border-color:#666}
+  .logout-btn:hover{background:#333;color:#fff;border-color:#666;transform:none;box-shadow:none}
   .page-title{margin:0 0 8px 0;font-size:28px;font-weight:700;background:linear-gradient(135deg,#0af,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
   .page-subtitle{margin:0;color:#888;font-size:14px}
 
   /* Tab styles */
-  .tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid #333;padding-bottom:10px}
-  .tab{background:#333;color:#fff;padding:10px 20px;border-radius:6px 6px 0 0;cursor:pointer;border:1px solid #555;border-bottom:none;transition:all 0.2s}
-  .tab:hover{background:#444}
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;border-bottom:2px solid #333;padding-bottom:10px}
+  .tab{background:#333;color:#fff;padding:10px 20px;margin:0;font-weight:500;border-radius:6px 6px 0 0;cursor:pointer;border:1px solid #555;border-bottom:none;transition:background-color 0.2s,color 0.2s,border-color 0.2s}
+  .tab:hover{background:#444;transform:none;box-shadow:none}
   .tab.active{background:#0af;border-color:#0af;color:#000;font-weight:600}
   .tab-content{display:none}
   .tab-content.active{display:block}
 
   /* Quick actions grid */
   .actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-  .action-card{background:#2d3748;padding:16px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:2px solid transparent}
+  .action-card{background:#2d3748;padding:16px;border-radius:8px;cursor:pointer;transition:background-color 0.2s,border-color 0.2s,transform 0.2s,box-shadow 0.2s;border:2px solid transparent}
   .action-card:hover{background:#3d4758;border-color:#0af;transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.3)}
   .action-card.danger:hover{border-color:#e53e3e}
+  .action-card:focus-visible{outline:2px solid #0af;outline-offset:2px}
   .action-card .icon{font-size:32px;margin-bottom:8px}
   .action-card .title{font-weight:600;font-size:16px;margin-bottom:4px}
   .action-card .desc{font-size:13px;color:#a0aec0}
 
   /* Quick links */
   .links-container{display:flex;gap:8px;flex-wrap:wrap}
-  .link-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#2d3748;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;transition:all 0.2s;border:1px solid #4a5568}
+  .link-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#2d3748;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;transition:background-color 0.2s,border-color 0.2s,transform 0.2s;border:1px solid #4a5568}
   .link-btn:hover{background:#3d4758;border-color:#0af;transform:translateY(-1px)}
+
+  @media (prefers-reduced-motion: reduce){
+    button,.tab,.action-card,.link-btn{transition:none}
+    button:hover,.action-card:hover,.link-btn:hover{transform:none}
+  }
 
   /* Footer credit */
   .footer-credit{
@@ -107,6 +118,7 @@
    <script src="dashboard/userExclusionManager.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#content">Skip to content</a>
   <div class="header">
     <div class="header-left">
       <h1 class="page-title"><span style="user-select:none;font-size:1.3em">🎮</span> Stream Sprites</h1>
@@ -138,18 +150,18 @@
   </div>
 
   <!-- Tab Navigation -->
-  <div class="tabs">
-    <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
-    <div class="tab" data-tab="users" onclick="switchTab('users')">👥 Users</div>
-    <div class="tab" data-tab="assets" onclick="switchTab('assets')">🎨 Assets</div>
-  <div class="tab" data-tab="config" onclick="switchTab('config')">🟣 Twitch</div>
-  <div class="tab" data-tab="deploy" onclick="switchTab('deploy')">🚀 Deploy</div>
-  <div class="tab" data-tab="storage" onclick="switchTab('storage')">🗄️ Database</div>
-  <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Configuration</div>
-    <div class="tab" data-tab="help" onclick="switchTab('help')">📝 Help</div>
+  <div class="tabs" role="tablist" aria-label="Dashboard sections">
+    <button type="button" class="tab active" role="tab" aria-selected="true" aria-controls="content" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="users" onclick="switchTab('users')">👥 Users</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="assets" onclick="switchTab('assets')">🎨 Assets</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="config" onclick="switchTab('config')">🟣 Twitch</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="deploy" onclick="switchTab('deploy')">🚀 Deploy</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="storage" onclick="switchTab('storage')">🗄️ Database</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="settings" onclick="switchTab('settings')">⚙️ Configuration</button>
+    <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="content" data-tab="help" onclick="switchTab('help')">📝 Help</button>
   </div>
 
-  <div id="content">
+  <div id="content" role="tabpanel" aria-label="Section content" tabindex="-1">
     <!-- Tab content will be loaded dynamically -->
   </div>
 
@@ -161,16 +173,55 @@
     let loadedScripts = new Set();
     let tabLoadSequence = 0;
 
+    document.querySelector('.tabs').addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      const tabs = Array.from(document.querySelectorAll('.tab'));
+      const index = tabs.indexOf(document.activeElement);
+      if (index === -1) return;
+      event.preventDefault();
+      let nextIndex = index;
+      if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+      if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = tabs.length - 1;
+      tabs[nextIndex].focus();
+      switchTab(tabs[nextIndex].dataset.tab);
+    });
+
+    function isValidTab(tabId) {
+      return !!tabId && Array.from(document.querySelectorAll('.tab')).some(tab => tab.dataset.tab === tabId);
+    }
+
+    function tabIdFromHash() {
+      const raw = location.hash.slice(1);
+      if (!raw) return null;
+      try { return decodeURIComponent(raw); } catch (e) { return raw; }
+    }
+
+    window.addEventListener('hashchange', () => {
+      const tabId = tabIdFromHash();
+      if (tabId === 'content') {
+        document.getElementById('content')?.focus();
+        history.replaceState(null, '', `#${currentTab}`);
+        return;
+      }
+      if (isValidTab(tabId) && tabId !== currentTab) switchTab(tabId);
+    });
+
     // Tab switching with dynamic loading
     async function switchTab(tabId) {
       currentTab = tabId;
       const loadSequence = ++tabLoadSequence;
+      if (location.hash !== `#${tabId}`) {
+        history.replaceState(null, '', `#${tabId}`);
+      }
 
-      // Remove active class from all tabs
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-
-      // Add active class to selected tab
-      document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+      // Update active state and accessibility attributes on all tabs.
+      document.querySelectorAll('.tab').forEach(tab => {
+        const isActive = tab.dataset.tab === tabId;
+        tab.classList.toggle('active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+      });
 
       // Load content for the tab
       try {
@@ -181,6 +232,12 @@
         const html = await response.text();
         if (loadSequence !== tabLoadSequence) return;
         content.innerHTML = html;
+
+        // Associate labels with their adjacent form controls in tab markup.
+        content.querySelectorAll('label').forEach((label) => {
+          const control = label.parentElement?.querySelector('input, select, textarea');
+          if (control?.id && !label.htmlFor) label.htmlFor = control.id;
+        });
 
         // Load tab-specific JavaScript file if not already loaded
         if (!loadedScripts.has(tabId)) {
@@ -243,7 +300,8 @@
     console.warn('Failed to check localhost status:', e);
   }
 
-  await switchTab('dashboard');
+  const initialTab = tabIdFromHash();
+  await switchTab(isValidTab(initialTab) ? initialTab : 'dashboard');
   console.log('Dashboard tab loaded, refreshing stats...');
   await refreshStatsHTTP();
 })();

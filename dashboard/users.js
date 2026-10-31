@@ -44,4 +44,16 @@ window.tabInitializers.users = async function () {
       if (e.target === this) window.userSkinAssignment.closeEditSkinModal();
     });
   }
+
+  if (!window._usersEscapeBound) {
+    window._usersEscapeBound = true;
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (window.userExclusion) {
+        window.userExclusion.closeReasonModal();
+        window.userExclusion.closeEditReasonModal();
+      }
+      if (window.userSkinAssignment) window.userSkinAssignment.closeEditSkinModal();
+    });
+  }
 };

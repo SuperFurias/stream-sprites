@@ -87,6 +87,8 @@ async function loadAssets() {
         const delBtn = document.createElement('button');
         delBtn.className = 'danger';
         delBtn.textContent = '✕';
+        delBtn.setAttribute('aria-label', `Delete ${asset.name}`);
+        delBtn.title = `Delete ${asset.name}`;
         delBtn.style.position = 'absolute';
         delBtn.style.top = '4px';
         delBtn.style.right = '4px';

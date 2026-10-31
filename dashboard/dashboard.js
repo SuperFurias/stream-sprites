@@ -57,6 +57,14 @@ function openOverlayInNewTab() {
   window.open(getOverlayUrl(), '_blank');
 }
 
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const card = event.target.closest?.('.action-card[role="button"]');
+  if (!card) return;
+  event.preventDefault();
+  card.click();
+});
+
 // Chat functionality
 
 function escapeHtml(value) {

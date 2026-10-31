@@ -44,7 +44,7 @@
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
-    transition: all 0.2s;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     background-color: #4a5568;
     color: #e2e8f0;
   }
@@ -143,27 +143,27 @@
 <div class="panel">
   <h2 style="margin-top:0">⚡ Quick Actions</h2>
   <div class="actions-grid">
-    <div class="action-card" onclick="clearSprites()">
+    <div class="action-card" role="button" tabindex="0" onclick="clearSprites()">
       <div class="icon">🧹</div>
       <div class="title">Clear All Sprites</div>
       <div class="desc">Remove all sprites from the overlay instantly</div>
     </div>
-    <div class="action-card" onclick="refreshAllOverlays()">
+    <div class="action-card" role="button" tabindex="0" onclick="refreshAllOverlays()">
       <div class="icon">🔄</div>
       <div class="title">Refresh Overlays</div>
       <div class="desc">Force all connected overlays to reload</div>
     </div>
-    <div class="action-card danger" onclick="resetAll()">
+    <div class="action-card danger" role="button" tabindex="0" onclick="resetAll()">
       <div class="icon">⚠️</div>
       <div class="title">Reset All Assignments</div>
       <div class="desc">Delete ALL user skin assignments (irreversible)</div>
     </div>
-    <div class="action-card danger" onclick="restartServer()">
+    <div class="action-card danger" role="button" tabindex="0" onclick="restartServer()">
       <div class="icon">🔃</div>
       <div class="title">Restart Server</div>
       <div class="desc">Restart the server (brief disconnect)</div>
     </div>
-    <div class="action-card secondary" onclick="window.location.reload()">
+    <div class="action-card secondary" role="button" tabindex="0" onclick="window.location.reload()">
       <div class="icon">↻</div>
       <div class="title">Refresh Page</div>
        <div class="desc">Reload the local control dashboard</div>

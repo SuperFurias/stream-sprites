@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111111">
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <title>Stream Sprites — Login</title>
 <style>
+  :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: system-ui, Arial;
@@ -43,9 +45,18 @@
     font-size: 14px;
     margin-bottom: 12px;
   }
-  input:focus {
+  input:focus-visible {
     outline: none;
     border-color: #0af;
+    box-shadow: 0 0 0 3px rgba(0,170,255,0.35);
+  }
+  label {
+    display: block;
+    text-align: left;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #a0aec0;
   }
   button {
     width: 100%;
@@ -72,9 +83,10 @@
 <div class="login-box">
   <h1>Stream Sprites</h1>
   <p>Enter the dashboard password to continue.</p>
-  <div class="error" id="error"></div>
-  <input type="password" id="password" placeholder="Password" autofocus>
-  <button id="btn" onclick="login()">Login</button>
+  <div class="error" id="error" role="alert" aria-live="polite"></div>
+  <label for="password">Password</label>
+  <input type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" spellcheck="false" autofocus>
+  <button id="btn" type="button" onclick="login()">Login</button>
 </div>
 <script>
   const errorEl = document.getElementById('error');

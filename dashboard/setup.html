@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111111">
 <link rel="icon" href="/favicon.ico" type="image/x-icon">
 <title>Stream Sprites — Setup</title>
 <style>
+  :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: system-ui, Arial;
@@ -43,9 +45,18 @@
     font-size: 14px;
     margin-bottom: 12px;
   }
-  input:focus {
+  input:focus-visible {
     outline: none;
     border-color: #0af;
+    box-shadow: 0 0 0 3px rgba(0,170,255,0.35);
+  }
+  label {
+    display: block;
+    text-align: left;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #a0aec0;
   }
   button {
     width: 100%;
@@ -77,11 +88,13 @@
 <div class="login-box">
   <h1>Stream Sprites</h1>
   <p>No dashboard password is configured yet. Set one to protect remote access.</p>
-  <div class="error" id="error"></div>
-  <input type="password" id="password" placeholder="Choose a password" autofocus>
-  <input type="password" id="confirm" placeholder="Confirm password">
+  <div class="error" id="error" role="alert" aria-live="polite"></div>
+  <label for="password">Password</label>
+  <input type="password" id="password" name="new-password" placeholder="Choose a password" autocomplete="new-password" spellcheck="false" autofocus>
+  <label for="confirm">Confirm password</label>
+  <input type="password" id="confirm" name="confirm-password" placeholder="Confirm password" autocomplete="new-password" spellcheck="false">
   <p class="hint">Minimum 4 characters. You'll need this to access the dashboard remotely.</p>
-  <button id="btn" onclick="setup()">Set Password</button>
+  <button id="btn" type="button" onclick="setup()">Set Password</button>
 </div>
 <script>
   const errorEl = document.getElementById('error');
