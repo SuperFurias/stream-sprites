@@ -7,7 +7,17 @@ Copyright 2026 SuperFurias | [Apache License 2.0](LICENSE)
 
 Stream Sprites is a powerful, feature-rich Twitch overlay application that transforms chat participation into an interactive visual experience. Each viewer receives a personalized sprite with realistic physics, creating a living, breathing community representation on your stream.
 
-![Stream Sprites Demo](app/assets/skins/default.gif)
+<p align="center">
+  <a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Stream Sprites dashboard overview" width="100%"></a>
+</p>
+
+<p align="center">
+  <a href="docs/screenshots/account-chooser.png"><img src="docs/screenshots/account-chooser.png" alt="Stream Sprites account chooser" width="32%"></a>
+  <a href="docs/screenshots/users.png"><img src="docs/screenshots/users.png" alt="Stream Sprites user management" width="32%"></a>
+  <a href="docs/screenshots/assets.png"><img src="docs/screenshots/assets.png" alt="Stream Sprites asset library" width="32%"></a>
+</p>
+
+<p align="center"><sub>Dashboard · Account chooser · User management · Asset library — screenshots use demo data.</sub></p>
 
 ---
 
@@ -382,6 +392,7 @@ Stream Sprites/
 ├── CHANGELOG.md
 ├── LICENSE
 ├── NOTICE
+├── docs/screenshots/         # README gallery images
 └── app/
     ├── index.html              # Dashboard shell (authenticated route)
     ├── favicon.ico             # App icon

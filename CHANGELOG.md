@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-10-31
+
+### Changed
+- The Overview dashboard now fits entirely in the app window at common desktop sizes (tested from 1120x760 through 1600x1000) without page scrolling.
+- Quick actions, metrics, the live overlay preview, and chat tester now scale to the available viewport.
+- The README now opens with a linked screenshot gallery using demo data.
+
+### Added
+- `Stream Sprites.exe` is now tracked in the repository root alongside the source and release assets.
+- Screenshot source images under `docs/screenshots/`.
+
 ## [2.8.0] - 2026-10-31
 
 ### Added

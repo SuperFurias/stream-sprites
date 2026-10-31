@@ -12,7 +12,7 @@
    <script src="dashboard/userSkinAssignmentManager.js"></script>
    <script src="dashboard/userExclusionManager.js"></script>
 </head>
-<body>
+<body data-tab="dashboard">
   <a class="skip-link" href="#content">Skip to content</a>
   <div class="app-shell">
     <aside class="sidebar">
@@ -162,6 +162,7 @@
     // Tab switching with dynamic loading
     async function switchTab(tabId) {
       currentTab = tabId;
+      document.body.dataset.tab = tabId;
       const meta = tabMeta[tabId];
       if (meta) {
         const pageTitle = document.getElementById('pageTitle');
