@@ -83,14 +83,14 @@ async function startTunnel() {
               clearInterval(tunnelPollInterval);
               tunnelPollInterval = null;
             } else if (statusData.status === 'stopped' && pollCount > 5) {
-              updateTunnelUI('error', null, 'Tunnel failed to start. Make sure cloudflared is installed (npm install -g cloudflared).');
+              updateTunnelUI('error', null, 'Tunnel failed to start. Run npm install to restore the bundled cloudflared binary.');
               clearInterval(tunnelPollInterval);
               tunnelPollInterval = null;
             }
           } catch (e) { /* ignore */ }
 
           if (pollCount > 20) {
-            updateTunnelUI('error', null, 'Tunnel timed out. Make sure cloudflared is installed.');
+            updateTunnelUI('error', null, 'Tunnel timed out. Run npm install to restore the bundled cloudflared binary.');
             clearInterval(tunnelPollInterval);
             tunnelPollInterval = null;
           }

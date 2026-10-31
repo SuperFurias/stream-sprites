@@ -999,7 +999,9 @@ app.use((req, res, next) => {
         : spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx',
             ['--yes', 'cloudflared', ...tunnelArgs], {
               stdio: ['ignore', 'pipe', 'pipe'],
-              windowsHide: true
+              windowsHide: true,
+              // .cmd shims on Windows require a shell.
+              shell: process.platform === 'win32'
             });
 
       let outputBuffer = '';
