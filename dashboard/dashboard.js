@@ -77,6 +77,8 @@ function escapeHtml(value) {
   })[ch]);
 }
 
+const MAX_CHAT_LOG_LINES = 200;
+
 function addChatLog(text, type) {
   const log = document.getElementById('chatLog');
   if (!log) return;
@@ -84,6 +86,9 @@ function addChatLog(text, type) {
   div.className = 'chat-msg' + (type ? ' ' + type : '');
   div.innerHTML = text;
   log.appendChild(div);
+  while (log.children.length > MAX_CHAT_LOG_LINES) {
+    log.removeChild(log.firstElementChild);
+  }
   log.scrollTop = log.scrollHeight;
 }
 
