@@ -272,6 +272,7 @@ while ($true) {
     # Start server
     Set-Location $projectRoot
     Write-Host "Starting server on port $serverPort..." -ForegroundColor Green
+    $env:STREAM_SPRITES_SUPERVISED = '1'
     node server/server.js
     
     # Reset deps check on restart so we re-evaluate

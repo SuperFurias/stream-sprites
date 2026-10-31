@@ -799,7 +799,30 @@ app.use((req, res, next) => {
 
   // Restart server
   app.post('/api/local/restartServer', (req, res) => {
+    const supervised = process.env.STREAM_SPRITES_SUPERVISED === '1';
     res.json({ ok: true, message: 'Server restarting...' });
+
+    // When running standalone (npm start / node server.js), a detached helper
+    // starts a replacement process. Under start.ps1/start.sh the supervisor
+    // loop already handles restarting, so simply exit.
+    if (!supervised) {
+      try {
+        const { spawn } = require('child_process');
+        const helper = spawn(process.execPath, [path.join(__dirname, 'restart-helper.js')], {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+          env: {
+            ...process.env,
+            STREAM_SPRITES_RESTART_DELAY_MS: '2000'
+          }
+        });
+        helper.unref();
+      } catch (e) {
+        _dbg('Failed to launch restart helper:', e.message);
+      }
+    }
+
     setTimeout(() => {
       try {
         const { cleanup: wsCleanup } = require('./websocket');
@@ -812,7 +835,11 @@ app.use((req, res, next) => {
       try {
         if (_driver) _driver.close();
       } catch (e) {}
-      process.kill(process.pid, 'SIGTERM');
+      if (supervised) {
+        process.kill(process.pid, 'SIGTERM');
+      } else {
+        process.exit(0);
+      }
     }, 500);
   });
 

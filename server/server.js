@@ -15,6 +15,8 @@ const cfgPath = process.env.STREAM_SPRITES_CONFIG
 const dataDir = process.env.STREAM_SPRITES_DATA_DIR
   ? path.resolve(process.env.STREAM_SPRITES_DATA_DIR)
   : __dirname;
+const restarted = process.env.STREAM_SPRITES_RESTARTED === '1';
+delete process.env.STREAM_SPRITES_RESTARTED;
 
 // Load config
 const cfg = loadConfig(cfgPath);
@@ -113,8 +115,8 @@ initDb(dataDir).then(async () => {
     websocket.clearServerSprites();
     console.log('✓ Cleared all sprites on startup');
 
-    // Auto-open browser
-    if (cfg.autoOpenBrowser !== false) {
+    // Auto-open browser (skip once after a self-restart to avoid a duplicate tab)
+    if (cfg.autoOpenBrowser !== false && !restarted) {
       setTimeout(async () => {
         try {
           const axios = require('axios');
@@ -155,7 +157,19 @@ initDb(dataDir).then(async () => {
     }
   });
 
+  let listenRetries = 0;
   server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && restarted && listenRetries < 5) {
+      listenRetries++;
+      console.warn(`⚠ Port ${port} still busy after restart; retry ${listenRetries}/5...`);
+      setTimeout(() => {
+        server.listen(port, '0.0.0.0', () => {
+          console.log(`✓ Server running on http://localhost:${port}`);
+        });
+      }, 1000);
+      return;
+    }
+
     if (err.code === 'EADDRINUSE') {
       console.error(`✗ Port ${port} in use. Change in .env`);
     } else {

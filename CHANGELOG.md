@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-10-31
+
+### Added
+- **Self-restarting server**: the dashboard “Restart Server” action now works under `npm start` / `node server.js` by launching a detached helper that waits for the port to be released and starts a fresh process with the same environment.
+- `start.ps1` and `start.sh` mark their supervised runs, so the existing restart loop is used instead of spawning a duplicate server.
+- After a self-restart the server skips auto-opening a second browser tab and retries binding the port up to five times.
+
+### Verified
+- Standalone restart: old process exited, new process answered `/healthz` on the same port.
+- Supervised restart: the endpoint exited cleanly without spawning a second process, leaving the restart to the supervisor.
+
 ## [2.3.10] - 2026-10-31
 
 ### Verified

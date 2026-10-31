@@ -304,7 +304,7 @@ while true; do
     cd "$PROJECT_ROOT"
     log_green "Starting server on port $SERVER_PORT..."
     export PORT="$SERVER_PORT"
-    node server/server.js || true
+    STREAM_SPRITES_SUPERVISED=1 node server/server.js || true
 
     # Reset deps check on restart so we re-evaluate
     DEPS_OK=false
