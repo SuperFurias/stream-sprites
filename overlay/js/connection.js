@@ -10,6 +10,10 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
   let isConnected = false;
 
   function connect() {
+    // Avoid stacking sockets while a connection attempt is still pending.
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
     dbg('Connecting WebSocket...');
     try {
       ws = new WebSocket(WS_URL);

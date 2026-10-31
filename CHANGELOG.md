@@ -5,6 +5,23 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-10-31
+
+### Fixed
+- **Live skin changes**: assigning or resetting a user's skin updates their current sprite immediately instead of waiting for the next chat message.
+- **Invalid config recovery**: a corrupt `.env` is backed up as `.invalid-<timestamp>.bak` before defaults are written, so credentials are never silently overwritten.
+- **Error handling order**: the Express error handler now runs after OAuth and all other routes.
+- **Drag lifetime**: dragging counts as activity, so sprites do not expire mid-drag.
+- **WebSocket reconnect guard**: the overlay no longer stacks connection attempts while a socket is already connecting.
+- **Empty dashboard chat** is rejected instead of sending a blank Twitch message.
+
+### Changed
+- **Smaller physics snapshots**: velocity and angular-velocity fields are no longer sent because clients never read them.
+- **User/exclusion lists** load up to 1000 rows by default (configurable up to 5000) instead of truncating at 100.
+- **Asset cache lifetime** reduced to 60 seconds so replaced skins refresh promptly.
+- **Stats broadcasts** are guarded against clients disconnecting mid-send.
+- **Collision spin** is now exposed in the settings UI.
+
 ## [2.3.1] - 2026-10-31
 
 ### Changed

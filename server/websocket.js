@@ -311,7 +311,9 @@ function startGameLoop() {
 
       if (spriteArray.length > 0) {
         // Filter out dragged sprites — they're positioned by the client, not physics
-        const physicsSprites = spriteArray.filter(s => !draggedSprites.has(s.id));
+        const physicsSprites = draggedSprites.size > 0
+          ? spriteArray.filter(s => !draggedSprites.has(s.id))
+          : spriteArray;
         if (physicsSprites.length > 0) {
           physics.updatePhysics(dt, physicsSprites, ov.W, ov.H, ov.GROUND_Y,
             ov.GRAVITY, ov.AIR_RESISTANCE, ov.GROUND_FRICTION,
@@ -543,6 +545,7 @@ function handleDragMessage(msg, ws) {
     if (currentOwner && currentOwner !== ws) return;
     draggedSprites.add(msg.spriteId);
     dragOwners.set(msg.spriteId, ws);
+    sprite.lastActivity = Date.now();
     return;
   }
 
@@ -551,6 +554,8 @@ function handleDragMessage(msg, ws) {
 
   const x = clamp(finiteOr(msg.x, sprite.x), 0, ov.W);
   const y = clamp(finiteOr(msg.y, sprite.y), 0, ov.H);
+
+  sprite.lastActivity = Date.now();
 
   if (msg.type === 'dragMove') {
     sprite.x = x;

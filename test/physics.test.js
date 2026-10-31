@@ -107,7 +107,7 @@ test('serializeSpritePhysics rounds values for the wire', () => {
 
   assert.equal(serialized.x, 1.23);
   assert.equal(serialized.y, 2.35);
-  assert.equal(serialized.vx, 0.123);
+  assert.equal(serialized.vx, undefined);
   assert.equal(serialized.size, 30.13);
   assert.equal(serialized.angle, 1.235);
 });

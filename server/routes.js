@@ -57,7 +57,11 @@ async function broadcastStats() {
     const msg = JSON.stringify({ type: 'stats', data: stats });
     const wss = ws.getWss();
     if (wss) {
-      wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg); });
+      wss.clients.forEach(c => {
+        if (c.readyState === 1) {
+          try { c.send(msg); } catch (e) { /* client disconnected mid-send */ }
+        }
+      });
     }
   }
 }
@@ -526,6 +530,13 @@ app.use((req, res, next) => {
         return res.status(400).json({ error: 'Unknown skin ID' });
       }
       await _driver.assignSkin(userId, skinId);
+      const liveSprite = ws.serverSprites.get(userId.toLowerCase());
+      if (liveSprite) {
+        liveSprite.skin = skinId;
+        liveSprite.lastActivity = Date.now();
+        ws.setSpriteDirty(true);
+        ws.broadcastPhysicsState();
+      }
       invalidateStatsCache();
       res.json({ ok: true, assigned_skin: skinId });
     } catch (err) {
@@ -536,7 +547,8 @@ app.use((req, res, next) => {
   // Local control: List users
   app.get('/api/local/users', async (req, res) => {
     try {
-      const rows = await _driver.listUsers(100);
+      const limit = Math.min(5000, Math.max(1, parseInt(req.query.limit, 10) || 1000));
+      const rows = await _driver.listUsers(limit);
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -683,6 +695,13 @@ app.use((req, res, next) => {
     if (!isValidUsername(id)) return res.status(400).json({ error: 'Invalid username' });
     try {
       await _driver.deleteUser(id);
+      const liveSprite = ws.serverSprites.get(id.toLowerCase());
+      if (liveSprite) {
+        liveSprite.skin = 'default';
+        liveSprite.lastActivity = Date.now();
+        ws.setSpriteDirty(true);
+        ws.broadcastPhysicsState();
+      }
       invalidateStatsCache();
       res.json({ ok: true });
     } catch (err) {
@@ -693,6 +712,17 @@ app.use((req, res, next) => {
   app.post('/api/local/resetAll', async (req, res) => {
     try {
       await _driver.deleteAllUsers();
+      let changed = false;
+      for (const sprite of ws.serverSprites.values()) {
+        if (sprite.skin !== 'default') {
+          sprite.skin = 'default';
+          changed = true;
+        }
+      }
+      if (changed) {
+        ws.setSpriteDirty(true);
+        ws.broadcastPhysicsState();
+      }
       invalidateStatsCache();
       res.json({ ok: true });
     } catch (err) {
@@ -703,7 +733,8 @@ app.use((req, res, next) => {
   // Exclusion endpoints
   app.get('/api/local/excluded', async (req, res) => {
     try {
-      const rows = await _driver.listExcluded(100);
+      const limit = Math.min(5000, Math.max(1, parseInt(req.query.limit, 10) || 1000));
+      const rows = await _driver.listExcluded(limit);
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -850,6 +881,7 @@ app.use((req, res, next) => {
 
     const sanitizedUsername = username.replace(/[^\p{L}\p{N}_]/gu, '_');
     const text = message.trim();
+    if (!text) return res.status(400).json({ error: 'Message cannot be empty' });
     const isCommand = text.startsWith('!');
 
     let commandResult = null;
@@ -1248,49 +1280,17 @@ app.use((req, res, next) => {
         const data = await _driver.readAsset(`${folder}/${filename}`);
         if (data) {
           res.setHeader('Content-Type', getAssetMimeType(filename));
-          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.setHeader('Cache-Control', 'public, max-age=60');
           return res.send(data);
         }
       }
 
       const filePath = resolveAssetPath(ASSETS_ROOT, folder, filename);
       if (!filePath || !fs.existsSync(filePath)) return res.status(404).send('Not found');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Cache-Control', 'public, max-age=60');
       res.sendFile(filePath);
     } catch (e) {
       res.status(500).json({ error: e.message });
-    }
-  });
-
-  // Error handler
-  app.use((err, req, res, next) => {
-    if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && err.status === 400)) {
-      return res.status(400).json({ error: 'Invalid JSON body' });
-    }
-    if (err.type === 'entity.too.large') {
-      return res.status(413).json({ error: 'Request body too large' });
-    }
-    if (err.name === 'MulterError') {
-      return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400)
-        .json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 10 MB)' : err.message });
-    }
-
-    const isDevelopment = _cfg.debug?.serverDebug === true;
-    const errorId = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
-    console.error(`[Error ${errorId}]`, {
-      message: err.message,
-      stack: isDevelopment ? err.stack : undefined,
-      url: req.url,
-      method: req.method,
-      ip: req.ip || req.connection.remoteAddress
-    });
-    if (!res.headersSent) {
-      const response = { error: 'Internal server error', errorId };
-      if (isDevelopment) {
-        response.message = err.message;
-        response.stack = err.stack;
-      }
-      res.status(500).json(response);
     }
   });
 
@@ -1368,6 +1368,38 @@ app.use((req, res, next) => {
       }
     }
   }, 5 * 60 * 1000);
+
+  // Error handler (must be registered after all routes).
+  app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && err.status === 400)) {
+      return res.status(400).json({ error: 'Invalid JSON body' });
+    }
+    if (err.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'Request body too large' });
+    }
+    if (err.name === 'MulterError') {
+      return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400)
+        .json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 10 MB)' : err.message });
+    }
+
+    const isDevelopment = _cfg.debug?.serverDebug === true;
+    const errorId = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+    console.error(`[Error ${errorId}]`, {
+      message: err.message,
+      stack: isDevelopment ? err.stack : undefined,
+      url: req.url,
+      method: req.method,
+      ip: req.ip || req.connection.remoteAddress
+    });
+    if (!res.headersSent) {
+      const response = { error: 'Internal server error', errorId };
+      if (isDevelopment) {
+        response.message = err.message;
+        response.stack = err.stack;
+      }
+      res.status(500).json(response);
+    }
+  });
 }
 
 function cleanupTunnel() {

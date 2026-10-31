@@ -19,6 +19,8 @@ const {
   sanitizeConfigInput,
   sanitizeConfigForDisk
 } = require('../server/lib/config-safety');
+const { loadConfig } = require('../server/config');
+const fs = require('fs');
 
 const ASSETS_ROOT = path.join(os.tmpdir(), 'stream-sprites-test-assets');
 
@@ -115,6 +117,25 @@ test('config written to disk never contains the access token', () => {
   assert.equal(persisted.twitch.refreshToken, 'refresh-token');
   assert.equal(persisted.defaultOverlay, undefined);
   assert.equal(persisted.channel, 'demo');
+});
+
+test('invalid config is backed up instead of overwriting credentials', () => {
+  const tempRoot = path.join(__dirname, '..', 'Temp');
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(tempRoot, 'config-test-'));
+  const cfgPath = path.join(dir, '.env');
+  try {
+    fs.writeFileSync(cfgPath, '{not valid json');
+    const cfg = loadConfig(cfgPath);
+    assert.equal(cfg.serverPort, 8080);
+    assert.equal(fs.existsSync(cfgPath), true);
+    assert.doesNotThrow(() => JSON.parse(fs.readFileSync(cfgPath, 'utf8')));
+    const backups = fs.readdirSync(dir).filter(name => name.includes('.invalid-') && name.endsWith('.bak'));
+    assert.equal(backups.length, 1);
+    assert.equal(fs.readFileSync(path.join(dir, backups[0]), 'utf8'), '{not valid json');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('bot permission check is case-insensitive', () => {

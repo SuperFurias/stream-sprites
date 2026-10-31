@@ -193,6 +193,7 @@ const overlayFieldMap = {
   // Collision
   collisionPersonalSpaceThreshold: 'collisionPersonalSpaceThreshold',
   collisionForceMultiplier: 'collisionForceMultiplier',
+  angularVelocityFromCollision: 'angularVelocityFromCollision',
   collisionProbabilityScaling: 'collisionProbabilityScaling',
   collisionProbabilityLow: 'collisionProbabilityLow',
   collisionProbabilityMedium: 'collisionProbabilityMedium',

@@ -132,6 +132,17 @@ function loadConfig(cfgPath) {
     }
   } catch (e) {
     console.warn('⚠ .env invalid or missing:', e.message);
+    if (fileExists) {
+      // Preserve the broken file instead of silently overwriting credentials.
+      const backupPath = `${cfgPath}.invalid-${Date.now()}.bak`;
+      try {
+        fs.renameSync(cfgPath, backupPath);
+        fileExists = false;
+        console.warn(`⚠ Backed up invalid config to ${backupPath}`);
+      } catch (backupError) {
+        console.warn('⚠ Could not back up invalid config:', backupError.message);
+      }
+    }
   }
 
   const defaultCfg = {
