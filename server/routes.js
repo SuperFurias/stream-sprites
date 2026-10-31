@@ -18,6 +18,7 @@ const {
 const twitch = require('./twitch');
 const ws = require('./websocket');
 const { DEFAULT_OVERLAY } = require('./config');
+const { version: APP_VERSION } = require('../package.json');
 const storage = require('./storage/index');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -850,7 +851,24 @@ app.use((req, res, next) => {
 
   // Health check
   app.get('/healthz', (req, res) => {
-    res.json({ status: 'ok' });
+    const wss = ws.getWss();
+    let twitchConnected = false;
+    try {
+      const twitchClient = twitch.getTwitchClient();
+      const state = twitchClient && twitchClient.readyState ? twitchClient.readyState() : null;
+      twitchConnected = state === 1 || state === 'OPEN';
+    } catch (e) {
+      twitchConnected = false;
+    }
+
+    res.json({
+      status: 'ok',
+      version: APP_VERSION,
+      uptimeSeconds: Math.round(process.uptime()),
+      storage: _driver.getType(),
+      websocketClients: wss ? wss.clients.size : 0,
+      twitchConnected
+    });
   });
 
   // Dashboard presence

@@ -152,6 +152,13 @@ test('HTTP surface enforces auth/static boundaries and asset sanitization', { ti
     assert.equal((await request(port, '/package.json')).status, 404);
     assert.equal((await request(port, '/server/db/sa.db')).status, 404);
     assert.equal((await request(port, '/logs/debug.log')).status, 404);
+    const health = await request(port, '/healthz');
+    assert.equal(health.status, 200);
+    assert.equal(health.json().status, 'ok');
+    assert.equal(health.json().version, require('../package.json').version);
+    assert.equal(health.json().storage, 'sqlite');
+    assert.equal(typeof health.json().uptimeSeconds, 'number');
+
     assert.equal((await request(port, '/overlay/overlay.html')).status, 200);
     assert.equal((await request(port, '/dashboard/dashboard.html')).status, 200);
     assert.equal((await request(port, '/assets/skins/default.gif')).status, 200);

@@ -261,6 +261,7 @@ Local requests are trusted. Remote requests require the dashboard password, and 
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
+| `/healthz` | GET | Public status: version, uptime, storage backend, WebSocket clients, Twitch connection |
 | `/api/local/saveConfig` | POST | Save configuration to the active store (`.env` or PostgreSQL) |
 | `/api/local/connectTwitch` | POST | Initiate Twitch connection |
 | `/api/local/disconnectTwitch` | POST | Disconnect Twitch |
