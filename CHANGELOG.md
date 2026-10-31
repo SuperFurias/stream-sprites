@@ -5,6 +5,12 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.9] - 2026-10-31
+
+### Security
+- **Dashboard passwords are now stored as salted scrypt hashes** instead of plaintext. Existing plaintext passwords still work and are transparently upgraded on the next successful login. Password changes and setup hash before writing to `.env` or PostgreSQL.
+- Added password hashing tests (18 tests total).
+
 ## [2.3.8] - 2026-10-31
 
 ### Fixed

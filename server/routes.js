@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 const { isValidUsername, isValidSkinId, rateLimiter } = require('./lib/util');
+const { hashPassword, verifyPassword, isHashedPassword } = require('./lib/password');
 const { sanitizeConfigInput, sanitizeConfigForDisk } = require('./lib/config-safety');
 const {
   normalizeAssetFolder,
@@ -344,11 +345,12 @@ app.use((req, res, next) => {
     if (!input || typeof input !== 'string' || input.length < 4) {
       return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
-    // Save password to config
-    _cfg.dashboardPassword = input;
+    // Store only a scrypt hash, never the plaintext password.
+    const passwordHash = hashPassword(input);
+    _cfg.dashboardPassword = passwordHash;
     try {
       const current = await _driver.loadConfig(_cfgPath) || {};
-      current.dashboardPassword = input;
+      current.dashboardPassword = passwordHash;
       await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(current));
       invalidateEnvCache();
     } catch (e) {
@@ -363,7 +365,7 @@ app.use((req, res, next) => {
   });
 
   // Login endpoint
-  app.post('/api/dashboard/login', (req, res) => {
+  app.post('/api/dashboard/login', async (req, res) => {
     const lockRemaining = getLoginLock(req);
     if (lockRemaining > 0) {
       res.setHeader('Retry-After', Math.ceil(lockRemaining / 1000));
@@ -375,12 +377,23 @@ app.use((req, res, next) => {
     const { password: input } = req.body;
     if (!input || typeof input !== 'string') return res.status(400).json({ error: 'Password required' });
 
-    // Hash both values so the comparison is constant-time regardless of length.
-    const expectedHash = crypto.createHash('sha256').update(String(password)).digest();
-    const providedHash = crypto.createHash('sha256').update(input).digest();
-    if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
+    if (!verifyPassword(input, password)) {
       recordLoginFailure(req);
       return res.status(401).json({ error: 'Wrong password' });
+    }
+
+    // Transparently upgrade legacy plaintext passwords.
+    if (!isHashedPassword(password)) {
+      const upgraded = hashPassword(input);
+      _cfg.dashboardPassword = upgraded;
+      try {
+        const current = await _driver.loadConfig(_cfgPath) || {};
+        current.dashboardPassword = upgraded;
+        await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(current));
+        invalidateEnvCache();
+      } catch (e) {
+        _dbg('Failed to upgrade dashboard password hash:', e.message);
+      }
     }
 
     loginAttempts.delete(loginKey(req));
@@ -576,6 +589,14 @@ app.use((req, res, next) => {
       const sanitizedInput = sanitizeConfigInput(req.body);
       if (!sanitizedInput || Object.keys(sanitizedInput).length === 0) {
         return res.status(400).json({ error: 'Invalid config payload' });
+      }
+
+      // New passwords must never be written as plaintext. The masked value is
+      // resolved later, and an empty value intentionally clears the password.
+      if (sanitizedInput.dashboardPassword &&
+          sanitizedInput.dashboardPassword !== '***' &&
+          !isHashedPassword(sanitizedInput.dashboardPassword)) {
+        sanitizedInput.dashboardPassword = hashPassword(sanitizedInput.dashboardPassword);
       }
 
       const previousPassword = _cfg.dashboardPassword || '';
