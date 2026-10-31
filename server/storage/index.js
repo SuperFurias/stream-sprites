@@ -8,7 +8,10 @@ let storageConfig = null;
 
 // NOTE: This filename must not be "storage.json": it would shadow the
 // server/storage directory during Node module resolution and break startup.
-const STORAGE_CONFIG_PATH = path.join(__dirname, '..', 'storage-config.json');
+const CUSTOM_CONFIG_PATH = !!process.env.STREAM_SPRITES_STORAGE_CONFIG;
+const STORAGE_CONFIG_PATH = CUSTOM_CONFIG_PATH
+  ? path.resolve(process.env.STREAM_SPRITES_STORAGE_CONFIG)
+  : path.join(__dirname, '..', 'storage-config.json');
 const LEGACY_STORAGE_CONFIG_PATH = path.join(__dirname, '..', 'storage.json');
 
 function loadStorageConfig() {
@@ -17,8 +20,8 @@ function loadStorageConfig() {
       return JSON.parse(fs.readFileSync(STORAGE_CONFIG_PATH, 'utf8'));
     }
 
-    // Migrate the old filename if it exists.
-    if (fs.existsSync(LEGACY_STORAGE_CONFIG_PATH)) {
+    // Migrate the old filename if it exists (only for the default location).
+    if (!CUSTOM_CONFIG_PATH && fs.existsSync(LEGACY_STORAGE_CONFIG_PATH)) {
       const legacy = JSON.parse(fs.readFileSync(LEGACY_STORAGE_CONFIG_PATH, 'utf8'));
       fs.writeFileSync(STORAGE_CONFIG_PATH, JSON.stringify(legacy, null, 2));
       try {

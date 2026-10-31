@@ -79,7 +79,16 @@ npm install
 npm start
 ```
 
-Run tests with `npm test`. For isolated development, set `STREAM_SPRITES_CONFIG` to an alternate config file and `STREAM_SPRITES_DATA_DIR` to a scratch data directory.
+Run tests with `npm test`. For isolated development or alternate deployments, these environment variables override default paths:
+
+| Variable | Purpose |
+|----------|---------|
+| `STREAM_SPRITES_CONFIG` | Alternate config file (JSON) |
+| `STREAM_SPRITES_DATA_DIR` | Alternate SQLite/database data directory |
+| `STREAM_SPRITES_ASSETS_DIR` | Alternate skin/media directory |
+| `STREAM_SPRITES_STORAGE_CONFIG` | Alternate storage backend file |
+
+The HTTP integration test uses all four so it never touches live data.
 
 The server will:
 - Create `server/.env` with default configuration on first run

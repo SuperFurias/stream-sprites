@@ -20,7 +20,9 @@ const { DEFAULT_OVERLAY } = require('./config');
 const storage = require('./storage/index');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const ASSETS_ROOT = path.join(PROJECT_ROOT, 'assets');
+const ASSETS_ROOT = process.env.STREAM_SPRITES_ASSETS_DIR
+  ? path.resolve(process.env.STREAM_SPRITES_ASSETS_DIR)
+  : path.join(PROJECT_ROOT, 'assets');
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
@@ -266,12 +268,17 @@ function initRoutes(app, cfg, cfgPath, driver, dbg) {
     }
   }
 
-  function isAuthenticated(req) {
+  function sessionTokenFromCookie(req) {
     const cookie = req.headers.cookie || '';
     const match = cookie.match(/dash_session=([^;]+)/);
-    if (!match) return false;
-    const session = activeSessions.get(match[1]);
-    return session && session.expires > Date.now();
+    return match ? match[1] : null;
+  }
+
+  function isAuthenticated(req) {
+    const token = sessionTokenFromCookie(req);
+    if (!token) return false;
+    const session = activeSessions.get(token);
+    return !!(session && session.expires > Date.now());
   }
 
 // Explicit favicon route (before auth to avoid any issues)
@@ -600,9 +607,13 @@ app.use((req, res, next) => {
         }
       });
 
-      // Changing the password invalidates every existing dashboard session.
+      // Changing the password invalidates other dashboard sessions while
+      // keeping the session that made the change alive.
       if ((persisted.dashboardPassword || '') !== previousPassword) {
-        activeSessions.clear();
+        const keepToken = sessionTokenFromCookie(req);
+        for (const token of Array.from(activeSessions.keys())) {
+          if (token !== keepToken) activeSessions.delete(token);
+        }
       }
 
       ws.invalidateOverlayConfigCache();
@@ -1097,7 +1108,7 @@ app.use((req, res, next) => {
       await dst.saveConfig(_cfgPath, sanitizeConfigForDisk(cfgData));
 
       // Migrate assets (all subfolders)
-      const assetsBaseDir = path.join(__dirname, '..', 'assets');
+      const assetsBaseDir = ASSETS_ROOT;
       if (fs.existsSync(assetsBaseDir)) {
         const folders = fs.readdirSync(assetsBaseDir, { withFileTypes: true }).filter(e => e.isDirectory());
         for (const folder of folders) {
@@ -1179,7 +1190,7 @@ app.use((req, res, next) => {
         }
         res.json(result);
       } else {
-        const assetsDir = path.join(__dirname, '..', 'assets');
+        const assetsDir = ASSETS_ROOT;
         const result = {};
         if (fs.existsSync(assetsDir)) {
           const entries = fs.readdirSync(assetsDir, { withFileTypes: true });

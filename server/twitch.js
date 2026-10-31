@@ -16,6 +16,10 @@ let botTokenInfo = null;
 let reconnectTimeout = null;
 let tokenRefreshIntervalId = null;
 
+const ASSETS_ROOT = process.env.STREAM_SPRITES_ASSETS_DIR
+  ? path.resolve(process.env.STREAM_SPRITES_ASSETS_DIR)
+  : path.join(__dirname, '..', 'assets');
+
 // Skin detection
 let skinsCache = null;
 let skinsCacheTime = 0;
@@ -49,7 +53,7 @@ function buildSkinEntry(filename, fileUrl) {
 }
 
 function detectLocalSkins() {
-  const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
+  const skinsDir = path.join(ASSETS_ROOT, 'skins');
   const detected = [];
   try {
     _dbg('Scanning skins directory:', skinsDir);
@@ -110,7 +114,7 @@ async function detectSkinsFromAssetsAsync() {
 // Watch skins directory for changes
 function watchSkinsDir() {
   try {
-    const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
+    const skinsDir = path.join(ASSETS_ROOT, 'skins');
     if (fs.existsSync(skinsDir)) {
       fs.watch(skinsDir, { persistent: false }, (eventType) => {
         if (eventType === 'rename' || eventType === 'change') {

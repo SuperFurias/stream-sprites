@@ -92,6 +92,11 @@ function broadcast(obj) {
 // Broadcast full physics state to all clients
 function broadcastPhysicsState() {
   if (!_wss || _wss.clients.size === 0) return;
+  let hasOverlayClient = false;
+  for (const client of _wss.clients) {
+    if (client.clientType !== 'dashboard') { hasOverlayClient = true; break; }
+  }
+  if (!hasOverlayClient) return;
 
   const sprites = [];
   for (const sprite of serverSprites.values()) {
@@ -105,6 +110,7 @@ function broadcastPhysicsState() {
   });
 
   _wss.clients.forEach(c => {
+    if (c.clientType === 'dashboard') return;
     if (c.readyState === WebSocket.OPEN) {
       try { c.send(msg); } catch (e) { /* client disconnected mid-send */ }
     }
@@ -419,6 +425,7 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
   _wss.on('connection', (ws) => {
     dbg('WebSocket client connected');
     ws.isAlive = true;
+    ws.clientType = 'overlay';
     ws.on('pong', () => { ws.isAlive = true; });
     sendFullStateToClient(ws);
 
@@ -428,7 +435,9 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
 
         // Clients may only manipulate drag state. Administrative commands
         // (clearing sprites, reloading overlays) are REST/authenticated only.
-        if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
+        if (msg.type === 'identify') {
+          ws.clientType = msg.clientType === 'dashboard' ? 'dashboard' : 'overlay';
+        } else if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
           handleDragMessage(msg, ws);
         } else if (msg.type === 'fullState') {
           dbg('fullState received from client (server is authoritative, ignoring physics data)');

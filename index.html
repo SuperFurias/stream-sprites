@@ -272,6 +272,10 @@
     async function refreshStatsHTTP() {
       try {
         const res = await fetch('/api/stats');
+        if (res.status === 401) {
+          window.location.href = '/';
+          return;
+        }
         const stats = await res.json();
         updateStatsUI(stats);
       } catch (e) {
@@ -349,6 +353,10 @@ connectStatsWebSocket();
           'Content-Type': 'application/json'
         }
       });
+      if (res.status === 401) {
+        window.location.href = '/';
+        throw new Error('Session expired');
+      }
       const contentType = res.headers.get('content-type');
       if(contentType && contentType.includes('application/json')){
         return await res.json();

@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-10-31
+
+### Changed
+- **Dashboard WebSocket role**: dashboards identify themselves and no longer receive 30 Hz physics snapshots; overlays continue to receive them.
+- **Expired sessions** redirect the dashboard to the login page instead of silently showing the server as offline.
+- **Password changes** invalidate other dashboard sessions but keep the session that made the change alive.
+
+### Added
+- **HTTP integration suite**: spawns an isolated server and verifies static boundaries, remote config redaction, auth/session behavior, upload traversal protection, and password-change invalidation.
+- **Path overrides**: `STREAM_SPRITES_ASSETS_DIR` and `STREAM_SPRITES_STORAGE_CONFIG` env vars allow alternate asset/storage locations and fully isolated tests.
+
 ## [2.3.0] - 2026-10-31
 
 ### Security
@@ -40,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logs rotate** at 5 MB.
 - **Node.js 22+** is required (better-sqlite3 13).
 - **Dependencies** updated and pinned via overrides; `npm audit` reports 0 vulnerabilities.
-- **Tests**: added `npm test` coverage for config safety, asset paths, permissions, physics configuration, collisions, lifetime, and serialization.
+- **Tests**: added `npm test` coverage for config safety, asset paths, permissions, physics configuration, collisions, lifetime, serialization, and SQLite storage. The spawned-server HTTP integration suite is described under 2.3.1.
 
 ### Removed
 - Unused `cors` dependency.
