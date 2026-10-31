@@ -5,6 +5,11 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.5] - 2026-10-31
+
+### Fixed
+- Twitch connection errors during startup and dashboard connect requests are now awaited and reported by the existing try/catch paths instead of surfacing as unhandled promise rejections.
+
 ## [2.4.4] - 2026-10-31
 
 ### Fixed

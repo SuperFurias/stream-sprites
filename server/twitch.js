@@ -686,7 +686,7 @@ async function handleStartupTwitchConnection() {
     if (refreshed) {
       if (_cfg.autoConnect) {
         console.log('✓ Token refreshed, autoConnect=true — connecting to Twitch...');
-        connectTwitchBot();
+        await connectTwitchBot();
       } else {
         console.log('✓ Token refreshed. Auto-connect disabled — use the dashboard to connect.');
       }
@@ -701,7 +701,7 @@ async function handleStartupTwitchConnection() {
   if (hasAccessToken) {
     if (_cfg.autoConnect) {
       _dbg('No refresh token, but access token found — connecting to Twitch');
-      connectTwitchBot();
+      await connectTwitchBot();
     } else {
       _dbg('No refresh token, but access token found — not connecting');
       console.log('✓ Token available. Auto-connect disabled — use the dashboard to connect.');

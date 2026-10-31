@@ -555,7 +555,7 @@ app.use((req, res, next) => {
   });
 
   // Local control: Connect/Disconnect Twitch
-  app.post('/api/local/connectTwitch', (req, res) => {
+  app.post('/api/local/connectTwitch', async (req, res) => {
     try {
       if (!_cfg.twitch.botOAuthToken || _cfg.twitch.botOAuthToken === 'oauth:your_bot_oauth_token_here' || _cfg.twitch.botOAuthToken.trim() === '') {
         return res.status(400).json({ error: 'OAuth token not found. Please generate one first.' });
@@ -563,7 +563,7 @@ app.use((req, res, next) => {
       if (!_cfg.botUsername || !_cfg.channel) {
         return res.status(400).json({ error: 'Bot username and channel must be set in config.' });
       }
-      twitch.connectTwitchBot();
+      await twitch.connectTwitchBot();
       res.json({ ok: true, message: 'Twitch connection initiated' });
     } catch (e) {
       res.status(500).json({ error: e.message });
