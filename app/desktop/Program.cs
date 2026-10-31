@@ -44,7 +44,6 @@ namespace StreamSprites.Desktop
     {
         private const string AppName = "Stream Sprites";
         private const string WebView2DownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
-        private const string NodeDownloadUrl = "https://nodejs.org/";
         private static readonly HashSet<string> AuthHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "twitch.tv",
@@ -340,14 +339,7 @@ namespace StreamSprites.Desktop
                 string message = string.IsNullOrWhiteSpace(ex.Message)
                     ? "Stream Sprites could not start."
                     : ex.Message;
-                if (ex is NodeNotFoundException)
-                {
-                    ShowError(message, NodeDownloadUrl, "Install Node.js");
-                }
-                else
-                {
-                    ShowError(message, _logDir, "Open logs folder");
-                }
+                ShowError(message, _logDir, "Open logs folder");
             }
         }
 
@@ -497,11 +489,20 @@ namespace StreamSprites.Desktop
             WriteLog("[" + stream + "] " + line);
         }
 
+        private static string? FindBundledWebView2Runtime()
+        {
+            string runtimeDir = Path.Combine(AppContext.BaseDirectory, "webview2");
+            return File.Exists(Path.Combine(runtimeDir, "msedgewebview2.exe")) ? runtimeDir : null;
+        }
+
         private async Task InitializeWebViewAsync()
         {
-            string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+            string? bundledRuntime = FindBundledWebView2Runtime();
+            string version = bundledRuntime == null
+                ? CoreWebView2Environment.GetAvailableBrowserVersionString()
+                : CoreWebView2Environment.GetAvailableBrowserVersionString(bundledRuntime);
             CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(
-                null,
+                bundledRuntime,
                 Path.Combine(_dataDir, "WebView2"),
                 null);
             await _webView.EnsureCoreWebView2Async(environment);
@@ -516,7 +517,7 @@ namespace StreamSprites.Desktop
             core.NavigationCompleted += Core_NavigationCompleted;
 
             _webViewReady = true;
-            LogEvent("webview_ready version=" + version);
+            LogEvent("webview_ready version=" + version + " runtime=" + (bundledRuntime ?? "installed"));
         }
 
         private void Core_NewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
@@ -598,6 +599,7 @@ namespace StreamSprites.Desktop
             ShowLoading("Starting the local server");
 
             _cliNodePath = FindNodeExecutable();
+            LogEvent("server_starting node=" + _cliNodePath);
             Process process = StartNodeServer(_cliNodePath);
             _server = process;
 
@@ -654,8 +656,11 @@ namespace StreamSprites.Desktop
             string explicitPath = Environment.GetEnvironmentVariable("STREAM_SPRITES_NODE") ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath)) return explicitPath;
 
-            string localNode = Path.Combine(AppContext.BaseDirectory, "node", "node.exe");
-            if (File.Exists(localNode)) return localNode;
+            string bundledNode = Path.Combine(AppContext.BaseDirectory, "node", "node.exe");
+            if (File.Exists(bundledNode)) return bundledNode;
+
+            string adjacentNode = Path.Combine(AppContext.BaseDirectory, "node.exe");
+            if (File.Exists(adjacentNode)) return adjacentNode;
 
             string? path = Environment.GetEnvironmentVariable("PATH");
             if (!string.IsNullOrWhiteSpace(path))
@@ -686,7 +691,7 @@ namespace StreamSprites.Desktop
                 if (File.Exists(candidate)) return candidate;
             }
 
-            throw new NodeNotFoundException("Node.js 22+ is required to run Stream Sprites.");
+            throw new NodeNotFoundException("The bundled Node.js runtime is missing. Reinstall Stream Sprites or set STREAM_SPRITES_NODE.");
         }
 
         private Process StartNodeServer(string nodePath)

@@ -5,6 +5,18 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.0] - 2026-10-31
+
+### Added
+- Portable Windows release with a self-contained .NET launcher, bundled Node.js runtime, and bundled fixed WebView2 runtime.
+- `portable:build` packaging script for reproducible portable ZIPs.
+- Bundled Node.js license and VC++ runtime files for clean Windows installations.
+
+### Changed
+- The release no longer requires Node.js, .NET Desktop Runtime, or WebView2 to be installed on the PC.
+- The desktop launcher prefers bundled runtimes and logs which Node.js and WebView2 paths it uses.
+- Updated the README, NOTICE, and release instructions for the portable package.
+
 ## [2.8.3] - 2026-10-31
 
 ### Changed
@@ -335,7 +347,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Database Migration**: API endpoints for migrating data between storage backends (e.g., SQLite → PostgreSQL).
 
 ### Changed
-- **Consolidated package.json**: Removed `server/package.json` and `server/package-lock.json` — all dependencies now managed in root `package.json`.
+- **Consolidated package.json**: Removed `server/package.json` and `server/package-lock.json`: all dependencies now managed in root `package.json`.
 - **Dashboard headings**: Updated section headings in dashboard for better clarity ("Quick Actions", "Overlay Preview").
 - **Routes refactored**: All database operations in `routes.js` now use the storage driver abstraction (`_driver`) instead of direct SQLite calls.
 
@@ -371,7 +383,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.7] - 2026-04-26
 
 ### Added
-- **`start.sh` for Linux/macOS**: Bash equivalent of `start.ps1` with full feature parity — CLI flags (`--no-prompt`, `--skip-deps`, `--audit-fix`), Node.js installation check (apt/dnf/brew), dependency staleness detection (package.json vs node_modules timestamp, missing lock file), port conflict detection and kill (ss/lsof), auto-restart loop with keypress timeout, and `npm audit fix` support.
+- **`start.sh` for Linux/macOS**: Bash equivalent of `start.ps1` with full feature parity: CLI flags (`--no-prompt`, `--skip-deps`, `--audit-fix`), Node.js installation check (apt/dnf/brew), dependency staleness detection (package.json vs node_modules timestamp, missing lock file), port conflict detection and kill (ss/lsof), auto-restart loop with keypress timeout, and `npm audit fix` support.
 
 ### Fixed
 - **`.env` port parsing**: The bash version correctly reads `.env` as `KEY=VALUE` lines instead of incorrectly parsing it as JSON (the PowerShell script had this bug).
@@ -389,14 +401,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.5] - 2026-04-04
 
 ### Removed
-- **Client-side physics engine**: Deleted `overlay/js/physics.js` — physics is now exclusively server-authoritative.
-- **Client-side command handlers**: Deleted `overlay/js/commands.js` — all commands are processed server-side.
-- **TMI.js fallback**: Removed `setupTmiFallback` from `connection.js` — overlay no longer connects directly to Twitch.
+- **Client-side physics engine**: Deleted `overlay/js/physics.js`: physics is now exclusively server-authoritative.
+- **Client-side command handlers**: Deleted `overlay/js/commands.js`: all commands are processed server-side.
+- **TMI.js fallback**: Removed `setupTmiFallback` from `connection.js`: overlay no longer connects directly to Twitch.
 - **Dual-mode code paths**: Removed all `USE_SERVER`/`useServer` conditionals, local mode spawning, local cooldowns, and client-side fight collision detection.
 
 ### Changed
-- **Overlay client rewritten**: `overlay_client.js` reduced from 698 to 363 lines — now only connects to server via WebSocket, receives physics state, interpolates, and renders.
-- **Canvas module simplified**: Removed `USE_SERVER` parameter from `canvas.js` — always uses server coordinate mode.
+- **Overlay client rewritten**: `overlay_client.js` reduced from 698 to 363 lines: now only connects to server via WebSocket, receives physics state, interpolates, and renders.
+- **Canvas module simplified**: Removed `USE_SERVER` parameter from `canvas.js`: always uses server coordinate mode.
 - **Config always server mode**: `USE_SERVER` in `config.js` now always returns `true`.
 
 ### Fixed
@@ -408,7 +420,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`!boom` explosion position**: Server now broadcasts the `y` coordinate with boom commands so all overlays render the explosion at the exact `groundY`. Previously the client calculated its own Y value which could differ from the server's.
 - **Dashboard groundY fallback**: Corrected from `920` to `1080` to match server default. Removed `groundY` from settings overlay field map so it's not duplicated.
 - **Jump velocity**: Now uses `physics.JUMP_VELOCITY` constant instead of hardcoded `-16`.
-- **Server restart**: Now performs graceful shutdown — closes database, cleans up WebSocket and Twitch connections before terminating.
+- **Server restart**: Now performs graceful shutdown: closes database, cleans up WebSocket and Twitch connections before terminating.
 - **Chat message sanitization**: IRC control characters and newlines are now stripped from messages sent via the dashboard chat endpoint.
 - **Cloudflare tunnel stop (Windows)**: Uses async `exec` instead of `execSync` for `taskkill`, preventing blocking.
 - **OAuth redirect with tunnels**: Redirect URL now uses the actual request host and `x-forwarded-proto` header so OAuth works through Cloudflare tunnels.
@@ -435,7 +447,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Missing `cloudflared` dependency**: Added `cloudflared` to `package.json` so `npx cloudflared` works without global install.
 
 ### Security
-- **`/env` endpoint masks dashboard password**: The `/env` API no longer exposes the `dashboardPassword` — returns `***` instead of the real value. The save endpoint preserves the real password if `***` is sent back.
+- **`/env` endpoint masks dashboard password**: The `/env` API no longer exposes the `dashboardPassword`: returns `***` instead of the real value. The save endpoint preserves the real password if `***` is sent back.
 
 ## [2.0.2] - 2026-03-30
 
@@ -480,8 +492,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Dashboard error messages**: All validation and status messages use inline elements with 2-second auto-fade instead of browser `alert()` popups.
 - **Toggle label structure**: Toggle labels only wrap the slider (clicking text no longer toggles the checkbox).
-- **Disconnect button**: Removed "Disconnecting..." state — button stays as-is.
-- **Save Config**: Simplified — no button state changes, shows inline status message.
+- **Disconnect button**: Removed "Disconnecting..." state: button stays as-is.
+- **Save Config**: Simplified: no button state changes, shows inline status message.
 - **Default config order**: `botUsername` now appears before `channel` in generated `.env` files.
 
 ## [2.0.0] - 2026-03-28 (Pre-release)

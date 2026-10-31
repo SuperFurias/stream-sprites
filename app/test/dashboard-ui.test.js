@@ -111,6 +111,24 @@ test('desktop new-window requests open app links in the system browser', () => {
   assert.doesNotMatch(handler[0], /if \(IsAppUrl\(e\.Uri\) \|\| IsAuthHost\(e\.Uri\)\) return;/);
 });
 
+test('desktop launcher prefers bundled Node and WebView2 runtimes', () => {
+  const source = fs.readFileSync(DESKTOP, 'utf8');
+  assert.match(source, /Path\.Combine\(AppContext\.BaseDirectory, "node", "node\.exe"\)/);
+  assert.match(source, /FindBundledWebView2Runtime/);
+  assert.match(source, /GetAvailableBrowserVersionString\(bundledRuntime\)/);
+  assert.match(source, /CreateAsync\(\s*bundledRuntime/);
+  assert.match(source, /server_starting node=/);
+});
+
+test('portable packaging script includes both bundled runtimes', () => {
+  const script = fs.readFileSync(path.join(ROOT, 'tools', 'package-portable.ps1'), 'utf8');
+  assert.match(script, /self-contained true/);
+  assert.match(script, /nodeDir/);
+  assert.match(script, /node\.exe/);
+  assert.match(script, /webview2/);
+  assert.match(script, /StreamSprites-\$version-win64\.zip/);
+});
+
 test('dashboard preview fills its stage and keeps chat on the right', () => {
   const css = fs.readFileSync(UI_CSS, 'utf8');
 
@@ -130,6 +148,31 @@ test('dashboard preview fills its stage and keeps chat on the right', () => {
   assert.ok(chatPanel, 'dashboard chat panel rule exists');
   assert.match(chatPanel[1], /width:\s*clamp\(200px, 26%, 300px\)/);
   assert.match(chatPanel[1], /height:\s*100%/);
+});
+
+test('user-facing documentation and pages avoid em dashes', () => {
+  const files = [
+    README,
+    path.join(ROOT, '..', 'CHANGELOG.md'),
+    path.join(ROOT, '..', 'NOTICE'),
+    path.join(ROOT, 'index.html'),
+    path.join(ROOT, 'accounts', 'accounts.html'),
+    path.join(ROOT, 'dashboard', 'login.html'),
+    path.join(ROOT, 'dashboard', 'setup.html'),
+    path.join(ROOT, 'overlay', 'overlay.html')
+  ];
+  for (const file of files) {
+    assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /\u2014/, path.basename(file));
+  }
+});
+
+test('README documents the portable release and bundled runtimes', () => {
+  const readme = fs.readFileSync(README, 'utf8');
+  assert.match(readme, /## Release requirements/);
+  assert.match(readme, /self-contained launcher/);
+  assert.match(readme, /`node\/`/);
+  assert.match(readme, /`webview2\/`/);
+  assert.doesNotMatch(readme, /### Prerequisites/);
 });
 
 test('documentation screenshots exist at their documented sizes', () => {

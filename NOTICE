@@ -17,8 +17,9 @@ Third-party licenses:
 - better-sqlite3 - MIT License
 - axios - MIT License
 - Microsoft Edge WebView2 SDK - Microsoft Software License Terms
-- Microsoft Edge WebView2 Runtime - Provided by Microsoft Edge
-- Node.js - MIT License (used from the host system)
+- Microsoft Edge WebView2 Runtime - Microsoft Software License Terms (fixed runtime bundled with the portable release)
+- .NET 8 Desktop Runtime - MIT License (bundled in the self-contained portable launcher)
+- Node.js - MIT License (bundled with the portable release)
 - And other open-source dependencies
 
 All third-party licenses are available in the node_modules directory

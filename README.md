@@ -5,7 +5,7 @@ Copyright 2026 SuperFurias | [Apache License 2.0](LICENSE)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/SuperFurias/stream-sprites/actions/workflows/ci.yml/badge.svg)](https://github.com/SuperFurias/stream-sprites/actions/workflows/ci.yml)
 
-Stream Sprites is a powerful, feature-rich Twitch overlay application that transforms chat participation into an interactive visual experience. Each viewer receives a personalized sprite with realistic physics, creating a living, breathing community representation on your stream.
+Stream Sprites turns Twitch chat into a physics-driven sprite overlay. Viewers who chat get a sprite on screen, and commands such as `!jump`, `!sit`, and `!skin` change what their sprite does. The dashboard handles skins, users, moderation, Twitch settings, and overlay configuration.
 
 <p align="center">
   <a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Stream Sprites dashboard overview" width="100%"></a>
@@ -17,11 +17,11 @@ Stream Sprites is a powerful, feature-rich Twitch overlay application that trans
   <a href="docs/screenshots/assets.png"><img src="docs/screenshots/assets.png" alt="Stream Sprites asset library" width="32%"></a>
 </p>
 
-<p align="center"><sub>Dashboard · Account chooser · User management · Asset library — screenshots use demo data.</sub></p>
+<p align="center"><sub>Dashboard, account chooser, user management, and asset library. Screenshots use demo data.</sub></p>
 
 ---
 
-## ✨ Features
+## Features
 
 ### Core Functionality
 - **Real-time Twitch Integration** – Live chat-to-sprite conversion with WebSocket communication
@@ -30,7 +30,7 @@ Stream Sprites is a powerful, feature-rich Twitch overlay application that trans
 - **Dynamic Skin System** – Automatic detection from `app/assets/skins/` with support for PNG, JPG, GIF, WebP, and WebM
 - **User Skin Assignments** – Persistent per-user skin preferences stored in SQLite or PostgreSQL
 - **Local Accounts & Profiles** – Shared guest profile plus separate accounts with isolated Twitch settings, databases, skins, and overlay state
-- **Admin Dashboard** – Full-featured web interface for configuration and management
+- **Admin Dashboard** – Configuration, moderation, assets, accounts, and overlay controls in one interface
 
 ### Interactive Commands
 Users can control their sprites via Twitch chat:
@@ -59,24 +59,32 @@ Users can control their sprites via Twitch chat:
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Windows Desktop App
 
-Download the latest Windows release from the [Releases page](https://github.com/SuperFurias/stream-sprites/releases/latest), or run **`Stream Sprites.exe`** from the repository root. The native window opens immediately with a loading screen, then shows the account chooser. Continue as **Guest**, sign in to an existing account, or create a new one. After a profile is selected, the local server starts and the dashboard opens with standard Windows minimize, maximize, and close controls. The window remembers its last size, position, and maximized state. Closing the window stops the server and exits the app.
+Download the portable Windows release from the [Releases page](https://github.com/SuperFurias/stream-sprites/releases/latest). The release ZIP includes the self-contained launcher, the Node.js runtime, and a fixed Microsoft Edge WebView2 runtime. You do not need Node.js, .NET, or WebView2 installed on the PC.
 
-Each account gets its own Twitch configuration, database, skins, logs, and overlay state. Only one profile is active at a time; **Log out** from the dashboard returns to the account chooser. The guest profile is shared by anyone using the app and is the existing single-profile data after upgrading.
+Extract the ZIP and run **`Stream Sprites.exe`**. Keep `Stream Sprites.exe`, `app/`, `node/`, and `webview2/` together. The account chooser opens first. Continue as **Guest**, sign in, or create an account. The dashboard then opens with standard Windows minimize, maximize, and close controls. Closing the window stops the local server and exits the app.
 
-The launcher is a ~1.5 MB Windows executable that uses the installed Edge WebView2 runtime and Node.js. The `app/` folder must stay next to the executable. Account data, profiles, configuration, logs, and WebView2 cache stay in `%APPDATA%\Stream Sprites`.
+The `Stream Sprites.exe` at the repository root is a development launcher. It uses an installed Node.js and .NET Desktop Runtime; use the release ZIP for the portable build.
+
+Each account gets its own Twitch configuration, database, skins, logs, and overlay state. Only one profile is active at a time. **Log out** returns to the account chooser. The guest profile is shared and keeps the single-profile data from older versions.
+
+Account data, profiles, configuration, logs, and the WebView2 cache stay in `%APPDATA%\Stream Sprites`. The app folder can be moved or renamed without changing those paths.
 
 The executable includes the Stream Sprites product, company, copyright, trademark, and Apache-2.0 license metadata. Builds are currently unsigned, so Windows UAC may still show **Unknown publisher**; removing that requires a trusted code-signing certificate.
 
-### Prerequisites
-- **Node.js 22+** – [Download from nodejs.org](https://nodejs.org/)
-- **Microsoft Edge WebView2 Runtime** – Included with current Edge and Windows 11
-- **.NET 8 Desktop Runtime** – Required by the native desktop launcher
-- **Twitch Account** – For bot credentials and OAuth
-- **.NET 8 SDK** – Only needed to build the desktop executable
+### Release requirements
+- **Windows 10 or 11, 64-bit**
+- **Twitch account** for bot credentials and OAuth
+
+The release bundles Node.js, the .NET runtime, and WebView2. Nothing else needs to be installed.
+
+### Source build requirements
+- **Node.js 22+** for the server and tests
+- **.NET 8 SDK** for the desktop launcher
+- **Microsoft Edge WebView2 Runtime** when running the development launcher
 
 ### Source Installation (Windows – Recommended)
 
@@ -112,7 +120,22 @@ npm install
 npm run desktop:build
 ```
 
-The single-file native executable is written to the repository root as `Stream Sprites.exe`. It is a thin WinForms/WebView2 launcher around the existing Node server. For isolated development or alternate deployments, these environment variables override default paths:
+This writes the development launcher to the repository root as `Stream Sprites.exe`. It is a WinForms/WebView2 launcher around the Node server and expects the source build runtimes.
+
+To build the portable release ZIP with a self-contained launcher, bundled Node.js, and bundled WebView2:
+
+1. Download the Microsoft Edge WebView2 Fixed Version x64 runtime.
+2. Extract it under `app/Temp/webview2/extracted/`.
+3. Run:
+
+```powershell
+cd app
+npm run portable:build
+```
+
+The script writes `app/Temp/StreamSprites-<version>-win64.zip` and prints its SHA-256 hash. You can pass `-WebView2RuntimePath` and `-NodeExePath` to the script when the runtimes live somewhere else.
+
+For isolated development or alternate deployments, these environment variables override default paths:
 
 | Variable | Purpose |
 |----------|---------|
@@ -136,7 +159,7 @@ The source server will:
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Initial Setup
 
@@ -230,7 +253,7 @@ Enable in Settings tab:
 
 ---
 
-## 📖 User Guide
+## User Guide
 
 ### Chat Commands
 
@@ -288,7 +311,7 @@ Enable in Settings tab:
 
 ---
 
-## 🔧 Administration
+## Administration
 
 ### Dashboard Tabs
 
@@ -329,7 +352,7 @@ From the dashboard or via API:
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Technology Stack
 
@@ -378,7 +401,7 @@ Twitch Chat → TMI.js → Server → WebSocket → Overlay Client
 
 ---
 
-## 🛠️ Development
+## Development
 
 ### Project Structure
 
@@ -408,7 +431,9 @@ Stream Sprites/
     │   └── build.ps1          # Builds the root executable
     ├── test/                   # node:test unit + HTTP integration tests
     │   └── accounts.test.js    # Account/profile switching coverage
-    ├── tools/soak.js           # Live-server load/soak test
+    ├── tools/
+    │   ├── soak.js             # Live-server load/soak test
+    │   └── package-portable.ps1 # Builds the portable release ZIP
     ├── server/
     │   ├── server.js           # Express + WebSocket bootstrap
     │   ├── accounts.js         # Local accounts and isolated profile data
@@ -501,7 +526,7 @@ Desktop app data lives outside the repository in `%APPDATA%\Stream Sprites`:
 
 ---
 
-## 🔒 Security Notes
+## Security Notes
 
 - **Local accounts**: registration and profile switching accept only loopback clients; passwords are stored as salted scrypt hashes. Guest has no password and is shared.
 - **Remote access requires a dashboard password.** Loopback requests are trusted after validating the peer address, Host header, proxy headers, and origin. Set a password from the local machine before exposing the server through a tunnel.
@@ -516,13 +541,13 @@ If exposing the server beyond localhost, use HTTPS (the built-in Cloudflare quic
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Server won't start
-- For the desktop app, open `%APPDATA%\Stream Sprites\logs\desktop.log` for the error
-- Ensure Node.js 22+, the .NET 8 Desktop Runtime, and the Edge WebView2 Runtime are installed
-- Ensure the `app/` folder is next to `Stream Sprites.exe`
-- Run `npm install` from `app/` after upgrading Node so native modules (`better-sqlite3`) match the runtime
+- For the portable release, keep `Stream Sprites.exe`, `app/`, `node/`, and `webview2/` together
+- Open `%APPDATA%\Stream Sprites\logs\desktop.log` for the launcher error
+- For a source build, install Node.js 22+, the .NET 8 Desktop Runtime, and the Edge WebView2 Runtime
+- For a source build, run `npm install` from `app/` after upgrading Node so native modules (`better-sqlite3`) match the runtime
 - Check port 8080 (or configured) is not in use
 - Verify `app/server/.env` exists and is valid JSON
 - Check logs in `app/logs/debug.log` if enabled
@@ -561,7 +586,7 @@ If exposing the server beyond localhost, use HTTPS (the built-in Cloudflare quic
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 For in-depth documentation, see the **Help** tab in the dashboard after starting the server.
 
@@ -572,13 +597,13 @@ For in-depth documentation, see the **Help** tab in the dashboard after starting
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 This project is maintained by SuperFurias. For bug reports, feature requests, or contributions, please open an issue on the repository.
 
 ---
 
-## 📄 License
+## License
 
 Copyright 2026 SuperFurias
 
