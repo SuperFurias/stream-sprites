@@ -5,6 +5,13 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.2] - 2026-10-31
+
+### Fixed
+- **Overlay settings are clamped** at the config boundary: canvas dimensions, ground Y, sprite sizes, max sprites, spawn quantity, lifetime, network rate, and related timings cannot be written with simulation-breaking values.
+- **Server normalization** guarantees positive canvas dimensions, ground inside the canvas, valid sprite-size ordering, sane lifetimes, and a 2000-sprite cap at runtime even if an old config file bypasses the UI.
+- The settings UI now matches the real 2000-sprite hard cap instead of offering 5000.
+
 ## [2.4.1] - 2026-10-31
 
 ### Changed

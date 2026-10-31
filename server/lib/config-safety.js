@@ -24,6 +24,23 @@ const DEBUG_KEYS = [
   'logToFile'
 ];
 
+// Bounds for values where an out-of-range setting would break the simulation.
+const OVERLAY_BOUNDS = {
+  canvasWidth: [320, 7680],
+  canvasHeight: [240, 4320],
+  groundY: [0, 10000],
+  maxSprites: [1, 2000],
+  maxSpawnQuantity: [1, 500],
+  spriteSizeMin: [4, 1000],
+  spriteSizeMax: [4, 1000],
+  spriteLifetimeMs: [1000, 86400000],
+  fadeWarningMs: [0, 86400000],
+  networkFps: [1, 60],
+  resizeDebounceMs: [0, 5000],
+  commandCooldownMs: [0, 600000],
+  spawnThrottleMs: [0, 3600000]
+};
+
 function safeString(value, maxLength) {
   if (typeof value !== 'string') return null;
   return value.replace(/[\x00-\x1F\x7F]/g, '').slice(0, maxLength);
@@ -47,7 +64,10 @@ function sanitizeOverlay(input) {
     const raw = input[key];
     const value = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
     if (typeof value === 'number' && Number.isFinite(value)) {
-      output[key] = value;
+      const bounds = OVERLAY_BOUNDS[key];
+      output[key] = bounds
+        ? Math.min(bounds[1], Math.max(bounds[0], value))
+        : value;
     }
   }
   return output;

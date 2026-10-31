@@ -78,7 +78,9 @@ test('config input drops runtime and unknown fields', () => {
     },
     overlay: {
       gravity: '0.4',
+      canvasWidth: 10,
       maxSprites: 2500,
+      networkFps: 1000,
       unknownSetting: 1
     },
     debug: {
@@ -91,7 +93,9 @@ test('config input drops runtime and unknown fields', () => {
   assert.equal(sanitized.channel, 'demo');
   assert.equal(sanitized.serverPort, 9090);
   assert.equal(sanitized.overlay.gravity, 0.4);
-  assert.equal(sanitized.overlay.maxSprites, 2500);
+  assert.equal(sanitized.overlay.canvasWidth, 320);
+  assert.equal(sanitized.overlay.maxSprites, 2000);
+  assert.equal(sanitized.overlay.networkFps, 60);
   assert.equal(sanitized.overlay.unknownSetting, undefined);
   assert.equal(sanitized.debug.serverDebug, true);
   assert.equal(sanitized.debug.bogus, undefined);

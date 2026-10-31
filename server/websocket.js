@@ -37,22 +37,36 @@ function getOverlayConfig() {
   if (!_overlayConfigCache) {
     const ov = _cfg.overlay || {};
     const d = DEFAULT_OVERLAY;
+
+    const W = Math.max(320, Number(ov.canvasWidth) || d.canvasWidth);
+    const H = Math.max(240, Number(ov.canvasHeight) || d.canvasHeight);
+    const GROUND_Y = Math.min(H, Math.max(0, Number(ov.groundY) || d.groundY));
+    const SPRITE_SIZE_MIN = Math.max(4, Number(ov.spriteSizeMin) || d.spriteSizeMin);
+    const SPRITE_SIZE_MAX = Math.max(SPRITE_SIZE_MIN, Number(ov.spriteSizeMax) || d.spriteSizeMax);
+    const SPRITE_LIFETIME_MS = Math.max(1000, Number(ov.spriteLifetimeMs) || d.spriteLifetimeMs);
+    const FADE_WARNING_MS = Math.min(SPRITE_LIFETIME_MS,
+      Math.max(0, Number(ov.fadeWarningMs) || d.fadeWarningMs));
+    const MAX_SPRITES = Math.min(2000, Math.max(1, Math.round(Number(ov.maxSprites) || d.maxSprites)));
+    const MAX_SPAWN_QUANTITY = Math.min(500, Math.max(1, Math.round(Number(ov.maxSpawnQuantity) || d.maxSpawnQuantity)));
+    const throttleRaw = Number(ov.spawnThrottleMs);
+    const SPAWN_THROTTLE_MS = Number.isFinite(throttleRaw) ? Math.max(0, throttleRaw) : d.spawnThrottleMs;
+
     _overlayConfigCache = {
-      MAX_SPRITES: ov.maxSprites ?? d.maxSprites,
-      MAX_SPAWN_QUANTITY: ov.maxSpawnQuantity ?? d.maxSpawnQuantity,
-      SPAWN_THROTTLE_MS: ov.spawnThrottleMs ?? d.spawnThrottleMs,
-      GROUND_Y: ov.groundY ?? d.groundY,
-      W: ov.canvasWidth ?? d.canvasWidth,
-      H: ov.canvasHeight ?? d.canvasHeight,
+      MAX_SPRITES,
+      MAX_SPAWN_QUANTITY,
+      SPAWN_THROTTLE_MS,
+      GROUND_Y,
+      W,
+      H,
       GRAVITY: ov.gravity ?? d.gravity,
       AIR_RESISTANCE: ov.airResistance ?? d.airResistance,
       GROUND_FRICTION: ov.groundFriction ?? d.groundFriction,
       BOUNCE_DAMPING: ov.bounceDamping ?? d.bounceDamping,
       MIN_VELOCITY: ov.minVelocity ?? d.minVelocity,
-      SPRITE_SIZE_MIN: ov.spriteSizeMin ?? d.spriteSizeMin,
-      SPRITE_SIZE_MAX: ov.spriteSizeMax ?? d.spriteSizeMax,
-      SPRITE_LIFETIME_MS: ov.spriteLifetimeMs ?? d.spriteLifetimeMs,
-      FADE_WARNING_MS: ov.fadeWarningMs ?? d.fadeWarningMs,
+      SPRITE_SIZE_MIN,
+      SPRITE_SIZE_MAX,
+      SPRITE_LIFETIME_MS,
+      FADE_WARNING_MS,
       COLLISION_PERSONAL_SPACE_THRESHOLD: ov.collisionPersonalSpaceThreshold ?? d.collisionPersonalSpaceThreshold,
       EXPLOSION_FORCE_MULTIPLIER: ov.explosionForceMultiplier ?? d.explosionForceMultiplier,
       EXPLOSION_RADIUS_BASE: ov.explosionRadiusBase ?? d.explosionRadiusBase,
