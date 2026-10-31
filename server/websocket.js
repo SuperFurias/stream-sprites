@@ -436,7 +436,17 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
   _loginUsernameIndex = loginUsernameIndex;
   serverStartTime = Date.now();
 
-  _wss = new WebSocket.Server({ server, maxPayload: 64 * 1024 });
+  const compressionDisabled = process.env.STREAM_SPRITES_NO_COMPRESSION === '1';
+  _wss = new WebSocket.Server({
+    server,
+    maxPayload: 64 * 1024,
+    perMessageDeflate: compressionDisabled ? false : {
+      threshold: 1024,
+      zlibDeflateOptions: { level: 1 },
+      clientNoContextTakeover: true,
+      serverNoContextTakeover: true
+    }
+  });
 
   _wss.on('connection', (ws) => {
     dbg('WebSocket client connected');

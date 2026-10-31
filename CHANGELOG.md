@@ -5,6 +5,13 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-10-31
+
+### Performance
+- **WebSocket snapshots are compressed** with permessage-deflate (level 1, 1 KB threshold). The soak test measures **65.6 KB → 8.8 KB average wire bytes** at 301 sprites (~86% reduction).
+- Snapshot compression can be disabled with `STREAM_SPRITES_NO_COMPRESSION=1` for CPU-bound hosts.
+- The soak report now includes decompressed and wire bytes per snapshot.
+
 ## [2.4.5] - 2026-10-31
 
 ### Fixed

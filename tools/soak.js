@@ -152,6 +152,7 @@ async function main() {
       ws.once('open', resolve);
       ws.once('error', reject);
     });
+    const wireStart = ws._socket ? ws._socket.bytesRead : 0;
 
     await localRequest(port, '/api/local/clearSprites', { method: 'POST' });
     for (const [name, count] of SPRITE_GROUPS) {
@@ -173,6 +174,8 @@ async function main() {
     const elapsedSeconds = (Date.now() - started) / 1000;
     const snapshotRate = metrics.snapshots / elapsedSeconds;
     const avgBytes = metrics.snapshots ? Math.round(metrics.bytes / metrics.snapshots) : 0;
+    const wireBytes = ws._socket ? ws._socket.bytesRead - wireStart : 0;
+    const avgWireBytes = metrics.snapshots ? Math.round(wireBytes / metrics.snapshots) : 0;
 
     await localRequest(port, '/api/local/clearSprites', { method: 'POST' });
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -191,6 +194,7 @@ async function main() {
       snapshots: metrics.snapshots,
       snapshotRate: Number(snapshotRate.toFixed(1)),
       avgSnapshotBytes: avgBytes,
+      avgWireBytes,
       maxSprites: metrics.maxSprites,
       finalSprites: metrics.lastSprites,
       checks
