@@ -5,6 +5,12 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.4] - 2026-10-31
+
+### Fixed
+- **Repeated Twitch connect attempts** no longer leave a stale connecting client behind. Existing clients are fully disconnected, and events from old clients are ignored so commands cannot be processed twice.
+- Command replies are sent through the client that received the message, not whichever client happens to be current.
+
 ## [2.4.3] - 2026-10-31
 
 ### Fixed

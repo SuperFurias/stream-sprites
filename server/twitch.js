@@ -457,11 +457,10 @@ async function connectTwitchBot() {
   }
 
   if (twitchClient) {
+    const oldClient = twitchClient;
+    twitchClient = null;
     try {
-      const state = twitchClient.readyState ? twitchClient.readyState() : null;
-      if (state === 1 || state === 'OPEN') {
-        await twitchClient.disconnect();
-      }
+      await oldClient.disconnect();
     } catch (e) {
       _dbg('Error disconnecting old Twitch client:', e.message);
     }
@@ -483,13 +482,15 @@ async function connectTwitchBot() {
     identity: { username: _cfg.botUsername, password: _cfg.twitch.botOAuthToken }
   };
 
-  twitchClient = new tmi.Client(opts);
+  const client = new tmi.Client(opts);
+  twitchClient = client;
 
-  if (_cfg.debug?.twitchAuthErrors === false && twitchClient.log) {
-    twitchClient.log = new FilteredLogger(twitchClient.log, _cfg);
+  if (_cfg.debug?.twitchAuthErrors === false && client.log) {
+    client.log = new FilteredLogger(client.log, _cfg);
   }
 
-  twitchClient.on('message', async (channel, tags, message, self) => {
+  client.on('message', async (channel, tags, message, self) => {
+    if (twitchClient !== client) return; // stale client from a previous connect
     if (self) return;
     const rawUsername = tags['display-name'] || tags['username'] || 'anon';
     const username = rawUsername.replace(/[^\p{L}\p{N}_]/gu, '_');
@@ -519,7 +520,7 @@ async function connectTwitchBot() {
           stateChanged = commandResult.stateChanged;
           if (commandResult.result) {
             const responseMsg = `@${username}, ${commandResult.result}`;
-            twitchClient.say(_cfg.channel, responseMsg).catch(err => {
+            client.say(_cfg.channel, responseMsg).catch(err => {
               _dbg('Failed to send command response:', err.message);
             });
           }
@@ -550,20 +551,23 @@ async function connectTwitchBot() {
     }
   });
 
-  twitchClient.on('connected', (addr) => {
+  client.on('connected', (addr) => {
+    if (twitchClient !== client) return;
     _dbg(`Twitch connected to ${addr}`);
     if (reconnectTimeout) clearTimeout(reconnectTimeout);
   });
 
-  twitchClient.on('disconnected', () => {
+  client.on('disconnected', () => {
+    if (twitchClient !== client) return;
     _dbg('Twitch disconnected');
   });
 
-  twitchClient.on('error', (err) => {
+  client.on('error', (err) => {
+    if (twitchClient !== client) return;
     _dbg('Twitch error:', err.message);
   });
 
-  twitchClient.connect().catch((err) => {
+  client.connect().catch((err) => {
     _dbg('Twitch connection failed:', err.message);
   });
 
