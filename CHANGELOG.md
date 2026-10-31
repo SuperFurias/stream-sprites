@@ -5,6 +5,13 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2] - 2026-10-31
+
+### Fixed
+- Jumping out of a sit now restores the standing `heightScale` instead of leaving the sprite squashed.
+- Starting a fight resets both participants to the standing height scale as well as `idle`, so sitting sprites fight correctly.
+- WebSocket integration tests cover the sit→jump height transition.
+
 ## [2.7.1] - 2026-10-31
 
 ### Added

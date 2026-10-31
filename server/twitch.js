@@ -145,6 +145,7 @@ function handleJump(username, userId, args, tags, now, ctx) {
     sprite.lastActivity = now;
     sprite.vy = ov.JUMP_VELOCITY;
     sprite.state = 'idle';
+    sprite.heightScale = ov.HEIGHT_SCALE_IDLE;
     ctx.stateChanged = true;
     return null;
   }
@@ -310,8 +311,14 @@ function handleFight(username, userId, args, tags, now, ctx) {
 
   const winnerSprite = ws.serverSprites.get(winner);
   const loserSprite = ws.serverSprites.get(loser);
-  if (winnerSprite) winnerSprite.state = 'idle';
-  if (loserSprite) loserSprite.state = 'idle';
+  if (winnerSprite) {
+    winnerSprite.state = 'idle';
+    winnerSprite.heightScale = ov.HEIGHT_SCALE_IDLE;
+  }
+  if (loserSprite) {
+    loserSprite.state = 'idle';
+    loserSprite.heightScale = ov.HEIGHT_SCALE_IDLE;
+  }
 
   // Apply fight on server sprites
   if (winnerSprite && loserSprite) {

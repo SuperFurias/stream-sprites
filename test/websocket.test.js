@@ -176,6 +176,21 @@ test('WebSocket protocol, dashboard role, and drag authority', { timeout: 40000 
     assert.ok(ownedSprite && Math.abs(ownedSprite.x - 250) < 1, 'non-owner dragMove must be ignored');
 
     overlay.ws.send(JSON.stringify({ type: 'dragEnd', spriteId: 'draguser', x: 250, y: 180, vx: 0, vy: 0 }));
+
+    // Sit -> jump must restore the standing height scale.
+    await chat(port, '!spawn Admin');
+    await waitFor(() => latestSprites(overlay).some(s => s.id === 'admin'));
+    await chat(port, '!sit');
+    await waitFor(() => {
+      const sprite = latestSprites(overlay).find(s => s.id === 'admin');
+      return !!sprite && sprite.state === 'sit' && Math.abs(sprite.heightScale - 0.75) < 0.01;
+    });
+    await chat(port, '!jump');
+    await waitFor(() => {
+      const sprite = latestSprites(overlay).find(s => s.id === 'admin');
+      return !!sprite && sprite.state === 'idle' && Math.abs(sprite.heightScale - 1) < 0.01;
+    });
+
     await fetch(`http://127.0.0.1:${port}/api/local/clearSprites`, { method: 'POST' });
     await waitFor(() => latestSprites(overlay).length === 0);
   } finally {
