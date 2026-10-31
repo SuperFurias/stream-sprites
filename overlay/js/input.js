@@ -12,9 +12,9 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
   let lastMouseX = 0;
   let lastMouseY = 0;
 
-  // Cached sorted sprite array (rebuilt only when sprite count changes)
-  let sortedCache = [];
-  let sortedCacheSize = -1;
+  // Sorted on click, not per frame. Positions change constantly, so a cache
+  // keyed only on sprite count would pick the wrong overlapping sprite.
+  const sortedCache = [];
 
   function rebuildSortedCache() {
     sortedCache.length = 0;
@@ -22,7 +22,6 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
       sortedCache.push(s);
     }
     sortedCache.sort((a, b) => b.y - a.y);
-    sortedCacheSize = sprites.size;
   }
 
   function updateCachedRect() {
@@ -51,10 +50,7 @@ export function setupInputHandlers(canvas, sprites, onDragStart, onDragMove, onD
     if (!cachedRect) updateCachedRect();
     const { x: mouseX, y: mouseY } = toCanvasCoords(e);
 
-    // Rebuild sorted cache only when sprite count changes
-    if (sortedCacheSize !== sprites.size) {
-      rebuildSortedCache();
-    }
+    rebuildSortedCache();
 
     for (const sprite of sortedCache) {
       const dx = mouseX - sprite.x;

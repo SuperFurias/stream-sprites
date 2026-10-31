@@ -38,6 +38,16 @@ function initFileLogger() {
       fs.mkdirSync(logsDir, { recursive: true });
     }
     const logFile = path.join(logsDir, 'debug.log');
+    const MAX_LOG_BYTES = 5 * 1024 * 1024;
+    try {
+      if (fs.statSync(logFile).size > MAX_LOG_BYTES) {
+        const rotated = `${logFile}.1`;
+        try { fs.unlinkSync(rotated); } catch (e) { /* no previous rotation */ }
+        fs.renameSync(logFile, rotated);
+      }
+    } catch (e) {
+      // File does not exist yet or cannot be inspected; start a fresh stream.
+    }
     logStream = fs.createWriteStream(logFile, { flags: 'a' });
     logStream.on('error', (err) => {
       console.error('Failed to write to log file:', err.message);

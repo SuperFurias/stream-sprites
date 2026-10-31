@@ -740,8 +740,14 @@ app.use((req, res, next) => {
 
   // Dashboard presence
   app.get('/api/dashboard/ping', (req, res) => {
-    dashboardLastSeen = Date.now();
-    res.json({ status: 'ok', timestamp: dashboardLastSeen, stopPinging: dashboardConfirmedOpen });
+    const now = Date.now();
+    const alreadySeen = !!dashboardLastSeen && (now - dashboardLastSeen) < 10000;
+    dashboardLastSeen = now;
+    res.json({
+      status: 'ok',
+      timestamp: now,
+      stopPinging: dashboardConfirmedOpen || alreadySeen
+    });
   });
 
   app.get('/api/dashboard/isOpen', (req, res) => {

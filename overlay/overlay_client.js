@@ -201,11 +201,13 @@ function applySpriteState(sprite, serverSprite) {
 
   let prevServerState = new Map();
   let nextServerState = new Map();
+  const serverIds = new Set();
   let lastServerUpdateTime = 0;
   let serverUpdateInterval = 16;
 
   function syncPhysicsFromServer(serverState) {
-    const serverIds = new Set(serverState.map(s => s.id));
+    serverIds.clear();
+    for (let i = 0; i < serverState.length; i++) serverIds.add(serverState[i].id);
     let changed = false;
 
     for (const [id, sprite] of sprites) {
@@ -283,7 +285,10 @@ function applySpriteState(sprite, serverSprite) {
 
       sprite.x = prev.x + (next.x - prev.x) * t;
       sprite.y = prev.y + (next.y - prev.y) * t;
-      sprite.angle = prev.angle + (next.angle - prev.angle) * t;
+      // Interpolate rotation along the shortest arc to avoid visible back-spins.
+      let angleDelta = next.angle - prev.angle;
+      angleDelta = Math.atan2(Math.sin(angleDelta), Math.cos(angleDelta));
+      sprite.angle = prev.angle + angleDelta * t;
       sprite.opacity = next.opacity;
       sprite.facingRight = next.facingRight;
       sprite.size = next.size;

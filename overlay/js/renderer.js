@@ -41,6 +41,7 @@ export function draw(ctx, W, H, GROUND_Y, sprites, skins, explosionParticles, sc
   }
 
   ctx.font = 'bold 12px system-ui, Arial';
+  ctx.textAlign = 'center';
   for (let i = 0; i < sortedSpriteCache.length; i++) {
     drawSprite(ctx, sortedSpriteCache[i], skins, GROUND_Y, scaleX, scaleY);
   }
@@ -103,7 +104,6 @@ function drawSprite(ctx, sprite, skins, GROUND_Y, scaleX, scaleY) {
 
   // Draw username
   ctx.fillStyle = '#fff';
-  ctx.textAlign = 'center';
   ctx.shadowColor = 'rgba(0,0,0,0.8)';
   ctx.shadowBlur = 4;
   ctx.fillText(sprite.username, sx, sy - size / 2 - 8);
@@ -117,6 +117,12 @@ function drawSprite(ctx, sprite, skins, GROUND_Y, scaleX, scaleY) {
   ctx.globalAlpha = 1;
 }
 
+let lastDisplayedSpriteCount = -1;
+
 export function updateSpriteCountDisplay(sprites) {
-  document.getElementById('avCount').textContent = sprites.size;
+  if (sprites.size === lastDisplayedSpriteCount) return;
+  const el = document.getElementById('avCount');
+  if (!el) return;
+  el.textContent = sprites.size;
+  lastDisplayedSpriteCount = sprites.size;
 }

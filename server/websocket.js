@@ -13,7 +13,7 @@ const serverSpawnTimes = new Map();
 let serverStartTime = Date.now();
 let cleanupIntervalId = null;
 let gameLoopIntervalId = null;
-let broadcastIntervalId = null;
+let heartbeatIntervalId = null;
 
 // Delta tracking for efficient sprite state broadcasts
 let spriteSnapshot = new Map();
@@ -65,6 +65,7 @@ function getOverlayConfig() {
       HEIGHT_SCALE_SIT: ov.heightScaleSit ?? d.heightScaleSit,
       HEIGHT_SCALE_IDLE: ov.heightScaleIdle ?? d.heightScaleIdle,
       FIGHT_COIN_FLIP_PROBABILITY: ov.fightCoinFlipProbability ?? d.fightCoinFlipProbability,
+      NETWORK_FPS: ov.networkFps ?? d.networkFps,
       flipDurationMs: ov.flipDurationMs ?? d.flipDurationMs,
       fightDurationMs: ov.fightDurationMs ?? d.fightDurationMs
     };
@@ -273,18 +274,20 @@ function startGameLoop() {
   const TARGET_FPS = 60;
   const FRAME_MS = 1000 / TARGET_FPS;
   let lastTime = Date.now();
+  let lastBroadcastTime = 0;
   let accumulator = 0;
 
   function tick() {
-    const now = Date.now();
-    const elapsed = now - lastTime;
-    lastTime = now;
+    const tickStart = Date.now();
+    const elapsed = tickStart - lastTime;
+    lastTime = tickStart;
     accumulator += elapsed;
 
     // Cap accumulator to prevent spiral of death
     if (accumulator > 200) accumulator = 200;
 
     while (accumulator >= FRAME_MS) {
+      const now = tickStart;
       const dt = FRAME_MS / 1000;
       const ov = getGameLoopConfig();
       const spriteArray = getServerSpriteArray();
@@ -372,15 +375,23 @@ function startGameLoop() {
       accumulator -= FRAME_MS;
     }
 
-    gameLoopIntervalId = setTimeout(tick, 1);
+    // Network snapshots are sent on their own cadence (default 30 Hz).
+    // Clients interpolate between snapshots, so this halves bandwidth
+    // without reducing simulation or rendering smoothness.
+    const ov = getGameLoopConfig();
+    const configuredFps = Number.isFinite(ov.NETWORK_FPS) ? ov.NETWORK_FPS : 30;
+    const networkFps = Math.min(60, Math.max(1, configuredFps));
+    if (tickStart - lastBroadcastTime >= (1000 / networkFps)) {
+      lastBroadcastTime = tickStart;
+      broadcastPhysicsState();
+    }
+
+    // Sleep only until the next simulation frame instead of polling every 1 ms.
+    const processingTime = Date.now() - tickStart;
+    gameLoopIntervalId = setTimeout(tick, Math.max(1, Math.ceil(FRAME_MS - processingTime)));
   }
 
   gameLoopIntervalId = setTimeout(tick, FRAME_MS);
-
-  // Broadcast physics state at 60Hz (every ~16ms)
-  broadcastIntervalId = setInterval(() => {
-    broadcastPhysicsState();
-  }, 16);
 }
 
 // ── Initialize WebSocket ──────────────────────────────────────────────────
@@ -396,6 +407,8 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
 
   _wss.on('connection', (ws) => {
     dbg('WebSocket client connected');
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
     sendFullStateToClient(ws);
 
     ws.on('message', (data) => {
@@ -425,6 +438,19 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
       }
     });
   });
+
+  // Drop dead sockets so broadcasts do not accumulate stale clients.
+  heartbeatIntervalId = setInterval(() => {
+    if (!_wss) return;
+    _wss.clients.forEach((ws) => {
+      if (ws.isAlive === false) {
+        ws.terminate();
+        return;
+      }
+      ws.isAlive = false;
+      try { ws.ping(); } catch (e) { /* socket already closing */ }
+    });
+  }, 30000);
 
   // Periodic cleanup of stale sprites (every minute)
   cleanupIntervalId = setInterval(() => {
@@ -584,7 +610,7 @@ function getWss() {
 function cleanup() {
   if (cleanupIntervalId) { clearInterval(cleanupIntervalId); cleanupIntervalId = null; }
   if (gameLoopIntervalId) { clearTimeout(gameLoopIntervalId); gameLoopIntervalId = null; }
-  if (broadcastIntervalId) { clearInterval(broadcastIntervalId); broadcastIntervalId = null; }
+  if (heartbeatIntervalId) { clearInterval(heartbeatIntervalId); heartbeatIntervalId = null; }
 }
 
 module.exports = {

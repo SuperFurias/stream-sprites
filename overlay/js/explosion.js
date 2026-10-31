@@ -19,12 +19,16 @@ export function createExplosionEffect(x, y, radius, explosionParticles) {
 }
 
 export function updateExplosionParticles(dt, explosionParticles) {
+  // Normalize particle motion to 60 FPS so effects last the same wall-clock
+  // time on 60 Hz, 120 Hz, and 144 Hz displays.
+  const frameScale = Math.min(3, Math.max(0, dt * 60));
+  if (frameScale === 0) return;
   for (let i = explosionParticles.length - 1; i >= 0; i--) {
     const p = explosionParticles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.vy += PARTICLE_GRAVITY;
-    p.life -= p.decay;
+    p.x += p.vx * frameScale;
+    p.y += p.vy * frameScale;
+    p.vy += PARTICLE_GRAVITY * frameScale;
+    p.life -= p.decay * frameScale;
     if (p.life <= 0) {
       // Swap with last element and pop — O(1) removal instead of O(n) splice
       explosionParticles[i] = explosionParticles[explosionParticles.length - 1];

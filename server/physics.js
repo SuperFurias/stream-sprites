@@ -456,6 +456,7 @@ function updateRoamingBehavior(sprite, dt, W, H, GROUND_Y, leftRightRadius, topB
 
 function handleCollisions(arr, grid, now) {
   const collisionProbability = getCollisionProbability(arr.length);
+  if (collisionProbability <= 0) return;
   const thresholdSq = COLLISION_PERSONAL_SPACE_THRESHOLD * COLLISION_PERSONAL_SPACE_THRESHOLD;
   for (const a of arr) {
     const near = grid.query(a, a);
@@ -510,6 +511,10 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
     for (const b of near) {
       if (b.isFighting) continue;
 
+      // Process each pair once instead of once from each side. Forces below are
+      // doubled so the net result matches the previous double-application.
+      if (a.id >= b.id) continue;
+
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const distSq = dx * dx + dy * dy;
@@ -534,7 +539,7 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
         const expandedRadiusSq = expandedRadius * expandedRadius;
         if (distSq < expandedRadiusSq) {
           const normalizedDist = dist / expandedRadius;
-          const force = Math.pow(1 - normalizedDist, 3) * 0.25;
+          const force = Math.pow(1 - normalizedDist, 3) * 0.5;
           a.vx -= nx * force;
           a.vy -= ny * force;
           b.vx += nx * force;
@@ -547,7 +552,7 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
         if (distSq < attractionRadiusSq && distSq > minAttrDistSq) {
           const sizeDiffFactor = (1 - sizeRatio) * SIZE_DIFF_FACTOR;
           const proximityFactor = 1 - (dist / attractionRadius);
-          const attractionForce = sizeDiffFactor * proximityFactor * ATTRACTION_FORCE_BASE;
+          const attractionForce = sizeDiffFactor * proximityFactor * ATTRACTION_FORCE_BASE * 2;
           if (sizeA < sizeB) {
             a.vx += nx * attractionForce;
             a.vy += ny * attractionForce;
@@ -563,7 +568,7 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
       } else {
         if (distSq < baseAvoidanceRadiusSq) {
           const normalizedDist = dist / baseAvoidanceRadius;
-          const force = Math.pow(1 - normalizedDist, 2) * MODERATE_REPULSION_FORCE;
+          const force = Math.pow(1 - normalizedDist, 2) * MODERATE_REPULSION_FORCE * 2;
           a.vx -= nx * force;
           a.vy -= ny * force;
           b.vx += nx * force;

@@ -113,6 +113,7 @@ const DEFAULT_OVERLAY = {
   groundYCenterOffset: 0.8,
   directionChangeThreshold: 0.3,
   resizeDebounceMs: 100,
+  networkFps: 30,
   flipDurationMs: 5000,
   fightDurationMs: 10000,
   commandCooldownMs: 5000,

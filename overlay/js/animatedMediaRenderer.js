@@ -25,15 +25,14 @@ export function createAnimatedMediaRenderer() {
 
   const mediaElements = new Map(); // spriteId -> { el, skinFile, type }
   const animatedSpriteIds = new Set();
-  let lastSkinCheckGeneration = -1; // Track when skins change
 
   // Element pools for reuse
   const imgPool = [];
   const videoPool = [];
 
-  // Cached sorted animated sprite list (rebuild only when animated sprites change)
+  // Cached sorted animated sprite list (rebuild only when membership changes)
   let cachedAnimatedSprites = [];
-  let cachedAnimatedSpriteCount = -1;
+  let cachedAnimatedIdSet = new Set();
 
   function acquireElement(type) {
     const pool = type === 'video' ? videoPool : imgPool;
@@ -44,8 +43,12 @@ export function createAnimatedMediaRenderer() {
   }
 
   function releaseElement(el, type) {
+    if (type === 'video' && typeof el.pause === 'function') {
+      try { el.pause(); } catch (e) { /* no-op */ }
+    }
     el.style.display = 'none';
     el.src = '';
+    el.remove();
     const pool = type === 'video' ? videoPool : imgPool;
     pool.push(el);
   }
@@ -54,34 +57,37 @@ export function createAnimatedMediaRenderer() {
     container,
     mediaElements,
     animatedSpriteIds,
-    _skinGeneration: 0,
 
     update(sprites, skins, W, H, GROUND_Y) {
-      // Build animated sprite list and determine z-order by size
-      this._skinGeneration++;
+      // Collect animated sprites in one pass, preserving Map order.
       animatedSpriteIds.clear();
-      let animatedCount = 0;
-
-      // Count animated sprites first to detect changes
+      const currentAnimated = [];
       for (const sprite of sprites.values()) {
         const skin = skins.get(sprite.skin);
         if (skin && (skin.isGif || skin.isWebm)) {
           animatedSpriteIds.add(sprite.id);
-          animatedCount++;
+          currentAnimated.push(sprite);
         }
       }
 
-      // Only rebuild and re-sort the list when animated sprite count changes
-      if (animatedCount !== cachedAnimatedSpriteCount) {
-        cachedAnimatedSprites.length = 0;
-        for (const sprite of sprites.values()) {
-          const skin = skins.get(sprite.skin);
-          if (skin && (skin.isGif || skin.isWebm)) {
-            cachedAnimatedSprites.push(sprite);
+      // Rebuild only when membership changed. The cached list is size-sorted,
+      // so comparing positions would force a rebuild every frame.
+      let membershipChanged = animatedSpriteIds.size !== cachedAnimatedIdSet.size;
+      if (!membershipChanged) {
+        for (const id of animatedSpriteIds) {
+          if (!cachedAnimatedIdSet.has(id)) {
+            membershipChanged = true;
+            break;
           }
         }
+      }
+      if (membershipChanged) {
+        cachedAnimatedSprites.length = 0;
+        for (let i = 0; i < currentAnimated.length; i++) {
+          cachedAnimatedSprites.push(currentAnimated[i]);
+        }
         cachedAnimatedSprites.sort((a, b) => b.size - a.size);
-        cachedAnimatedSpriteCount = animatedCount;
+        cachedAnimatedIdSet = new Set(animatedSpriteIds);
       }
 
       // Pre-compute coordinate scale factors once per frame
