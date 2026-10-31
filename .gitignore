@@ -124,9 +124,8 @@ captures/
 # Developer notes
 RELEASE.md
 
-# Desktop build output and root executable
+# Desktop build output
 release/
-/*.exe
 
 # Native desktop build output
 app/desktop/bin/
