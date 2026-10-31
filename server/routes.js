@@ -21,6 +21,9 @@ const { DEFAULT_OVERLAY } = require('./config');
 const storage = require('./storage/index');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
+const DATA_DIR = process.env.STREAM_SPRITES_DATA_DIR
+  ? path.resolve(process.env.STREAM_SPRITES_DATA_DIR)
+  : PROJECT_ROOT;
 const ASSETS_ROOT = process.env.STREAM_SPRITES_ASSETS_DIR
   ? path.resolve(process.env.STREAM_SPRITES_ASSETS_DIR)
   : path.join(PROJECT_ROOT, 'assets');
@@ -1119,10 +1122,10 @@ app.use((req, res, next) => {
         if (!connectionString || typeof connectionString !== 'string') {
           return res.status(400).json({ error: 'Connection string required for PostgreSQL' });
         }
-        result = await storage.switchToPostgres(connectionString, path.join(__dirname, '..'));
+        result = await storage.switchToPostgres(connectionString, DATA_DIR);
         if (!result.ok) return res.status(400).json(result);
       } else if (type === 'sqlite') {
-        result = await storage.switchToSqlite(path.join(__dirname, '..'));
+        result = await storage.switchToSqlite(DATA_DIR);
       } else {
         return res.status(400).json({ error: 'Invalid storage type. Use "sqlite" or "postgres".' });
       }
@@ -1151,7 +1154,7 @@ app.use((req, res, next) => {
     try {
       const SqliteDriver = require('./storage/sqlite-driver');
       const PostgresDriver = require('./storage/postgres-driver');
-      src = new SqliteDriver(path.join(__dirname, '..'));
+      src = new SqliteDriver(DATA_DIR);
       await src.init();
       dst = new PostgresDriver(connectionString);
       await dst.init();

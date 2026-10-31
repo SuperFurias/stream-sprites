@@ -5,6 +5,16 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-10-31
+
+### Fixed
+- Storage switching and SQLite→PostgreSQL migration now honor `STREAM_SPRITES_DATA_DIR` instead of always reading/writing the default `server/db` directory.
+
+### Added
+- **PostgreSQL driver test suite** (`npm run test:postgres`) covering users, skins, exclusions, config, assets, and stats. It skips locally unless `TEST_POSTGRES_URL` is set.
+- CI now runs the PostgreSQL suite against a `postgres:16-alpine` service job on Node 22.
+- Verified against a real PostgreSQL 16 container: direct driver operations, live storage switching, asset writes/reads, and migration to PostgreSQL.
+
 ## [2.6.3] - 2026-10-31
 
 ### Added
