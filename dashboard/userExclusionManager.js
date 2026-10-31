@@ -12,7 +12,7 @@ const _exRenderPagination = (window.dashboardUtils && window.dashboardUtils.rend
       const container = document.getElementById(containerId);
       if (!container) return;
       container.innerHTML = '';
-      const totalPages = Math.ceil(totalItems / pageSize);
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
       const prevBtn = document.createElement('button');
       prevBtn.textContent = '\u2190';
       prevBtn.setAttribute('aria-label', 'Previous page');
@@ -128,6 +128,18 @@ function renderExcludedTable() {
     tr.appendChild(actionsTd);
     tbody.appendChild(tr);
   });
+
+  if (pageData.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.textContent = filteredExcluded.length === 0 ? 'No excluded users.' : 'No matching excluded users.';
+    td.style.textAlign = 'center';
+    td.style.color = '#888';
+    td.style.padding = '24px';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
 
   _exRenderPagination('excludedPagination', filteredExcluded.length, excludedPageSize, excludedCurrentPage, (page) => {
     excludedCurrentPage = page;

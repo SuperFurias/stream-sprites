@@ -53,10 +53,11 @@ function renderPagination(containerId, totalItems, pageSize, currentPage, onPage
   if (!container) return;
   container.innerHTML = '';
 
-  const totalPages = Math.ceil(totalItems / pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   const prevBtn = document.createElement('button');
   prevBtn.textContent = '\u2190';
+  prevBtn.setAttribute('aria-label', 'Previous page');
   prevBtn.disabled = currentPage === 1;
   prevBtn.onclick = function() { onPageChange(Math.max(1, currentPage - 1)); };
   container.appendChild(prevBtn);
@@ -68,6 +69,7 @@ function renderPagination(containerId, totalItems, pageSize, currentPage, onPage
 
   const nextBtn = document.createElement('button');
   nextBtn.textContent = '\u2192';
+  nextBtn.setAttribute('aria-label', 'Next page');
   nextBtn.disabled = currentPage === totalPages;
   nextBtn.onclick = function() { onPageChange(Math.min(totalPages, currentPage + 1)); };
   container.appendChild(nextBtn);

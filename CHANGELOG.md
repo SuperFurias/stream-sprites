@@ -5,6 +5,13 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.6] - 2026-10-31
+
+### Fixed
+- **Footer credit** no longer floats over the Users, Settings, or chat panels; it sits below the page content.
+- **Empty user tables** now show “No users yet.” / “No excluded users.” instead of a blank body.
+- **Empty pagination** shows “Page 1 of 1” instead of “Page 1 of 0”.
+
 ## [2.3.5] - 2026-10-31
 
 ### Fixed
