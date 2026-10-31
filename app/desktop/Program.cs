@@ -522,7 +522,7 @@ namespace StreamSprites.Desktop
         private void Core_NewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
         {
             e.Handled = true;
-            if (IsAppUrl(e.Uri) || IsAuthHost(e.Uri)) return;
+            if (IsAuthHost(e.Uri)) return;
             OpenExternal(e.Uri);
         }
 

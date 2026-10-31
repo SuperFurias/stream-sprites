@@ -1,4 +1,4 @@
-<div class="panel">
+<div class="panel quick-actions-panel">
   <div class="panel-head panel-head-row">
     <div>
       <p class="section-kicker">Control deck</p>
@@ -60,7 +60,8 @@
       <iframe id="overlayPreview" class="overlay-frame" src="" frameborder="0" title="Live overlay preview"></iframe>
       <div class="preview-controls">
         <button type="button" onclick="refreshPreview()" class="preview-btn">Refresh</button>
-        <button type="button" onclick="openOverlayInNewTab()" class="preview-btn primary">Open in new tab</button>
+        <button type="button" onclick="copyOverlayUrl(this)" class="preview-btn">Copy URL</button>
+        <button type="button" onclick="openOverlayInBrowser()" class="preview-btn primary">Open in browser</button>
       </div>
     </div>
     <div class="chat-panel">

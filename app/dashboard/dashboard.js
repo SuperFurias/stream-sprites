@@ -53,8 +53,41 @@ function refreshPreview() {
   updateOverlayPreview();
 }
 
-function openOverlayInNewTab() {
+function openOverlayInBrowser() {
   window.open(getOverlayUrl(), '_blank');
+}
+
+async function copyOverlayUrl(button) {
+  const url = getOverlayUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    const helper = document.createElement('textarea');
+    helper.value = url;
+    helper.setAttribute('readonly', '');
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    document.body.appendChild(helper);
+    helper.select();
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch (err) {
+      copied = false;
+    }
+    helper.remove();
+    if (!copied) {
+      alert('Could not copy the overlay URL.');
+      return;
+    }
+  }
+
+  if (!button) return;
+  const label = button.textContent;
+  button.textContent = 'Copied';
+  setTimeout(() => {
+    if (button.isConnected) button.textContent = label;
+  }, 1500);
 }
 
 document.addEventListener('keydown', (event) => {

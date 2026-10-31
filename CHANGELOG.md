@@ -5,6 +5,22 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.3] - 2026-10-31
+
+### Changed
+- Compacted the Overview metrics and quick actions into low-profile stat rows and inline action chips, freeing space for the live preview.
+- The overlay preview now fills the available stage area, with the chat tester fixed to its right at every window size.
+- Added slightly more breathing room between cards, panels, and preview controls.
+- Refreshed the README screenshots with the compact layout and a five-user demo overlay.
+
+### Added
+- A **Copy URL** button for the overlay source URL.
+- Dashboard regression tests for preview controls, layout rules, and documentation screenshots.
+
+### Fixed
+- **Open in browser** now launches the overlay in the system default browser from the desktop app instead of doing nothing.
+- Cleaned up `.gitignore` for test output, environment variants, databases, editor files, and generated release artifacts.
+
 ## [2.8.2] - 2026-10-31
 
 ### Fixed

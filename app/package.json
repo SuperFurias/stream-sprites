@@ -1,7 +1,7 @@
 {
   "name": "stream-sprites",
   "productName": "Stream Sprites",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "description": "Twitch sprite overlay dashboard and desktop app",
   "author": "SuperFurias",
   "license": "Apache-2.0",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "desktop:build": "pwsh -NoProfile -ExecutionPolicy Bypass -File desktop/build.ps1",
-    "test": "node --test test/phase1.test.js test/physics.test.js test/storage.test.js test/password.test.js test/http.test.js test/websocket.test.js test/accounts.test.js",
+    "test": "node --test test/phase1.test.js test/physics.test.js test/storage.test.js test/password.test.js test/http.test.js test/websocket.test.js test/accounts.test.js test/dashboard-ui.test.js",
     "test:postgres": "node --test --test-concurrency=1 test/postgres.test.js test/postgres-startup.test.js",
     "soak": "node tools/soak.js"
   },
