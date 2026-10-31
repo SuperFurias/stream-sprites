@@ -65,6 +65,8 @@ export async function preloadSkins(skins) {
   dbg('Preloading', skins.size, 'skins...');
   const baseUrl = getServerBaseUrl();
   await Promise.all(Array.from(skins.values()).map(async s => {
+    // Already preloaded entries (for example after a skin refresh) are reused.
+    if (s.img && s.img.complete) return;
     // Skip preloading for WebM videos - they'll be loaded by video elements directly
     if (s.isWebm) {
       dbg('Skipping preload for WebM skin:', s.id);
@@ -73,17 +75,56 @@ export async function preloadSkins(skins) {
     }
     try {
       const img = new Image();
-      // Prepend server base URL for remote hosting (e.g. Cloudflare tunnel)
-      img.src = baseUrl + s.file;
-      await new Promise(r => { img.onload = r; img.onerror = r; });
-      s.img = img;
-      dbg('Preloaded skin:', s.id);
+      const loaded = await new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(ok);
+        };
+        const timer = setTimeout(() => finish(false), 5000);
+        img.onload = () => finish(true);
+        img.onerror = () => finish(false);
+        // Prepend server base URL for remote hosting (e.g. Cloudflare tunnel)
+        img.src = baseUrl + s.file;
+      });
+      s.img = loaded ? img : null;
+      dbg(loaded ? 'Preloaded skin:' : 'Failed to preload skin:', s.id);
     } catch (e) {
       dbg('Failed to preload skin:', s.id, e);
       s.img = null;
     }
   }));
   dbg('All skins preloaded');
+}
+
+// Reconcile the client skin map with the server after an upload/delete.
+export async function reloadSkins(skins) {
+  const baseUrl = getServerBaseUrl();
+  const res = await fetch(baseUrl + '/api/skins/auto');
+  if (!res.ok) return false;
+  const autoSkins = await res.json();
+  const incoming = new Set(autoSkins.map(s => s.id));
+
+  for (const id of Array.from(skins.keys())) {
+    if (!incoming.has(id)) skins.delete(id);
+  }
+
+  for (const s of autoSkins) {
+    const existing = skins.get(s.id);
+    const file = s.file || '';
+    const lowerFile = file.toLowerCase();
+    const isGif = s.isGif || lowerFile.endsWith('.gif');
+    const isWebm = s.isWebm || lowerFile.endsWith('.webm');
+    if (existing && existing.file === file && existing.isGif === isGif && existing.isWebm === isWebm) {
+      continue;
+    }
+    skins.set(s.id, { ...s, img: null, isGif, isWebm });
+  }
+
+  await preloadSkins(skins);
+  return true;
 }
 
 export function getSkin(skins, skinId) {

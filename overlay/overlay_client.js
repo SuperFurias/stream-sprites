@@ -2,8 +2,8 @@
 import { loadConfig, getConfigConstants, getServerBaseUrl } from './js/config.js';
 import { setupCanvas, resizeCanvas, initializeCanvasDisplay } from './js/canvas.js';
 import { setupInputHandlers } from './js/input.js';
-import { createSkinsMap, loadSkinsFromConfig, fetchAutoSkins, preloadSkins } from './js/skins.js';
-import { createUserSkinCache, fetchUserSkin, createGameLoop } from './js/core.js';
+import { createSkinsMap, loadSkinsFromConfig, fetchAutoSkins, preloadSkins, reloadSkins } from './js/skins.js';
+import { createUserSkinCache, createGameLoop } from './js/core.js';
 import { createSprite } from './js/sprite.js';
 import { createExplosionEffect, updateExplosionParticles } from './js/explosion.js';
 import { draw as render, updateSpriteCountDisplay, markSpritesDirty } from './js/renderer.js';
@@ -338,14 +338,15 @@ function applySpriteState(sprite, serverSprite) {
       if (data.type !== 'physicsState') dbg('WebSocket message received:', data.type || data);
       handleWebSocketMessage(data,
         (username, message, tags) => {
+          // Physics snapshots already carry the authoritative skin; no extra
+          // /api/user request is needed when someone chats.
           dbg('Chat message from:', username, ':', message);
-          if (!userSkinCache.has(username.toLowerCase())) {
-            fetchUserSkin(username, userSkinCache).then(() => {});
-          }
         },
         (cmd, data) => {
           dbg('Command received:', cmd);
-          if (cmd === 'clearSprites') {
+          if (cmd === 'reloadSkins') {
+            reloadSkins(skins).catch((e) => console.warn('[OVERLAY] Skin reload failed:', e));
+          } else if (cmd === 'clearSprites') {
             sprites.clear();
             markSpritesDirty();
             animatedMediaRenderer.clear();

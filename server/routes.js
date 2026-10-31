@@ -1107,6 +1107,7 @@ app.use((req, res, next) => {
       twitch.setDriver(_driver);
       twitch.invalidateSkinsCache();
       ws.invalidateOverlayConfigCache();
+      ws.broadcast({ type: 'cmd', cmd: 'reloadSkins' });
       invalidateEnvCache();
       invalidateStatsCache();
       res.json(result);
@@ -1210,6 +1211,7 @@ app.use((req, res, next) => {
         fs.writeFileSync(localPath, req.file.buffer);
       }
       twitch.invalidateSkinsCache();
+      ws.broadcast({ type: 'cmd', cmd: 'reloadSkins' });
       res.json({ ok: true, filename, folder });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -1270,6 +1272,7 @@ app.use((req, res, next) => {
       }
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       twitch.invalidateSkinsCache();
+      ws.broadcast({ type: 'cmd', cmd: 'reloadSkins' });
       res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: e.message });

@@ -103,6 +103,7 @@ export function setupWebSocket(WS_URL, onMessage, onOpen) {
 
 // Command dispatch map (replaces if-else chain)
 const COMMAND_HANDLERS = {
+  reloadSkins: (onCommand, data) => onCommand('reloadSkins', data),
   clearSprites: (onCommand, data) => onCommand('clearSprites', data),
   refresh: (onCommand, data) => {
     const delay = Math.random() * 1000;

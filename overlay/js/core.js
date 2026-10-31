@@ -8,14 +8,23 @@ import { DT_CAP } from './config.js';
 
 export function createGameLoop(drawFn, updatePhysicsFn, updateExplosionParticlesFn, dtCap = DT_CAP) {
   let last = Date.now();
+  let lastErrorAt = 0;
   const maxDt = Number.isFinite(dtCap) && dtCap > 0 ? dtCap : DT_CAP;
 
   function loop() {
     const now = Date.now();
     const dt = Math.min(maxDt, (now - last) / 1000);
-    updatePhysicsFn(dt);
-    drawFn();
-    updateExplosionParticlesFn(dt);
+    try {
+      updatePhysicsFn(dt);
+      drawFn();
+      updateExplosionParticlesFn(dt);
+    } catch (e) {
+      // One bad frame must not permanently stop the overlay.
+      if (now - lastErrorAt > 5000) {
+        console.error('[Overlay] Frame error:', e);
+        lastErrorAt = now;
+      }
+    }
     last = now;
     requestAnimationFrame(loop);
   }

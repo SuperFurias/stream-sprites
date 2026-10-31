@@ -1,6 +1,6 @@
 {
   "name": "stream-sprites",
-  "version": "2.3.6",
+  "version": "2.3.7",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

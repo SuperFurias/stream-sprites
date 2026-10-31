@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.7] - 2026-10-31
+
+### Fixed
+- **Live skin refresh**: uploading or deleting a skin now tells connected overlays to reconcile their skin list; no reload required.
+- **Overlay network waste**: chat messages no longer trigger a redundant `/api/user/*` request because physics snapshots carry the authoritative skin.
+- **Skin preload failures** time out after 5 seconds and broken images fall back to the drawn placeholder instead of stalling or rendering a broken image.
+- **Overlay loop resilience**: a single frame exception is logged and the animation loop continues.
+
+### Added
+- Server broadcasts `reloadSkins` after asset upload/delete and storage switches; overlays add, update, and remove skins in place.
+
 ## [2.3.6] - 2026-10-31
 
 ### Fixed
