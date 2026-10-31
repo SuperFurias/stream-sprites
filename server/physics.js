@@ -588,7 +588,7 @@ function applyAvoidance(arr, grid, W, H, GROUND_Y, zoneCounts, zoneWidth, avgDen
 
 // ── Lifetime Management ──────────────────────────────────────────────────
 
-function manageLifetime(spriteMap, spriteArray, SPRITE_LIFETIME_MS, FADE_WARNING_MS, now) {
+function manageLifetime(spriteMap, spriteArray, SPRITE_LIFETIME_MS, FADE_WARNING_MS, now, onRemove) {
   for (const sprite of spriteArray) {
     const age = now - sprite.lastActivity;
     if (age > SPRITE_LIFETIME_MS) {
@@ -603,11 +603,18 @@ function manageLifetime(spriteMap, spriteArray, SPRITE_LIFETIME_MS, FADE_WARNING
     }
   }
 
+  const removed = [];
   for (const [id, sprite] of spriteMap) {
     if (sprite.markedForRemoval && sprite.opacity <= 0) {
       spriteMap.delete(id);
+      removed.push(sprite);
     }
   }
+
+  if (onRemove) {
+    for (const sprite of removed) onRemove(sprite);
+  }
+  return removed;
 }
 
 // ── Explosion Physics ─────────────────────────────────────────────────────

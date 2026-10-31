@@ -9,6 +9,8 @@ server/db/
 
 # Storage config (contains connection strings)
 server/storage.json
+server/storage.json.bak
+server/storage-config.json
 
 # Logs
 logs/
@@ -56,6 +58,7 @@ coverage/
 # Temp files
 tmp/
 temp/
+Temp/
 *.tmp
 
 # Cache

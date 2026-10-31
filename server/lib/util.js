@@ -1,9 +1,17 @@
+// Keys that can alter an object's prototype chain when copied from untrusted JSON
+const BLOCKED_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key) {
+  return typeof key === 'string' && !BLOCKED_OBJECT_KEYS.has(key);
+}
+
 // Deep merge utility — creates independent copies of nested objects/arrays
 function deepMerge(target, source) {
   if (!isObject(target)) return isObject(source) ? deepClone(source) : source;
   if (!isObject(source)) return source;
   const output = deepClone(target);
   for (const key of Object.keys(source)) {
+    if (!isSafeObjectKey(key)) continue;
     if (isObject(source[key])) {
       output[key] = isObject(output[key]) ? deepMerge(output[key], source[key]) : deepClone(source[key]);
     } else if (Array.isArray(source[key])) {
@@ -24,9 +32,23 @@ function deepClone(obj) {
   if (Array.isArray(obj)) return obj.map(deepClone);
   const clone = {};
   for (const key of Object.keys(obj)) {
+    if (!isSafeObjectKey(key)) continue;
     clone[key] = deepClone(obj[key]);
   }
   return clone;
+}
+
+// Remove fields that are generated at runtime and must never be persisted
+function stripRuntimeConfigKeys(cfg) {
+  if (!isObject(cfg)) return cfg;
+  let changed = false;
+  for (const key of ['defaultOverlay', 'hasOAuthToken', 'isLocalhost', 'skins']) {
+    if (Object.prototype.hasOwnProperty.call(cfg, key)) {
+      delete cfg[key];
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 // Input validation utilities
@@ -53,10 +75,11 @@ function validateRequired(body, ...fields) {
 
 // Shared permission check for Twitch chat commands
 function hasModPermission(tags, username, cfg) {
-  const isBroadcaster = tags?.badges?.broadcaster || username.toLowerCase() === (cfg.channel || '').toLowerCase();
-  const isBot = username === cfg.botUsername;
+  const normalizedUser = String(username || '').toLowerCase();
+  const isBroadcaster = tags?.badges?.broadcaster || normalizedUser === (cfg.channel || '').toLowerCase();
+  const isBot = normalizedUser === String(cfg.botUsername || '').toLowerCase();
   const isMod = tags?.mod === '1' || tags?.mod === 1 || tags?.badges?.moderator || tags?.badges?.global_mod || tags?.badges?.admin;
-  return isBroadcaster || isBot || isMod;
+  return !!(isBroadcaster || isBot || isMod);
 }
 
 // Lightweight rate limiter for API protection (no external dependency)
@@ -89,6 +112,8 @@ module.exports = {
   deepMerge,
   isObject,
   deepClone,
+  isSafeObjectKey,
+  stripRuntimeConfigKeys,
   isValidUsername,
   isValidSkinId,
   validateRequired,

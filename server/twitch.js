@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { FilteredLogger } = require('./lib/logger');
 const { hasModPermission } = require('./lib/util');
-const storage = require('./storage');
+const { sanitizeConfigForDisk } = require('./lib/config-safety');
+const storage = require('./storage/index');
 const ws = require('./websocket');
 const physics = require('./physics');
 
@@ -18,11 +19,51 @@ let tokenRefreshIntervalId = null;
 // Skin detection
 let skinsCache = null;
 let skinsCacheTime = 0;
+let skinsAsyncCache = null;
+let skinsAsyncCacheTime = 0;
 const SKINS_CACHE_TTL_MS = 60000;
+const SKIN_EXTENSIONS = ['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'];
 
 function invalidateSkinsCache() {
   skinsCache = null;
   skinsCacheTime = 0;
+  skinsAsyncCache = null;
+  skinsAsyncCacheTime = 0;
+}
+
+function buildSkinEntry(filename, fileUrl) {
+  const ext = path.extname(filename).toLowerCase();
+  if (!SKIN_EXTENSIONS.includes(ext)) return null;
+  const name = path.basename(filename, ext);
+  const id = name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  if (!id) return null;
+  return {
+    id,
+    name,
+    file: fileUrl,
+    price: 0,
+    autoDetected: true,
+    isGif: ext === '.gif',
+    isWebm: ext === '.webm'
+  };
+}
+
+function detectLocalSkins() {
+  const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
+  const detected = [];
+  try {
+    _dbg('Scanning skins directory:', skinsDir);
+    if (fs.existsSync(skinsDir)) {
+      const files = fs.readdirSync(skinsDir);
+      for (const file of files) {
+        const entry = buildSkinEntry(file, `/assets/skins/${encodeURIComponent(file)}`);
+        if (entry) detected.push(entry);
+      }
+    }
+  } catch (e) {
+    console.error('Error detecting skins:', e.message);
+  }
+  return detected;
 }
 
 function detectSkinsFromAssets() {
@@ -31,37 +72,39 @@ function detectSkinsFromAssets() {
     return skinsCache;
   }
 
-  const skinsDir = path.join(__dirname, '..', 'assets', 'skins');
-  const detected = [];
-  try {
-    _dbg('Scanning skins directory:', skinsDir);
-    if (fs.existsSync(skinsDir)) {
-      const files = fs.readdirSync(skinsDir);
-      files.forEach(file => {
-        const ext = path.extname(file).toLowerCase();
-        if (['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'].includes(ext)) {
-          const id = path.basename(file, ext).toLowerCase().replace(/[^a-z0-9_]/g, '_');
-          const isGif = ['.gif'].includes(ext);
-          const isWebm = ['.webm'].includes(ext);
-          detected.push({
-            id,
-            name: path.basename(file, ext),
-            file: `../assets/skins/${file}`,
-            price: 0,
-            autoDetected: true,
-            isGif,
-            isWebm
-          });
-        }
-      });
-    }
-  } catch (e) {
-    console.error('Error detecting skins:', e.message);
+  skinsCache = detectLocalSkins();
+  skinsCacheTime = now;
+  return skinsCache;
+}
+
+// Includes skins stored in PostgreSQL so cloud-backed deployments expose them too.
+async function detectSkinsFromAssetsAsync() {
+  const now = Date.now();
+  if (skinsAsyncCache && (now - skinsAsyncCacheTime) < SKINS_CACHE_TTL_MS) {
+    return skinsAsyncCache;
   }
 
-  skinsCache = detected;
-  skinsCacheTime = now;
-  return detected;
+  const byId = new Map();
+  for (const skin of detectLocalSkins()) byId.set(skin.id, skin);
+
+  const driver = storage.getDriver();
+  if (driver && driver.getType() === 'postgres') {
+    try {
+      const assets = await driver.listAssets();
+      for (const assetPath of assets) {
+        if (!assetPath.startsWith('skins/')) continue;
+        const filename = assetPath.slice('skins/'.length);
+        const entry = buildSkinEntry(filename, `/api/assets/skins/${encodeURIComponent(filename)}`);
+        if (entry) byId.set(entry.id, entry);
+      }
+    } catch (e) {
+      console.error('Error listing database skins:', e.message);
+    }
+  }
+
+  skinsAsyncCache = Array.from(byId.values());
+  skinsAsyncCacheTime = now;
+  return skinsAsyncCache;
 }
 
 // Watch skins directory for changes
@@ -85,6 +128,7 @@ const getNameLengthLimit = () => (_cfg.overlay && _cfg.overlay.nameLengthLimit) 
 
 // Command handlers
 function handleJump(username, userId, args, tags, now, ctx) {
+  const ov = ws.getOverlayConfig();
   // Mods/broadcasters can target another sprite: !jump spritename
   let targetId = userId;
   if (args[0] && hasModPermission(tags, username, _cfg)) {
@@ -95,7 +139,7 @@ function handleJump(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(targetId)) {
     const sprite = ws.serverSprites.get(targetId);
     sprite.lastActivity = now;
-    sprite.vy = physics.JUMP_VELOCITY;
+    sprite.vy = ov.JUMP_VELOCITY;
     sprite.state = 'idle';
     ctx.stateChanged = true;
     return null;
@@ -104,6 +148,7 @@ function handleJump(username, userId, args, tags, now, ctx) {
 }
 
 function handleSit(username, userId, args, tags, now, ctx) {
+  const ov = ws.getOverlayConfig();
   let targetId = userId;
   if (args[0] && hasModPermission(tags, username, _cfg)) {
     const targetArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
@@ -113,7 +158,7 @@ function handleSit(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(targetId)) {
     const sprite = ws.serverSprites.get(targetId);
     sprite.state = 'sit';
-    sprite.heightScale = 0.75;
+    sprite.heightScale = ov.HEIGHT_SCALE_SIT;
     sprite.lastActivity = now;
     ctx.stateChanged = true;
     return null;
@@ -122,6 +167,7 @@ function handleSit(username, userId, args, tags, now, ctx) {
 }
 
 function handleUnsit(username, userId, args, tags, now, ctx) {
+  const ov = ws.getOverlayConfig();
   let targetId = userId;
   if (args[0] && hasModPermission(tags, username, _cfg)) {
     const targetArg = args[0].toLowerCase().replace(/^@/, '').replace(/[^\p{L}\p{N}_]/gu, '_');
@@ -131,7 +177,7 @@ function handleUnsit(username, userId, args, tags, now, ctx) {
   if (ws.serverSprites.has(targetId)) {
     const sprite = ws.serverSprites.get(targetId);
     sprite.state = 'idle';
-    sprite.heightScale = 1.0;
+    sprite.heightScale = ov.HEIGHT_SCALE_IDLE;
     sprite.lastActivity = now;
     ctx.stateChanged = true;
     return null;
@@ -142,26 +188,26 @@ function handleUnsit(username, userId, args, tags, now, ctx) {
 function handleBoom() {
   _dbg('Boom command - applying explosion on server sprites');
   const ov = ws.getOverlayConfig();
-  const epicenterX = Math.random() * (ov.W - (ov.EXPLOSION_RADIUS_BASE || 400)) + ((ov.EXPLOSION_RADIUS_BASE || 400) / 2);
-  const explosionRadius = (ov.EXPLOSION_RADIUS_BASE || 400) + Math.random() * (ov.EXPLOSION_RADIUS_VAR || 300);
+  const radiusBase = ov.EXPLOSION_RADIUS_BASE ?? 400;
+  const epicenterX = Math.random() * (ov.W - radiusBase) + (radiusBase / 2);
+  const explosionRadius = radiusBase + Math.random() * (ov.EXPLOSION_RADIUS_VAR ?? 300);
   const spriteArray = Array.from(ws.serverSprites.values());
-  const { applyExplosionPhysics } = require('./physics');
-  applyExplosionPhysics(spriteArray, epicenterX, ov.GROUND_Y, explosionRadius,
-    ov.EXPLOSION_FORCE_MULTIPLIER || 60, ov.EXPLOSION_UPWARD_BIAS || 0.7,
-    ov.SPIN_STRENGTH_FACTOR || 0.05, ov.RANDOM_JITTER_FACTOR || 0.2,
-    ov.COLLISION_PERSONAL_SPACE_THRESHOLD || 0.1);
+  physics.applyExplosionPhysics(spriteArray, epicenterX, ov.GROUND_Y, explosionRadius,
+    ov.EXPLOSION_FORCE_MULTIPLIER ?? 60, ov.EXPLOSION_UPWARD_BIAS ?? 0.7,
+    ov.SPIN_STRENGTH_FACTOR ?? 0.05, ov.RANDOM_JITTER_FACTOR ?? 0.2,
+    ov.COLLISION_PERSONAL_SPACE_THRESHOLD ?? 0.1);
   // Also broadcast for explosion visual effect on clients
   ws.broadcast({ type: 'cmd', cmd: 'boom', x: epicenterX, y: ov.GROUND_Y, radius: explosionRadius });
   return null;
 }
 
-function handleSkin(username, userId, args, tags, now, ctx) {
+async function handleSkin(username, userId, args, tags, now, ctx) {
   if (!args[0]) return 'Usage: !skin <skinname>';
-  const allSkins = detectSkinsFromAssets();
+  const allSkins = await detectSkinsFromAssetsAsync();
   const validSkin = allSkins.find(s => s.id === args[0]);
   if (!validSkin) return `Invalid skin: ${args[0]}`;
   try {
-    _driver.assignSkin(userId, args[0]);
+    await _driver.assignSkin(userId, args[0]);
     if (ws.serverSprites.has(userId)) {
       const sprite = ws.serverSprites.get(userId);
       sprite.skin = args[0];
@@ -174,18 +220,18 @@ function handleSkin(username, userId, args, tags, now, ctx) {
   }
 }
 
-function handleSkins() {
-  const skinList = detectSkinsFromAssets().map(s => s.id).sort();
+async function handleSkins() {
+  const skinList = (await detectSkinsFromAssetsAsync()).map(s => s.id).sort();
   return `Available skins: ${skinList.join(', ')}`;
 }
 
-function handleSpawn(username, userId, args, tags, now, ctx) {
+async function handleSpawn(username, userId, args, tags, now, ctx) {
   if (!hasModPermission(tags, username, _cfg)) return 'Only broadcaster/mods can use !spawn';
   const ov = ws.getOverlayConfig();
   let quantity = 1;
   let targetSkin = 'default';
   let targetName = '';
-  const allSkinIds = detectSkinsFromAssets().map(s => s.id);
+  const allSkinIds = (await detectSkinsFromAssetsAsync()).map(s => s.id);
 
   for (const arg of args) {
     if (/^\d+$/.test(arg)) {
@@ -221,12 +267,13 @@ function handleFlip(username, userId, args, tags, now, ctx) {
   const ov = ws.getOverlayConfig();
   const sprite = ws.serverSprites.get(targetUser);
   if (sprite) {
-    sprite.flipUntil = now + (ov.flipDurationMs || 5000);
-    sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+    sprite.flipUntil = now + (ov.flipDurationMs ?? 5000);
+    sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * ov.FLIP_ANGULAR_VELOCITY;
     sprite.lastTiltTime = null;
+    ctx.stateChanged = true;
+    return null;
   }
-  ctx.stateChanged = true;
-  return null;
+  return targetUser === userId ? 'You need to appear first!' : `Sprite '${targetUser}' not found.`;
 }
 
 function handleFight(username, userId, args, tags, now, ctx) {
@@ -237,10 +284,13 @@ function handleFight(username, userId, args, tags, now, ctx) {
   if (targetId === userId) return 'You cannot fight yourself.';
   if (!ws.serverSprites.has(userId)) return 'You need a sprite to fight. Use !spawn to create one.';
 
-  const commandUserWins = Math.random() < 0.5;
+  const ov = ws.getOverlayConfig();
+  const winChance = Number.isFinite(ov.FIGHT_COIN_FLIP_PROBABILITY)
+    ? Math.min(1, Math.max(0, ov.FIGHT_COIN_FLIP_PROBABILITY))
+    : 0.5;
+  const commandUserWins = Math.random() < winChance;
   const winner = commandUserWins ? userId : targetId;
   const loser = commandUserWins ? targetId : userId;
-  const ov = ws.getOverlayConfig();
 
   const winnerSprite = ws.serverSprites.get(winner);
   const loserSprite = ws.serverSprites.get(loser);
@@ -252,9 +302,12 @@ function handleFight(username, userId, args, tags, now, ctx) {
     winnerSprite.roamTargetX = loserSprite.x;
     winnerSprite.roamTargetY = ov.GROUND_Y - 50;
     winnerSprite.roamSpeed = 1.0 + Math.random() * 0.5;
+    const fightUntil = now + (ov.fightDurationMs || 10000);
     winnerSprite.roamTimer = ov.fightDurationMs || 10000;
     winnerSprite.isFighting = true;
     winnerSprite._fightTarget = loser;
+    winnerSprite._fightLoser = false;
+    winnerSprite._fightUntil = fightUntil;
 
     loserSprite.roamTargetX = winnerSprite.x;
     loserSprite.roamTargetY = ov.GROUND_Y - 50;
@@ -262,6 +315,8 @@ function handleFight(username, userId, args, tags, now, ctx) {
     loserSprite.roamTimer = ov.fightDurationMs || 10000;
     loserSprite.isFighting = true;
     loserSprite._fightTarget = winner;
+    loserSprite._fightLoser = true;
+    loserSprite._fightUntil = fightUntil;
   }
 
   ctx.stateChanged = true;
@@ -282,7 +337,7 @@ const commandRegistry = {
 };
 
 // Server-side command processing
-function processServerCommand(username, text, tags) {
+async function processServerCommand(username, text, tags) {
   const cmd = text.trim().split(' ')[0].toLowerCase();
   const args = text.trim().split(' ').slice(1);
   const userId = username.toLowerCase();
@@ -313,7 +368,7 @@ function processServerCommand(username, text, tags) {
   if (!handler) return { result: null, stateChanged: false };
 
   const ctx = { stateChanged: false };
-  const response = handler(username, userId, args, tags, now, ctx);
+  const response = await handler(username, userId, args, tags, now, ctx);
   return { result: response, stateChanged: ctx.stateChanged };
 }
 
@@ -349,7 +404,7 @@ async function tryAutoRefreshToken() {
 
     _cfg.twitch.refreshToken = refresh_token;
     try {
-      await _driver.saveConfig(_cfgPath, _cfg);
+      await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(_cfg));
       _dbg('Refresh token updated');
     } catch (e) {
       _dbg('Failed to save refreshed token to config:', e.message);
@@ -358,12 +413,17 @@ async function tryAutoRefreshToken() {
     console.log('✓ OAuth token refreshed automatically');
     return true;
   } catch (e) {
-    _dbg('Auto-refresh failed:', e.message);
-    _cfg.twitch.refreshToken = '';
-    try {
-      await _driver.saveConfig(_cfgPath, _cfg);
-    } catch (writeErr) {
-      _dbg('Failed to clear invalid refresh token:', writeErr.message);
+    const responseMessage = e.response?.data?.message || '';
+    const invalidGrant = e.response?.status === 400 && /invalid|expired|revoked/i.test(responseMessage);
+    _dbg('Auto-refresh failed:', e.message, invalidGrant ? '(refresh token invalid)' : '(transient error)');
+
+    if (invalidGrant) {
+      _cfg.twitch.refreshToken = '';
+      try {
+        await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(_cfg));
+      } catch (writeErr) {
+        _dbg('Failed to clear invalid refresh token:', writeErr.message);
+      }
     }
     return false;
   }
@@ -422,7 +482,7 @@ async function connectTwitchBot() {
 
       await _driver.upsertUser(username.toLowerCase(), displayName);
 
-      ws.updateServerSprite(username, tags);
+      await ws.updateServerSprite(username, tags);
 
       const text = message.trim();
       const isCommand = text.startsWith('!');
@@ -431,7 +491,7 @@ async function connectTwitchBot() {
 
       if (isCommand) {
         _dbg('Processing command on server:', text);
-        commandResult = processServerCommand(username, text, tags);
+        commandResult = await processServerCommand(username, text, tags);
         if (commandResult) {
           stateChanged = commandResult.stateChanged;
           if (commandResult.result) {
@@ -512,7 +572,7 @@ async function connectTwitchBot() {
 
         _cfg.twitch.refreshToken = refresh_token;
         try {
-          await _driver.saveConfig(_cfgPath, _cfg);
+          await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(_cfg));
           _dbg('Refresh token updated');
         } catch (e) {
           _dbg('Failed to save refresh token:', e.message);
@@ -628,8 +688,15 @@ function initTwitch(cfg, cfgPath, dbg, driver) {
   watchSkinsDir();
 }
 
+// Keep the driver reference in sync after the storage backend changes.
+function setDriver(driver) {
+  _driver = driver;
+  invalidateSkinsCache();
+}
+
 module.exports = {
   initTwitch,
+  setDriver,
   connectTwitchBot,
   handleStartupTwitchConnection,
   getTwitchClient,
@@ -637,6 +704,7 @@ module.exports = {
   getBotTokenInfo: () => botTokenInfo,
   setBotTokenInfo: (v) => { botTokenInfo = v; },
   detectSkinsFromAssets,
+  detectSkinsFromAssetsAsync,
   invalidateSkinsCache,
   processServerCommand,
   cleanup

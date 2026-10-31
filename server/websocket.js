@@ -60,6 +60,11 @@ function getOverlayConfig() {
       EXPLOSION_UPWARD_BIAS: ov.explosionUpwardBias ?? d.explosionUpwardBias,
       SPIN_STRENGTH_FACTOR: ov.spinStrengthFactor ?? d.spinStrengthFactor,
       RANDOM_JITTER_FACTOR: ov.randomJitterFactor ?? d.randomJitterFactor,
+      JUMP_VELOCITY: ov.jumpVelocity ?? d.jumpVelocity,
+      FLIP_ANGULAR_VELOCITY: ov.flipAngularVelocity ?? d.flipAngularVelocity,
+      HEIGHT_SCALE_SIT: ov.heightScaleSit ?? d.heightScaleSit,
+      HEIGHT_SCALE_IDLE: ov.heightScaleIdle ?? d.heightScaleIdle,
+      FIGHT_COIN_FLIP_PROBABILITY: ov.fightCoinFlipProbability ?? d.fightCoinFlipProbability,
       flipDurationMs: ov.flipDurationMs ?? d.flipDurationMs,
       fightDurationMs: ov.fightDurationMs ?? d.fightDurationMs
     };
@@ -73,12 +78,15 @@ function invalidateOverlayConfigCache() {
 }
 
 function broadcast(obj) {
+  if (!_wss) return;
   const s = JSON.stringify(obj);
   _wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
 // Broadcast full physics state to all clients
 function broadcastPhysicsState() {
+  if (!_wss || _wss.clients.size === 0) return;
+
   const sprites = [];
   for (const sprite of serverSprites.values()) {
     sprites.push(physics.serializeSpritePhysics(sprite));
@@ -109,11 +117,35 @@ function sendFullStateToClient(ws) {
   }));
 }
 
+// Remove the oldest sprite so a new one can be created within the configured limit.
+function evictOldestSprite() {
+  let oldestId = null;
+  let oldestTime = Infinity;
+  for (const [id, s] of serverSprites) {
+    if (s.createdAt < oldestTime) {
+      oldestTime = s.createdAt;
+      oldestId = id;
+    }
+  }
+  if (!oldestId) return false;
+
+  const evicted = serverSprites.get(oldestId);
+  if (evicted?.loginUsername && _loginUsernameIndex) {
+    _loginUsernameIndex.delete(evicted.loginUsername);
+  }
+  draggedSprites.delete(oldestId);
+  dragOwners.delete(oldestId);
+  serverSprites.delete(oldestId);
+  return true;
+}
+
 // Clear all server-side sprites
 function clearServerSprites() {
   serverSprites.clear();
   serverSpawnTimes.clear();
   spriteSnapshot.clear();
+  draggedSprites.clear();
+  dragOwners.clear();
   if (_loginUsernameIndex) _loginUsernameIndex.clear();
   spriteDirty = true;
   markServerSpriteArrayDirty();
@@ -134,19 +166,7 @@ function spawnServerSprite(name, skinId, now, stateChangedRef) {
 
   // Evict oldest if at limit
   if (serverSprites.size >= ov.MAX_SPRITES) {
-    let oldestId = null;
-    let oldestTime = Infinity;
-    for (const [id, s] of serverSprites) {
-      if (s.createdAt < oldestTime) {
-        oldestTime = s.createdAt;
-        oldestId = id;
-      }
-    }
-    if (oldestId) {
-      const evicted = serverSprites.get(oldestId);
-      if (evicted?.loginUsername) _loginUsernameIndex.delete(evicted.loginUsername);
-      serverSprites.delete(oldestId);
-    }
+    evictOldestSprite();
   }
 
   if (serverSprites.size >= MAX_SERVER_SPRITES_HARD_LIMIT) {
@@ -166,9 +186,9 @@ function spawnServerSprite(name, skinId, now, stateChangedRef) {
 }
 
 // Update server-side sprite state (called when user sends chat message)
-function updateServerSprite(username, tags) {
+async function updateServerSprite(username, tags) {
   const userId = username.toLowerCase();
-  const skin = getUserSkinFromDB(userId);
+  const skin = await getUserSkinFromDB(userId);
   const loginUsername = tags && tags['username'] ? tags['username'].toLowerCase() : null;
   const now = Date.now();
   const ov = getOverlayConfig();
@@ -178,10 +198,22 @@ function updateServerSprite(username, tags) {
     sprite.lastActivity = now;
     if (sprite.skin !== skin) sprite.skin = skin;
     if (loginUsername !== null) {
+      if (sprite.loginUsername && sprite.loginUsername !== loginUsername && _loginUsernameIndex) {
+        _loginUsernameIndex.delete(sprite.loginUsername);
+      }
       sprite.loginUsername = loginUsername;
       _loginUsernameIndex.set(loginUsername, userId);
     }
   } else {
+    // Apply the same configured limit to sprites created by chat activity.
+    if (serverSprites.size >= ov.MAX_SPRITES) {
+      evictOldestSprite();
+    }
+    if (serverSprites.size >= MAX_SERVER_SPRITES_HARD_LIMIT) {
+      _dbg('Hard limit reached, cannot spawn more sprites');
+      return null;
+    }
+
     // Create new sprite with full physics
     const newSprite = physics.createServerSprite(username, ov.W, ov.GROUND_Y, ov.SPRITE_SIZE_MIN, ov.SPRITE_SIZE_MAX);
     newSprite.skin = skin;
@@ -195,6 +227,7 @@ function updateServerSprite(username, tags) {
   }
 
   spriteDirty = true;
+  return serverSprites.get(userId);
 }
 
 // Resolve a username to the actual sprite ID (O(1) lookup)
@@ -265,42 +298,74 @@ function startGameLoop() {
             ov.BOUNCE_DAMPING, ov.MIN_VELOCITY);
         }
 
-        physics.manageLifetime(serverSprites, spriteArray, ov.SPRITE_LIFETIME_MS, ov.FADE_WARNING_MS, now);
+        physics.manageLifetime(serverSprites, spriteArray, ov.SPRITE_LIFETIME_MS, ov.FADE_WARNING_MS, now, (removed) => {
+          if (removed.loginUsername && _loginUsernameIndex) {
+            _loginUsernameIndex.delete(removed.loginUsername);
+          }
+          draggedSprites.delete(removed.id);
+          dragOwners.delete(removed.id);
+          spriteDirty = true;
+          markServerSpriteArrayDirty();
+        });
 
         // Check fight collisions
         for (const sprite of spriteArray) {
-          if (sprite._fightTarget) {
-            const target = serverSprites.get(sprite._fightTarget);
-            if (target) {
-              const dx = sprite.x - target.x;
-              const dy = sprite.y - target.y;
-              const distSq = dx * dx + dy * dy;
-              const collisionDist = (sprite.collisionRadius || sprite.size / 2) + (target.collisionRadius || target.size / 2);
-              if (distSq < collisionDist * collisionDist) {
-                const loser = sprite.id < target._fightTarget ? target : sprite;
-                const winner = sprite.id < target._fightTarget ? sprite : target;
-                loser.flipUntil = now + (ov.fightDurationMs || 10000);
-                loser.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * physics.FLIP_ANGULAR_VELOCITY;
-                loser.lastTiltTime = null;
-                loser.vx = 0;
-                loser.vy = 0;
-                loser.isExhausted = true;
-                loser.isFighting = false;
-                delete loser._fightTarget;
+          if (!sprite._fightTarget) continue;
+          if (!serverSprites.has(sprite.id)) continue;
 
-                winner.vx += (Math.random() - 0.5) * 8;
-                winner.vy -= 4;
-                winner.isFighting = false;
-                delete winner._fightTarget;
-
-                const midX = (sprite.x + target.x) / 2;
-                broadcast({ type: 'cmd', cmd: 'boom', x: midX, y: ov.GROUND_Y, radius: 200 + Math.random() * 100 });
-              }
-            } else {
-              sprite.isFighting = false;
-              delete sprite._fightTarget;
-            }
+          // Abandon fights that never connected before their deadline.
+          if (sprite._fightUntil && now > sprite._fightUntil) {
+            sprite.isFighting = false;
+            delete sprite._fightTarget;
+            delete sprite._fightLoser;
+            delete sprite._fightUntil;
+            continue;
           }
+
+          const target = serverSprites.get(sprite._fightTarget);
+          if (!target || target._fightTarget !== sprite.id) {
+            sprite.isFighting = false;
+            delete sprite._fightTarget;
+            delete sprite._fightLoser;
+            delete sprite._fightUntil;
+            continue;
+          }
+
+          // Handle each pair exactly once, regardless of which sprite is visited first.
+          if (sprite.id > target.id) continue;
+
+          const dx = sprite.x - target.x;
+          const dy = sprite.y - target.y;
+          const distSq = dx * dx + dy * dy;
+          const collisionDist = (sprite.collisionRadius || sprite.size / 2) + (target.collisionRadius || target.size / 2);
+          if (distSq >= collisionDist * collisionDist) continue;
+
+          // The command that started the fight already chose the loser. Fall back
+          // to a fair coin flip only if that information is unavailable.
+          let loser = sprite._fightLoser ? sprite : (target._fightLoser ? target : null);
+          if (!loser) loser = Math.random() < 0.5 ? sprite : target;
+          const winner = loser === sprite ? target : sprite;
+
+          loser.flipUntil = now + (ov.fightDurationMs || 10000);
+          loser.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * (ov.FLIP_ANGULAR_VELOCITY || physics.FLIP_ANGULAR_VELOCITY);
+          loser.lastTiltTime = null;
+          loser.vx = 0;
+          loser.vy = 0;
+          loser.isExhausted = true;
+          loser.isFighting = false;
+          delete loser._fightTarget;
+          delete loser._fightLoser;
+          delete loser._fightUntil;
+
+          winner.vx += (Math.random() - 0.5) * 8;
+          winner.vy -= 4;
+          winner.isFighting = false;
+          delete winner._fightTarget;
+          delete winner._fightLoser;
+          delete winner._fightUntil;
+
+          const midX = (sprite.x + target.x) / 2;
+          broadcast({ type: 'cmd', cmd: 'boom', x: midX, y: ov.GROUND_Y, radius: 200 + Math.random() * 100 });
         }
       }
 
@@ -327,21 +392,19 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
   _loginUsernameIndex = loginUsernameIndex;
   serverStartTime = Date.now();
 
-  _wss = new WebSocket.Server({ server });
+  _wss = new WebSocket.Server({ server, maxPayload: 64 * 1024 });
 
   _wss.on('connection', (ws) => {
     dbg('WebSocket client connected');
     sendFullStateToClient(ws);
-    ws.send(JSON.stringify({ type: 'config', data: cfg }));
 
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data);
 
-        if (msg.type === 'cmd' && msg.cmd === 'clearSprites') {
-          dbg('clearSprites command received from client');
-          clearServerSprites();
-        } else if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
+        // Clients may only manipulate drag state. Administrative commands
+        // (clearing sprites, reloading overlays) are REST/authenticated only.
+        if (msg.type === 'dragStart' || msg.type === 'dragMove' || msg.type === 'dragEnd') {
           handleDragMessage(msg, ws);
         } else if (msg.type === 'fullState') {
           dbg('fullState received from client (server is authoritative, ignoring physics data)');
@@ -411,28 +474,50 @@ function initWebSocket(server, cfg, db, dbg, loginUsernameIndex) {
   return _wss;
 }
 
+const MAX_DRAG_SPEED = 60;
+
+function finiteOr(value, fallback) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 // Handle drag messages from clients
 function handleDragMessage(msg, ws) {
+  if (!msg || typeof msg.spriteId !== 'string') return;
   const sprite = serverSprites.get(msg.spriteId);
   if (!sprite) return;
 
+  const ov = getOverlayConfig();
+  const currentOwner = dragOwners.get(msg.spriteId);
+
   if (msg.type === 'dragStart') {
+    if (currentOwner && currentOwner !== ws) return;
     draggedSprites.add(msg.spriteId);
     dragOwners.set(msg.spriteId, ws);
-  } else if (msg.type === 'dragMove') {
-    sprite.x = msg.x;
-    sprite.y = msg.y;
+    return;
+  }
+
+  // Only the client that started the drag may move or release it.
+  if (currentOwner !== ws) return;
+
+  const x = clamp(finiteOr(msg.x, sprite.x), 0, ov.W);
+  const y = clamp(finiteOr(msg.y, sprite.y), 0, ov.H);
+
+  if (msg.type === 'dragMove') {
+    sprite.x = x;
+    sprite.y = y;
     sprite.vx = 0;
     sprite.vy = 0;
-    draggedSprites.add(msg.spriteId);
-    dragOwners.set(msg.spriteId, ws);
   } else if (msg.type === 'dragEnd') {
     draggedSprites.delete(msg.spriteId);
     dragOwners.delete(msg.spriteId);
-    sprite.x = msg.x;
-    sprite.y = msg.y;
-    sprite.vx = msg.vx || 0;
-    sprite.vy = msg.vy || 0;
+    sprite.x = x;
+    sprite.y = y;
+    sprite.vx = clamp(finiteOr(msg.vx, 0), -MAX_DRAG_SPEED, MAX_DRAG_SPEED);
+    sprite.vy = clamp(finiteOr(msg.vy, 0), -MAX_DRAG_SPEED, MAX_DRAG_SPEED);
   }
 }
 
@@ -443,7 +528,7 @@ function handleServerCommand(cmd, data) {
   if (cmd === 'jump' && data?.username) {
     const sprite = serverSprites.get(data.username.toLowerCase());
     if (sprite) {
-      sprite.vy = physics.JUMP_VELOCITY;
+      sprite.vy = ov.JUMP_VELOCITY;
       sprite.state = 'idle';
     }
   } else if (cmd === 'boom') {
@@ -457,7 +542,7 @@ function handleServerCommand(cmd, data) {
     const sprite = serverSprites.get(data.username.toLowerCase());
     if (sprite) {
       sprite.flipUntil = Date.now() + (data.duration || ov.flipDurationMs);
-      sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * physics.FLIP_ANGULAR_VELOCITY;
+      sprite.angularVelocity = (Math.random() > 0.5 ? 1 : -1) * ov.FLIP_ANGULAR_VELOCITY;
       sprite.lastTiltTime = null;
     }
   } else if (cmd === 'fight' && data?.loser && data?.winner) {
@@ -481,8 +566,13 @@ function handleServerCommand(cmd, data) {
       loserSprite.state = 'idle';
       loserSprite.isFighting = true;
 
+      const fightUntil = Date.now() + (ov.fightDurationMs || 10000);
       winnerSprite._fightTarget = loserId;
+      winnerSprite._fightLoser = false;
+      winnerSprite._fightUntil = fightUntil;
       loserSprite._fightTarget = winnerId;
+      loserSprite._fightLoser = true;
+      loserSprite._fightUntil = fightUntil;
     }
   }
 }
@@ -493,7 +583,7 @@ function getWss() {
 
 function cleanup() {
   if (cleanupIntervalId) { clearInterval(cleanupIntervalId); cleanupIntervalId = null; }
-  if (gameLoopIntervalId) { clearInterval(gameLoopIntervalId); gameLoopIntervalId = null; }
+  if (gameLoopIntervalId) { clearTimeout(gameLoopIntervalId); gameLoopIntervalId = null; }
   if (broadcastIntervalId) { clearInterval(broadcastIntervalId); broadcastIntervalId = null; }
 }
 

@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path');
+const { stripRuntimeConfigKeys } = require('./lib/util');
 
 // Default overlay configuration (shared with dashboard and overlay client)
 const DEFAULT_OVERLAY = {
@@ -121,8 +121,6 @@ const DEFAULT_OVERLAY = {
   fightCoinFlipProbability: 0.5
 };
 
-const { deepMerge } = require('./lib/util');
-
 function loadConfig(cfgPath) {
   let cfg = null;
   let fileExists = false;
@@ -196,9 +194,9 @@ function loadConfig(cfgPath) {
 
     configChanged = ensureDefaults(cfg, defaultCfg);
 
-    if (cfg.skins) {
-      delete cfg.skins;
+    if (stripRuntimeConfigKeys(cfg)) {
       configChanged = true;
+      console.log('✓ Removed runtime-only config keys');
     }
 
     if (configChanged) {

@@ -4,10 +4,26 @@ const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 const { isValidUsername, isValidSkinId, rateLimiter } = require('./lib/util');
+const { sanitizeConfigInput, sanitizeConfigForDisk } = require('./lib/config-safety');
+const {
+  normalizeAssetFolder,
+  isValidAssetFolder,
+  isSafeAssetName,
+  hasAllowedAssetExtension,
+  sanitizeUploadFilename,
+  resolveAssetPath,
+  getAssetMimeType
+} = require('./lib/asset-paths');
 const twitch = require('./twitch');
 const ws = require('./websocket');
 const { DEFAULT_OVERLAY } = require('./config');
-const storage = require('./storage');
+const storage = require('./storage/index');
+
+const PROJECT_ROOT = path.join(__dirname, '..');
+const ASSETS_ROOT = path.join(PROJECT_ROOT, 'assets');
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
 
 // Shared state (set by initRoutes)
 let _cfg, _cfgPath, _driver, _dbg, _app;
@@ -44,10 +60,20 @@ async function broadcastStats() {
   }
 }
 
-// Env cache
-let envCache = null;
-let envCacheTime = 0;
+// Env caches are kept separate so a trusted request can never leak
+// secrets through a response cached for an unauthenticated client.
+let envCachePublic = null;
+let envCachePublicTime = 0;
+let envCacheTrusted = null;
+let envCacheTrustedTime = 0;
 const ENV_CACHE_TTL_MS = 10000;
+
+function invalidateEnvCache() {
+  envCachePublic = null;
+  envCachePublicTime = 0;
+  envCacheTrusted = null;
+  envCacheTrustedTime = 0;
+}
 
 // OAuth state management
 const pendingOAuthStates = new Map();
@@ -113,9 +139,100 @@ function initRoutes(app, cfg, cfgPath, driver, dbg) {
     }
   }, 10 * 60 * 1000);
 
-  function isLocalhost(req) {
-    const host = req.hostname || req.headers.host || '';
-    return host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
+  const loginAttempts = new Map();
+
+  function isLoopbackAddress(address) {
+    if (!address || typeof address !== 'string') return false;
+    const normalized = address.replace(/^::ffff:/i, '');
+    return normalized === '127.0.0.1' || normalized === '::1';
+  }
+
+  function requestHostname(req) {
+    const host = String(req.headers.host || '').toLowerCase();
+    if (!host) return '';
+    if (host.startsWith('[')) {
+      const end = host.indexOf(']');
+      return end === -1 ? host : host.slice(0, end + 1);
+    }
+    return host.split(':')[0];
+  }
+
+  function isSameOriginRequest(req) {
+    const origin = req.headers.origin;
+    if (!origin) return true;
+    try {
+      const parsed = new URL(origin);
+      const host = String(req.headers.host || '').toLowerCase();
+      return !!host && parsed.host.toLowerCase() === host;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // A request is local only when it is genuinely loopback, has a local Host
+  // header, is not proxied from elsewhere, and is not cross-origin.
+  function isLocalRequest(req) {
+    if (!isLoopbackAddress(req.socket?.remoteAddress)) return false;
+    const hostname = requestHostname(req);
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '[::1]') return false;
+
+    const forwarded = req.headers['cf-connecting-ip'] ||
+      req.headers['x-real-ip'] ||
+      String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded && !isLoopbackAddress(String(forwarded).trim())) return false;
+
+    return isSameOriginRequest(req);
+  }
+
+  function isPublicRequest(req) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+    const p = req.path;
+    return p === '/env' || p === '/healthz' || p === '/favicon.ico' ||
+      p === '/api/skins' || p === '/api/skins/auto' ||
+      p === '/auth/callback' ||
+      p.startsWith('/api/user/') ||
+      /^\/api\/assets\/[^/]+\/[^/]+$/.test(p) ||
+      p === '/overlay' || p.startsWith('/overlay/') ||
+      p === '/assets' || p.startsWith('/assets/');
+  }
+
+  function isSecureRequest(req) {
+    return req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  }
+
+  function loginKey(req) {
+    return req.ip || req.socket?.remoteAddress || 'unknown';
+  }
+
+  function getLoginLock(req) {
+    const entry = loginAttempts.get(loginKey(req));
+    if (!entry) return 0;
+    if (entry.lockedUntil > Date.now()) return entry.lockedUntil - Date.now();
+    if (Date.now() - entry.firstFailure > LOGIN_WINDOW_MS) {
+      loginAttempts.delete(loginKey(req));
+    }
+    return 0;
+  }
+
+  function recordLoginFailure(req) {
+    const key = loginKey(req);
+    const now = Date.now();
+    let entry = loginAttempts.get(key);
+    if (!entry || now - entry.firstFailure > LOGIN_WINDOW_MS) {
+      entry = { count: 0, firstFailure: now, lockedUntil: 0 };
+    }
+    entry.count++;
+    if (entry.count >= LOGIN_MAX_FAILURES) {
+      entry.lockedUntil = now + LOGIN_LOCKOUT_MS;
+      entry.count = 0;
+      entry.firstFailure = now;
+    }
+    loginAttempts.set(key, entry);
+
+    if (loginAttempts.size > 1000) {
+      const oldestKey = loginAttempts.keys().next().value;
+      loginAttempts.delete(oldestKey);
+    }
   }
 
   function isAuthenticated(req) {
@@ -128,31 +245,56 @@ function initRoutes(app, cfg, cfgPath, driver, dbg) {
 
 // Explicit favicon route (before auth to avoid any issues)
 app.get('/favicon.ico', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'favicon.ico'));
+  res.sendFile(path.join(PROJECT_ROOT, 'favicon.ico'));
+});
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  next();
+});
+
+// Only read-only overlay/config endpoints are CORS-enabled, and only without
+// credentials. Everything else must be same-origin.
+app.use((req, res, next) => {
+  if (isPublicRequest(req)) {
+    if (req.headers.origin) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Vary', 'Origin');
+    }
+    return next();
+  }
+  if (req.headers['sec-fetch-site'] === 'cross-site' || !isSameOriginRequest(req)) {
+    return res.status(403).json({ error: 'Cross-origin request blocked' });
+  }
+  next();
 });
 
 // Auth middleware: protect dashboard and dashboard API for remote access
 app.use((req, res, next) => {
-  if (isLocalhost(req)) return next(); // localhost always allowed
-  // Public paths: overlay, env, skins, static assets needed by overlay
-  const publicPaths = ['/overlay', '/env'];
-  if (publicPaths.some(p => req.path === p || req.path.startsWith(p + '/'))) return next();
-    if (req.path === '/api/skins' || req.path === '/api/skins/auto') return next();
-    // Auth check for everything else (dashboard, dashboard API, assets)
-    if (isAuthenticated(req)) return next();
-    // Unauthenticated remote access to dashboard
-    if (req.path === '/api/dashboard/login' || req.path === '/api/dashboard/setup') return next(); // auth endpoints
-    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
-    // If no password configured yet, show setup page
-    if (!_cfg.dashboardPassword || _cfg.dashboardPassword.trim() === '') {
-      return res.sendFile(path.join(__dirname, '..', 'dashboard', 'setup.html'));
-    }
-    // Serve login page
-    res.sendFile(path.join(__dirname, '..', 'dashboard', 'login.html'));
-  });
+  if (isPublicRequest(req)) return next();
+  if (isLocalRequest(req)) return next();
+  if (isAuthenticated(req)) return next();
+  if (req.path === '/api/dashboard/login') return next();
+  if (req.path === '/api/dashboard/setup') {
+    return res.status(403).json({ error: 'Dashboard setup must be completed from the local machine' });
+  }
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Setup endpoint (first-time password creation)
+  // If no password is configured yet, show the setup page. Setting the
+  // password itself is restricted to local requests above.
+  if (!_cfg.dashboardPassword || _cfg.dashboardPassword.trim() === '') {
+    return res.sendFile(path.join(PROJECT_ROOT, 'dashboard', 'setup.html'));
+  }
+  res.sendFile(path.join(PROJECT_ROOT, 'dashboard', 'login.html'));
+});
+
+  // Setup endpoint (first-time password creation, local machine only)
   app.post('/api/dashboard/setup', async (req, res) => {
+    if (!isLocalRequest(req)) {
+      return res.status(403).json({ error: 'Dashboard setup must be completed from the local machine' });
+    }
     if (_cfg.dashboardPassword && _cfg.dashboardPassword.trim() !== '') {
       return res.status(403).json({ error: 'Password already configured' });
     }
@@ -165,86 +307,138 @@ app.use((req, res, next) => {
     try {
       const current = await _driver.loadConfig(_cfgPath) || {};
       current.dashboardPassword = input;
-      await _driver.saveConfig(_cfgPath, current);
+      await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(current));
+      invalidateEnvCache();
     } catch (e) {
       return res.status(500).json({ error: 'Failed to save password' });
     }
     // Create session and log in immediately
     const token = crypto.randomBytes(32).toString('hex');
     activeSessions.set(token, { expires: Date.now() + SESSION_TTL_MS });
-    res.setHeader('Set-Cookie', `dash_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}`);
+    const secure = isSecureRequest(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `dash_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${secure}`);
     res.json({ ok: true });
   });
 
   // Login endpoint
   app.post('/api/dashboard/login', (req, res) => {
+    const lockRemaining = getLoginLock(req);
+    if (lockRemaining > 0) {
+      res.setHeader('Retry-After', Math.ceil(lockRemaining / 1000));
+      return res.status(429).json({ error: 'Too many failed login attempts. Try again later.' });
+    }
+
     const password = _cfg.dashboardPassword;
     if (!password || password.trim() === '') return res.status(403).json({ error: 'Password not configured yet' });
     const { password: input } = req.body;
     if (!input || typeof input !== 'string') return res.status(400).json({ error: 'Password required' });
-    if (input !== password) return res.status(401).json({ error: 'Wrong password' });
+
+    // Hash both values so the comparison is constant-time regardless of length.
+    const expectedHash = crypto.createHash('sha256').update(String(password)).digest();
+    const providedHash = crypto.createHash('sha256').update(input).digest();
+    if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
+      recordLoginFailure(req);
+      return res.status(401).json({ error: 'Wrong password' });
+    }
+
+    loginAttempts.delete(loginKey(req));
     const token = crypto.randomBytes(32).toString('hex');
     activeSessions.set(token, { expires: Date.now() + SESSION_TTL_MS });
-    res.setHeader('Set-Cookie', `dash_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}`);
+    const secure = isSecureRequest(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `dash_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${secure}`);
     res.json({ ok: true });
   });
 
-  app.use(express.static(path.join(__dirname, '..')));
-  app.use('/overlay', express.static(path.join(__dirname, '..', 'overlay')));
+  // Only public UI directories are served. The project root previously exposed
+  // server/.env, database files, and logs via express.static.
+  app.use('/overlay', express.static(path.join(PROJECT_ROOT, 'overlay')));
+  app.use('/dashboard', express.static(path.join(PROJECT_ROOT, 'dashboard')));
+  app.use('/assets', express.static(ASSETS_ROOT, { dotfiles: 'ignore', index: false }));
 
   // Serve dashboard at root
   app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+    res.sendFile(path.join(PROJECT_ROOT, 'index.html'));
   });
 
   // Skin endpoints
-  app.get('/api/skins', (req, res) => {
-    res.json(twitch.detectSkinsFromAssets());
+  app.get('/api/skins', async (req, res) => {
+    try {
+      res.json(await twitch.detectSkinsFromAssetsAsync());
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
-  app.get('/api/skins/auto', (req, res) => {
-    res.json(twitch.detectSkinsFromAssets());
+  app.get('/api/skins/auto', async (req, res) => {
+    try {
+      res.json(await twitch.detectSkinsFromAssetsAsync());
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Config endpoint
   app.get('/env', async (req, res) => {
     const now = Date.now();
-    if (envCache && (now - envCacheTime) < ENV_CACHE_TTL_MS) {
-      return res.json(envCache);
-    }
+    const trusted = isLocalRequest(req) || isAuthenticated(req);
+    const cache = trusted ? envCacheTrusted : envCachePublic;
+    const cacheTime = trusted ? envCacheTrustedTime : envCachePublicTime;
 
-    try {
-      const fileCfg = await _driver.loadConfig(_cfgPath);
-      if (fileCfg) {
-        Object.assign(_cfg, fileCfg);
-        ws.invalidateOverlayConfigCache();
-        envCache = null;
+    let safeCfg;
+    if (cache && (now - cacheTime) < ENV_CACHE_TTL_MS) {
+      safeCfg = { ...cache };
+    } else {
+      try {
+        const fileCfg = await _driver.loadConfig(_cfgPath);
+        if (fileCfg) {
+          const { stripRuntimeConfigKeys } = require('./lib/util');
+          stripRuntimeConfigKeys(fileCfg);
+          Object.assign(_cfg, fileCfg);
+          ws.invalidateOverlayConfigCache();
+          invalidateEnvCache();
+        }
+      } catch (e) {
+        _dbg('Failed to reload config:', e.message);
       }
-    } catch (e) {
-      _dbg('Failed to reload config:', e.message);
+
+      const overlayConfig = { ...DEFAULT_OVERLAY, ...(_cfg.overlay || {}) };
+      const hasOAuthToken = !!(_cfg.twitch?.botOAuthToken && _cfg.twitch.botOAuthToken.trim() !== '');
+      const base = {
+        useServer: _cfg.useServer !== false,
+        serverPort: _cfg.serverPort || 8080,
+        channel: _cfg.channel || '',
+        botUsername: _cfg.botUsername || '',
+        autoGenerateOAuth: !!_cfg.autoGenerateOAuth,
+        autoConnect: !!_cfg.autoConnect,
+        debug: _cfg.debug || {},
+        overlay: overlayConfig,
+        defaultOverlay: DEFAULT_OVERLAY,
+        hasOAuthToken
+      };
+
+      if (trusted) {
+        safeCfg = {
+          ..._cfg,
+          ...base,
+          twitch: {
+            ...(_cfg.twitch || {}),
+            botOAuthToken: undefined,
+            refreshToken: undefined
+          },
+          dashboardPassword: _cfg.dashboardPassword ? '***' : ''
+        };
+        envCacheTrusted = JSON.parse(JSON.stringify(safeCfg));
+        envCacheTrustedTime = now;
+      } else {
+        // Public config intentionally omits Twitch credentials and secrets.
+        safeCfg = base;
+        envCachePublic = JSON.parse(JSON.stringify(base));
+        envCachePublicTime = now;
+      }
     }
 
-    const overlayConfig = { ...DEFAULT_OVERLAY, ...(_cfg.overlay || {}) };
-    const mergedCfg = {
-      ..._cfg,
-      overlay: overlayConfig,
-      defaultOverlay: DEFAULT_OVERLAY,
-      dashboardPassword: _cfg.dashboardPassword ? '***' : ''
-    };
-
-const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
-  if (safeCfg.twitch) {
-    safeCfg.hasOAuthToken = !!(_cfg.twitch?.botOAuthToken && _cfg.twitch.botOAuthToken.trim() !== '');
-    safeCfg.twitch.botOAuthToken = undefined;
-    safeCfg.twitch.refreshToken = undefined;
-  }
-
-  // Expose localhost status to dashboard
-  safeCfg.isLocalhost = isLocalhost(req);
-
-  envCache = safeCfg;
-  envCacheTime = now;
-  res.json(safeCfg);
+    safeCfg.isLocalhost = isLocalRequest(req);
+    res.json(safeCfg);
   });
 
   // User endpoints
@@ -270,11 +464,11 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
     });
   });
 
-  app.post('/api/viewer/updateSkin', (req, res) => {
+  app.post('/api/viewer/updateSkin', async (req, res) => {
     const { skinId } = req.body;
     if (!skinId) return res.status(400).json({ error: 'missing skinId' });
     try {
-      const allSkins = twitch.detectSkinsFromAssets();
+      const allSkins = await twitch.detectSkinsFromAssetsAsync();
       const validSkin = allSkins.find(s => s.id === skinId);
       if (!validSkin) return res.status(400).json({ error: 'Invalid skin ID' });
       res.json({ ok: true, message: 'Skin updated' });
@@ -341,27 +535,39 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   app.post('/api/local/saveConfig', async (req, res) => {
     try {
       const { deepMerge } = require('./lib/util');
-      const newCfg = req.body;
-      const merged = deepMerge(_cfg, newCfg);
-      delete merged.skins;
-      if (_cfg.skins) delete _cfg.skins;
-
-      const tokenForMemory = _cfg.twitch?.botOAuthToken || '';
-      const refreshTokenForMemory = _cfg.twitch?.refreshToken || '';
-      if (merged.twitch) {
-        merged.twitch.botOAuthToken = tokenForMemory;
-        merged.twitch.refreshToken = refreshTokenForMemory;
+      const sanitizedInput = sanitizeConfigInput(req.body);
+      if (!sanitizedInput || Object.keys(sanitizedInput).length === 0) {
+        return res.status(400).json({ error: 'Invalid config payload' });
       }
 
-      // Preserve real dashboard password if masked value was sent back
+      const merged = deepMerge(_cfg, sanitizedInput);
+
+      // Tokens are never accepted from the client and stay memory-only.
+      merged.twitch = merged.twitch || {};
+      merged.twitch.botOAuthToken = _cfg.twitch?.botOAuthToken || '';
+      merged.twitch.refreshToken = _cfg.twitch?.refreshToken || '';
+
+      // Preserve the real dashboard password if the masked value was sent back.
       if (merged.dashboardPassword === '***') {
         merged.dashboardPassword = _cfg.dashboardPassword || '';
       }
 
-      await _driver.saveConfig(_cfgPath, merged);
-      Object.assign(_cfg, merged);
+      const persisted = sanitizeConfigForDisk(merged);
+      await _driver.saveConfig(_cfgPath, persisted);
+
+      // Keep memory aligned with the sanitized on-disk shape while retaining
+      // the access token that is intentionally never persisted.
+      for (const key of Object.keys(_cfg)) delete _cfg[key];
+      Object.assign(_cfg, persisted, {
+        twitch: {
+          ...persisted.twitch,
+          botOAuthToken: merged.twitch.botOAuthToken,
+          refreshToken: merged.twitch.refreshToken
+        }
+      });
+
       ws.invalidateOverlayConfigCache();
-      envCache = null;
+      invalidateEnvCache();
 
       res.json({ ok: true, message: 'Config saved' });
     } catch (e) {
@@ -394,13 +600,10 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
         }
       }
 
-      const configToSave = { ..._cfg };
-      configToSave.twitch = { ...configToSave.twitch };
-      configToSave.twitch.botOAuthToken = '';
-      delete configToSave.skins;
-      await _driver.saveConfig(_cfgPath, configToSave);
+      await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(_cfg));
 
       ws.invalidateOverlayConfigCache();
+      invalidateEnvCache();
       res.json({ ok: true, message: 'Settings applied', settings: _cfg.debug });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -582,7 +785,7 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   // Dashboard chat — sends messages/commands from the dashboard to the overlay and Twitch
-  app.post('/api/local/sendChat', (req, res) => {
+  app.post('/api/local/sendChat', async (req, res) => {
     const { username, message } = req.body;
     if (!username || !message || typeof username !== 'string' || typeof message !== 'string' ||
         username.length > 25 || message.length > 500) {
@@ -595,7 +798,11 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
 
     let commandResult = null;
     if (isCommand) {
-      commandResult = twitch.processServerCommand(sanitizedUsername, text, { badges: { broadcaster: true, moderator: true } });
+      try {
+        commandResult = await twitch.processServerCommand(sanitizedUsername, text, { badges: { broadcaster: true, moderator: true } });
+      } catch (e) {
+        commandResult = { result: `Command failed: ${e.message}`, stateChanged: false };
+      }
     }
 
     // Broadcast chat message to all overlay clients
@@ -606,6 +813,11 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
       tags: { badges: { broadcaster: true } },
       commandResult: commandResult
     });
+
+    if (commandResult?.stateChanged) {
+      ws.setSpriteDirty(true);
+      ws.broadcastPhysicsState();
+    }
 
     // Send to Twitch chat (only non-command messages)
     if (!isCommand) {
@@ -766,19 +978,30 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   app.post('/api/storage/switch', async (req, res) => {
-    const { type, connectionString } = req.body;
-    if (type === 'postgres') {
-      if (!connectionString || typeof connectionString !== 'string') {
-        return res.status(400).json({ error: 'Connection string required for PostgreSQL' });
+    const { type, connectionString } = req.body || {};
+    try {
+      let result;
+      if (type === 'postgres') {
+        if (!connectionString || typeof connectionString !== 'string') {
+          return res.status(400).json({ error: 'Connection string required for PostgreSQL' });
+        }
+        result = await storage.switchToPostgres(connectionString, path.join(__dirname, '..'));
+        if (!result.ok) return res.status(400).json(result);
+      } else if (type === 'sqlite') {
+        result = await storage.switchToSqlite(path.join(__dirname, '..'));
+      } else {
+        return res.status(400).json({ error: 'Invalid storage type. Use "sqlite" or "postgres".' });
       }
-      const result = await storage.switchToPostgres(connectionString, path.join(__dirname, '..'));
-      res.json(result);
-    } else if (type === 'sqlite') {
-      const result = await storage.switchToSqlite(path.join(__dirname, '..'));
+
+      // All modules must use the new driver, not the closed previous one.
       _driver = storage.getDriver();
+      twitch.setDriver(_driver);
+      twitch.invalidateSkinsCache();
+      invalidateEnvCache();
+      invalidateStatsCache();
       res.json(result);
-    } else {
-      res.status(400).json({ error: 'Invalid storage type. Use "sqlite" or "postgres".' });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
     }
   });
 
@@ -808,9 +1031,9 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
         await dst.excludeUser(e.id, e.reason);
       }
 
-      // Migrate config
+      // Migrate config (access tokens are not persisted)
       const cfgData = JSON.parse(fs.readFileSync(_cfgPath, 'utf8'));
-      await dst.saveConfig(_cfgPath, cfgData);
+      await dst.saveConfig(_cfgPath, sanitizeConfigForDisk(cfgData));
 
       // Migrate assets (all subfolders)
       const assetsBaseDir = path.join(__dirname, '..', 'assets');
@@ -850,25 +1073,32 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
 
   app.post('/api/assets/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    if (!['.png', '.gif', '.jpg', '.jpeg', '.webp', '.webm', '.avif'].includes(ext)) {
-      return res.status(400).json({ error: 'Invalid file type. Supported: png, gif, jpg, jpeg, webp, webm, avif' });
+
+    const filename = sanitizeUploadFilename(req.file.originalname);
+    if (!filename || !hasAllowedAssetExtension(filename)) {
+      return res.status(400).json({ error: 'Invalid file name or type. Supported: png, gif, jpg, jpeg, webp, webm, avif' });
     }
-    const folder = (req.body.folder || 'skins').replace(/[^a-zA-Z0-9_-]/g, '');
+
+    const folder = normalizeAssetFolder(req.body.folder || 'skins');
+    const localPath = resolveAssetPath(ASSETS_ROOT, folder, filename);
+    if (!localPath) return res.status(400).json({ error: 'Invalid asset path' });
+
     try {
       if (_driver.getType() === 'postgres') {
-        const mimeMap = {
-          '.png': 'image/png', '.gif': 'image/gif', '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.avif': 'image/avif'
-        };
-        await _driver.writeAsset(`${folder}/${req.file.originalname}`, req.file.buffer, mimeMap[ext] || 'application/octet-stream');
+        await _driver.writeAsset(`${folder}/${filename}`, req.file.buffer, getAssetMimeType(filename));
+        // Keep a local copy as well so /assets works without a DB round-trip.
+        try {
+          fs.mkdirSync(path.dirname(localPath), { recursive: true });
+          fs.writeFileSync(localPath, req.file.buffer);
+        } catch (e) {
+          _dbg('Could not cache uploaded asset on disk:', e.message);
+        }
       } else {
-        const assetsDir = path.join(__dirname, '..', 'assets', folder);
-        if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
-        fs.writeFileSync(path.join(assetsDir, req.file.originalname), req.file.buffer);
+        fs.mkdirSync(path.dirname(localPath), { recursive: true });
+        fs.writeFileSync(localPath, req.file.buffer);
       }
       twitch.invalidateSkinsCache();
-      res.json({ ok: true, filename: req.file.originalname, folder });
+      res.json({ ok: true, filename, folder });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -913,16 +1143,20 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
   });
 
   app.delete('/api/assets/delete', async (req, res) => {
-    const { filename, folder } = req.body;
-    if (!filename) return res.status(400).json({ error: 'Filename required' });
-    const assetFolder = (folder || 'skins').replace(/[^a-zA-Z0-9_-]/g, '');
+    const { filename, folder } = req.body || {};
+    const assetFolder = normalizeAssetFolder(folder || 'skins');
+    if (!filename || !isSafeAssetName(filename)) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = resolveAssetPath(ASSETS_ROOT, assetFolder, filename);
+    if (!filePath) return res.status(400).json({ error: 'Invalid asset path' });
+
     try {
       if (_driver.getType() === 'postgres') {
         await _driver.deleteAsset(`${assetFolder}/${filename}`);
-      } else {
-        const filePath = path.join(__dirname, '..', 'assets', assetFolder, filename);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       twitch.invalidateSkinsCache();
       res.json({ ok: true });
     } catch (e) {
@@ -932,25 +1166,25 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
 
   // Asset serving for remote storage (when using postgres, serve from DB)
   app.get('/api/assets/:folder/:filename', async (req, res) => {
-    const folder = req.params.folder;
-    const filename = req.params.filename;
+    const { folder, filename } = req.params;
+    if (!isValidAssetFolder(folder) || !isSafeAssetName(filename)) {
+      return res.status(404).send('Not found');
+    }
+
     try {
       if (_driver.getType() === 'postgres') {
         const data = await _driver.readAsset(`${folder}/${filename}`);
-        if (!data) return res.status(404).send('Not found');
-        const ext = path.extname(filename).toLowerCase();
-        const mimeMap = {
-          '.png': 'image/png', '.gif': 'image/gif', '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.webm': 'video/webm', '.avif': 'image/avif'
-        };
-        res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        res.send(data);
-      } else {
-        const filePath = path.join(__dirname, '..', 'assets', folder, filename);
-        if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
-        res.sendFile(filePath);
+        if (data) {
+          res.setHeader('Content-Type', getAssetMimeType(filename));
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          return res.send(data);
+        }
       }
+
+      const filePath = resolveAssetPath(ASSETS_ROOT, folder, filename);
+      if (!filePath || !fs.existsSync(filePath)) return res.status(404).send('Not found');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.sendFile(filePath);
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -958,6 +1192,13 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
 
   // Error handler
   app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed' || (err instanceof SyntaxError && err.status === 400)) {
+      return res.status(400).json({ error: 'Invalid JSON body' });
+    }
+    if (err.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'Request body too large' });
+    }
+
     const isDevelopment = _cfg.debug?.serverDebug === true;
     const errorId = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
     console.error(`[Error ${errorId}]`, {
@@ -1022,7 +1263,8 @@ const safeCfg = JSON.parse(JSON.stringify(mergedCfg));
       if (refresh_token) {
         _cfg.twitch.refreshToken = refresh_token;
         try {
-          await _driver.saveConfig(_cfgPath, _cfg);
+          await _driver.saveConfig(_cfgPath, sanitizeConfigForDisk(_cfg));
+          invalidateEnvCache();
         } catch (e) {
           _dbg('Failed to save refresh token:', e.message);
         }

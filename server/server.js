@@ -2,14 +2,19 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bodyParser = require('body-parser');
-const cors = require('cors');
 
 const { loadConfig } = require('./config');
 const { initDb } = require('./db');
-const { createDbg, initFileLogger } = require('./lib/logger');
-const storage = require('./storage');
+const { createDbg, initFileLogger, getLogStream } = require('./lib/logger');
+const { deepMerge, stripRuntimeConfigKeys } = require('./lib/util');
+const storage = require('./storage/index');
 
-const cfgPath = path.join(__dirname, '.env');
+const cfgPath = process.env.STREAM_SPRITES_CONFIG
+  ? path.resolve(process.env.STREAM_SPRITES_CONFIG)
+  : path.join(__dirname, '.env');
+const dataDir = process.env.STREAM_SPRITES_DATA_DIR
+  ? path.resolve(process.env.STREAM_SPRITES_DATA_DIR)
+  : __dirname;
 
 // Load config
 const cfg = loadConfig(cfgPath);
@@ -58,9 +63,26 @@ if (cfg.debug?.logToFile) initFileLogger();
 dbg('Config loaded:', { channel: cfg.channel, botUsername: cfg.botUsername, useServer: cfg.useServer, serverPort: cfg.serverPort });
 
 // Initialize database BEFORE requiring modules that depend on it
-initDb(__dirname).then(() => {
+initDb(dataDir).then(async () => {
   const driver = storage.getDriver();
   const db = driver.getType() === 'sqlite' ? driver.getRawDb() : driver;
+
+  // When using a database-backed config, it is authoritative over the local file.
+  if (driver.getType() === 'postgres') {
+    try {
+      const dbCfg = await driver.loadConfig(cfgPath);
+      if (dbCfg && typeof dbCfg === 'object') {
+        const merged = deepMerge(cfg, dbCfg);
+        stripRuntimeConfigKeys(merged);
+        Object.assign(cfg, merged);
+        console.log('✓ Loaded configuration from PostgreSQL');
+      }
+    } catch (e) {
+      console.warn('⚠ Failed to load configuration from PostgreSQL:', e.message);
+    }
+  }
+
+  if (cfg.debug?.logToFile && !getLogStream()) initFileLogger();
 
   // NOW require modules that depend on DB being initialized
   const websocket = require('./websocket');
@@ -72,14 +94,8 @@ initDb(__dirname).then(() => {
 
   // Express app
   const app = express();
-  app.use(cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      return callback(null, true);
-    },
-    credentials: true
-  }));
-  app.use(bodyParser.json());
+  app.disable('x-powered-by');
+  app.use(bodyParser.json({ limit: '1mb' }));
 
   const port = cfg.serverPort || 8080;
 
@@ -142,7 +158,16 @@ initDb(__dirname).then(() => {
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.error(`✗ Port ${port} in use. Change in .env`);
+    } else {
+      console.error('✗ Server error:', err.message);
     }
+    try { websocket.cleanup(); } catch (e) {}
+    try { twitch.cleanup(); } catch (e) {}
+    try {
+      const activeDriver = storage.getDriver();
+      if (activeDriver) activeDriver.close();
+    } catch (e) {}
+    process.exit(1);
   });
 
   // Initialize WebSocket server
@@ -170,7 +195,8 @@ initDb(__dirname).then(() => {
       }
     }
     try {
-      await driver.close();
+      const activeDriver = storage.getDriver();
+      if (activeDriver) await activeDriver.close();
       dbg('Database closed');
     } catch (e) {
       dbg('Error closing database:', e.message);
