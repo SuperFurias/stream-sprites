@@ -192,9 +192,9 @@ function handleUnsit(username, userId, args, tags, now, ctx) {
 function handleBoom() {
   _dbg('Boom command - applying explosion on server sprites');
   const ov = ws.getOverlayConfig();
-  const radiusBase = ov.EXPLOSION_RADIUS_BASE ?? 400;
-  const epicenterX = Math.random() * (ov.W - radiusBase) + (radiusBase / 2);
-  const explosionRadius = radiusBase + Math.random() * (ov.EXPLOSION_RADIUS_VAR ?? 300);
+  const radiusBase = Math.min(ov.W, Math.max(1, ov.EXPLOSION_RADIUS_BASE ?? 400));
+  const epicenterX = (radiusBase / 2) + Math.random() * Math.max(0, ov.W - radiusBase);
+  const explosionRadius = radiusBase + Math.random() * Math.max(0, ov.EXPLOSION_RADIUS_VAR ?? 300);
   const spriteArray = Array.from(ws.serverSprites.values());
   physics.applyExplosionPhysics(spriteArray, epicenterX, ov.GROUND_Y, explosionRadius,
     ov.EXPLOSION_FORCE_MULTIPLIER ?? 60, ov.EXPLOSION_UPWARD_BIAS ?? 0.7,
@@ -207,18 +207,19 @@ function handleBoom() {
 
 async function handleSkin(username, userId, args, tags, now, ctx) {
   if (!args[0]) return 'Usage: !skin <skinname>';
+  const requestedSkin = args[0].toLowerCase();
   const allSkins = await detectSkinsFromAssetsAsync();
-  const validSkin = allSkins.find(s => s.id === args[0]);
-  if (!validSkin) return `Invalid skin: ${args[0]}`;
+  const validSkin = allSkins.find(s => s.id === requestedSkin);
+  if (!validSkin) return `Invalid skin: ${args[0].slice(0, 40)}`;
   try {
-    await _driver.assignSkin(userId, args[0]);
+    await _driver.assignSkin(userId, requestedSkin);
     if (ws.serverSprites.has(userId)) {
       const sprite = ws.serverSprites.get(userId);
-      sprite.skin = args[0];
+      sprite.skin = requestedSkin;
       sprite.lastActivity = now;
       ctx.stateChanged = true;
     }
-    return `${username}'s skin changed to ${args[0]}`;
+    return `${username}'s skin changed to ${requestedSkin}`;
   } catch (e) {
     return 'Failed to change skin.';
   }
@@ -226,7 +227,18 @@ async function handleSkin(username, userId, args, tags, now, ctx) {
 
 async function handleSkins() {
   const skinList = (await detectSkinsFromAssetsAsync()).map(s => s.id).sort();
-  return `Available skins: ${skinList.join(', ')}`;
+  let message = 'Available skins: ';
+  let shown = 0;
+  for (const skin of skinList) {
+    const addition = (shown === 0 ? '' : ', ') + skin;
+    if (message.length + addition.length > 380) break;
+    message += addition;
+    shown++;
+  }
+  if (shown < skinList.length) {
+    message += ` … (+${skinList.length - shown} more)`;
+  }
+  return message;
 }
 
 async function handleSpawn(username, userId, args, tags, now, ctx) {
@@ -240,8 +252,8 @@ async function handleSpawn(username, userId, args, tags, now, ctx) {
   for (const arg of args) {
     if (/^\d+$/.test(arg)) {
       quantity = Math.min(ov.MAX_SPAWN_QUANTITY || 100, Math.max(1, parseInt(arg, 10)));
-    } else if (allSkinIds.includes(arg)) {
-      targetSkin = arg;
+    } else if (allSkinIds.includes(arg.toLowerCase())) {
+      targetSkin = arg.toLowerCase();
     } else if (!targetName) {
       targetName = arg.trim().replace(/^@/, '');
     }
@@ -342,8 +354,9 @@ const commandRegistry = {
 
 // Server-side command processing
 async function processServerCommand(username, text, tags) {
-  const cmd = text.trim().split(' ')[0].toLowerCase();
-  const args = text.trim().split(' ').slice(1);
+  const parts = text.trim().split(/\s+/).filter(Boolean);
+  const cmd = (parts[0] || '').toLowerCase();
+  const args = parts.slice(1);
   const userId = username.toLowerCase();
   const now = Date.now();
 

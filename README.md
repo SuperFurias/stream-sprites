@@ -79,7 +79,7 @@ npm install
 npm start
 ```
 
-Run tests with `npm test`. For isolated development or alternate deployments, these environment variables override default paths:
+Run tests with `npm test`. Run `npm run soak` for a 10-second live-server load test that spawns 300+ sprites, drives every command, and verifies snapshots keep flowing. For isolated development or alternate deployments, these environment variables override default paths:
 
 | Variable | Purpose |
 |----------|---------|

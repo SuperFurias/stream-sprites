@@ -5,6 +5,17 @@ All notable changes to Stream Sprites will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.5] - 2026-10-31
+
+### Fixed
+- **Command parsing** handles repeated whitespace and reports only real command arguments.
+- **Skin commands** (`!skin`, `!spawn <skin>`) are case-insensitive.
+- **`!skins`** truncates long lists to fit a Twitch chat message and shows the remaining count.
+- **`!boom`** clamps its epicenter/radius to the canvas on unusual configurations.
+
+### Added
+- **Soak test**: `npm run soak` starts an isolated server, spawns 300+ sprites, runs every command repeatedly for 10 seconds, and checks snapshot flow, sprite limits, cleanup, and server errors.
+
 ## [2.3.4] - 2026-10-31
 
 ### Accessibility & UX

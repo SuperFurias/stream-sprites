@@ -1,10 +1,11 @@
 {
   "name": "stream-sprites",
-  "version": "2.3.4",
+  "version": "2.3.5",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "soak": "node tools/soak.js"
   },
   "engines": {
     "node": ">=22"
