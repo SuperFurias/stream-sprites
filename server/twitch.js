@@ -455,7 +455,13 @@ async function connectTwitchBot() {
 
   const opts = {
     options: { debug: twitchDebug, messagesLogLevel: messagesLogLevel, tags: true },
-    connection: { secure: true, reconnect: false },
+    connection: {
+      secure: true,
+      reconnect: true,
+      reconnectInterval: 5000,
+      reconnectDecay: 1.5,
+      maxReconnectAttempts: Infinity
+    },
     channels: [_cfg.channel],
     identity: { username: _cfg.botUsername, password: _cfg.twitch.botOAuthToken }
   };
@@ -592,7 +598,11 @@ async function connectTwitchBot() {
             _dbg('Error during token refresh disconnect check:', e.message);
           }
           twitchClient.opts.identity.password = access_token;
-          setTimeout(() => twitchClient.connect(), 2000);
+          setTimeout(() => {
+            if (twitchClient) {
+              twitchClient.connect().catch(err => _dbg('Token-refresh reconnect failed:', err.message));
+            }
+          }, 2000);
         }
       } catch (e) {
         refreshFailures++;
@@ -603,6 +613,23 @@ async function connectTwitchBot() {
       }
     }
   }, 30 * 60 * 1000);
+}
+
+// Stop token refresh and disconnect intentionally (no auto-reconnect).
+async function disconnectTwitchBot() {
+  if (tokenRefreshIntervalId) {
+    clearInterval(tokenRefreshIntervalId);
+    tokenRefreshIntervalId = null;
+  }
+  if (!twitchClient) return false;
+  const client = twitchClient;
+  twitchClient = null;
+  try {
+    await client.disconnect();
+  } catch (e) {
+    _dbg('Error disconnecting Twitch client:', e.message);
+  }
+  return true;
 }
 
 // Auto-connect logic
@@ -698,6 +725,7 @@ module.exports = {
   initTwitch,
   setDriver,
   connectTwitchBot,
+  disconnectTwitchBot,
   handleStartupTwitchConnection,
   getTwitchClient,
   getNeedsOAuthRedirect,

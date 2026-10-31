@@ -60,6 +60,10 @@ async function initStorage(serverDir) {
   } else {
     driver = new SqliteDriver(serverDir);
     await driver.init();
+    if (storageConfig.type !== 'sqlite') {
+      storageConfig = { type: 'sqlite' };
+      saveStorageConfig(storageConfig);
+    }
   }
 
   return driver;

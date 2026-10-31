@@ -89,7 +89,15 @@ const RATE_LIMIT_MAX_REQUESTS = 100;
 const RATE_LIMIT_MAX_ENTRIES = 1000;
 
 function rateLimiter(req, res, next) {
-  const ip = req.ip || req.connection.remoteAddress;
+  const socketAddress = req.socket?.remoteAddress;
+  let ip = req.ip || socketAddress;
+  const loopback = socketAddress === '127.0.0.1' || socketAddress === '::1' || socketAddress === '::ffff:127.0.0.1';
+  if (loopback) {
+    const forwarded = req.headers['cf-connecting-ip'] ||
+      String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) ip = String(forwarded).trim();
+  }
+  ip = ip || 'unknown';
   const now = Date.now();
   let entry = rateLimitMap.get(ip);
   if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {

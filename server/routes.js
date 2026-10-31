@@ -219,8 +219,20 @@ function initRoutes(app, cfg, cfgPath, driver, dbg) {
     })[ch]);
   }
 
+  // Behind a loopback tunnel/proxy, use the forwarded client address so one
+  // attacker cannot lock out every remote dashboard user.
+  function clientAddress(req) {
+    const socketAddress = req.socket?.remoteAddress;
+    if (isLoopbackAddress(socketAddress)) {
+      const forwarded = req.headers['cf-connecting-ip'] ||
+        String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+      if (forwarded) return String(forwarded).trim();
+    }
+    return req.ip || socketAddress || 'unknown';
+  }
+
   function loginKey(req) {
-    return req.ip || req.socket?.remoteAddress || 'unknown';
+    return clientAddress(req);
   }
 
   function getLoginLock(req) {
@@ -540,15 +552,13 @@ app.use((req, res, next) => {
     }
   });
 
-  app.post('/api/local/disconnectTwitch', (req, res) => {
+  app.post('/api/local/disconnectTwitch', async (req, res) => {
     try {
-      const twitchClient = twitch.getTwitchClient();
-      if (twitchClient) {
-        twitchClient.disconnect();
-        res.json({ ok: true, message: 'Twitch bot disconnected' });
-      } else {
-        res.json({ ok: true, message: 'Twitch bot was not connected' });
-      }
+      const wasConnected = await twitch.disconnectTwitchBot();
+      res.json({
+        ok: true,
+        message: wasConnected ? 'Twitch bot disconnected' : 'Twitch bot was not connected'
+      });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -563,6 +573,7 @@ app.use((req, res, next) => {
         return res.status(400).json({ error: 'Invalid config payload' });
       }
 
+      const previousPassword = _cfg.dashboardPassword || '';
       const merged = deepMerge(_cfg, sanitizedInput);
 
       // Tokens are never accepted from the client and stay memory-only.
@@ -588,6 +599,11 @@ app.use((req, res, next) => {
           refreshToken: merged.twitch.refreshToken
         }
       });
+
+      // Changing the password invalidates every existing dashboard session.
+      if ((persisted.dashboardPassword || '') !== previousPassword) {
+        activeSessions.clear();
+      }
 
       ws.invalidateOverlayConfigCache();
       invalidateEnvCache();
@@ -1053,12 +1069,14 @@ app.use((req, res, next) => {
     if (!connectionString) {
       return res.status(400).json({ error: 'Connection string required' });
     }
+    let src = null;
+    let dst = null;
     try {
       const SqliteDriver = require('./storage/sqlite-driver');
       const PostgresDriver = require('./storage/postgres-driver');
-      const src = new SqliteDriver(path.join(__dirname, '..'));
+      src = new SqliteDriver(path.join(__dirname, '..'));
       await src.init();
-      const dst = new PostgresDriver(connectionString);
+      dst = new PostgresDriver(connectionString);
       await dst.init();
 
       const users = src.getRawDb().prepare('SELECT id, display_name, assigned_skin FROM users').all();
@@ -1100,12 +1118,12 @@ app.use((req, res, next) => {
         }
       }
 
-      await src.close();
-      await dst.close();
-
       res.json({ ok: true, users: users.length, excluded: excluded.length, message: 'Migration complete' });
     } catch (e) {
       res.status(500).json({ error: e.message });
+    } finally {
+      try { if (src) await src.close(); } catch (e) { /* ignore */ }
+      try { if (dst) await dst.close(); } catch (e) { /* ignore */ }
     }
   });
 
@@ -1240,6 +1258,10 @@ app.use((req, res, next) => {
     }
     if (err.type === 'entity.too.large') {
       return res.status(413).json({ error: 'Request body too large' });
+    }
+    if (err.name === 'MulterError') {
+      return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400)
+        .json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 10 MB)' : err.message });
     }
 
     const isDevelopment = _cfg.debug?.serverDebug === true;

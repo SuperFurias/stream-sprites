@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auth hardened**: loopback detection now validates the peer address, Host header, proxy headers, and request origin; mutating APIs reject cross-origin and cross-site requests; login attempts are rate-limited and password comparison is constant-time.
 - **Secret leaks removed**: the public `/env` response no longer includes Twitch client credentials, and the WebSocket no longer sends the full config (which contained tokens) to every client.
 - **Dashboard setup is local-only**; remote setup attempts return 403. Set the password from the local machine before exposing a tunnel.
+- **Sessions are invalidated when the dashboard password changes**, and login throttling uses the forwarded client IP behind tunnels so one attacker cannot lock out everyone.
 - **Config writes sanitized**: unknown/runtime keys are dropped, prototype-pollution keys are blocked, and OAuth access tokens are never persisted.
 
 ### Fixed
@@ -23,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fight resolution** no longer marks both participants as losers; the chosen loser is preserved and fights expire if they never connect.
 - **MAX_SPRITES** is enforced for chat-created sprites as well as `!spawn`.
 - **Sprite cleanup** removes login-name index entries and drag ownership.
-- **Storage UI** no longer advertises unsupported MySQL/MongoDB backends.
+- **Storage UI** no longer advertises unsupported MySQL/MongoDB backends; migrations and failed switches release drivers cleanly.
+- **Twitch reconnects automatically** after network loss, and manual disconnect stops token refresh/reconnect.
+- **Install-script approvals** (`allowScripts`) keep native `better-sqlite3` and `cloudflared` builds working on fresh npm 11 installs.
 - **Settings lifetime/fade fields** now round-trip correctly between minutes (UI) and milliseconds (server).
 - **Dashboard tab races** and chat/asset XSS paths fixed.
 - **Invalid JSON bodies** return 400 instead of 500.

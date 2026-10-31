@@ -82,7 +82,11 @@ function invalidateOverlayConfigCache() {
 function broadcast(obj) {
   if (!_wss) return;
   const s = JSON.stringify(obj);
-  _wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
+  _wss.clients.forEach(c => {
+    if (c.readyState === WebSocket.OPEN) {
+      try { c.send(s); } catch (e) { /* client disconnected mid-send */ }
+    }
+  });
 }
 
 // Broadcast full physics state to all clients
@@ -101,7 +105,9 @@ function broadcastPhysicsState() {
   });
 
   _wss.clients.forEach(c => {
-    if (c.readyState === WebSocket.OPEN) c.send(msg);
+    if (c.readyState === WebSocket.OPEN) {
+      try { c.send(msg); } catch (e) { /* client disconnected mid-send */ }
+    }
   });
 }
 
@@ -112,11 +118,15 @@ function sendFullStateToClient(ws) {
   for (const sprite of serverSprites.values()) {
     sprites.push(physics.serializeSpritePhysics(sprite));
   }
-  ws.send(JSON.stringify({
-    type: 'physicsState',
-    sprites,
-    timestamp: Date.now()
-  }));
+  try {
+    ws.send(JSON.stringify({
+      type: 'physicsState',
+      sprites,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    // Client closed during initial state delivery.
+  }
 }
 
 // Remove the oldest sprite so a new one can be created within the configured limit.
@@ -280,7 +290,7 @@ function startGameLoop() {
 
   function tick() {
     const tickStart = Date.now();
-    const elapsed = tickStart - lastTime;
+    const elapsed = Math.max(0, tickStart - lastTime);
     lastTime = tickStart;
     accumulator += elapsed;
 
